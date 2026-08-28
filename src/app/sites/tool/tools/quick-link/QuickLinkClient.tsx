@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import Link from "next/link";
 import {
   Alert,
@@ -41,12 +41,14 @@ import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import Footer from "@tool/components/layout/Footer";
 import { ShowNavbarLoginStatus } from "@tool/components/layout/NavbarLoginStatus";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
+import { useAutoRefresh } from "@tool/hooks/useAutoRefresh";
 import { useAuth } from "@tool/lib/client-api/use-auth";
 import { ApiError, quickLinksApi, type QuickLink } from "@tool/lib/client-api";
 import { useI18n } from "@tool/lib/i18n";
 
 const QUICK_LINK_BASE_URL = "https://koi.ci/s/";
 const SHORT_NAME_PATTERN = /^[A-Za-z0-9]{1,64}$/;
+const URGENT_WINDOW_MS = 30 * 60_000;
 
 function formatDate(value: string, locale: "en" | "zh") {
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
@@ -100,32 +102,38 @@ export default function QuickLinkClient() {
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshedAt, setRefreshedAt] = useState(0);
+
+  const loadLinks = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    setError(null);
+    try {
+      const response = await quickLinksApi.list();
+      setLinks(response.links);
+      setRefreshedAt(Date.now());
+    } catch {
+      setError(copy.loadFailed);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, [copy.loadFailed]);
 
   useEffect(() => {
     if (status !== "authenticated") {
-      if (!isAuthenticated) setLinks([]);
+      if (!isAuthenticated) {
+        const timer = window.setTimeout(() => setLinks([]), 0);
+        return () => window.clearTimeout(timer);
+      }
       return;
     }
+    const timer = window.setTimeout(() => void loadLinks(), 0);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, loadLinks, status, user?.userId]);
 
-    let active = true;
-    setLoading(true);
-    setError(null);
-    quickLinksApi
-      .list()
-      .then((response) => {
-        if (active) setLinks(response.links);
-      })
-      .catch(() => {
-        if (active) setError(copy.loadFailed);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [copy.loadFailed, isAuthenticated, status, user?.userId]);
+  useAutoRefresh(
+    () => loadLinks(false),
+    status === "authenticated" && isAuthenticated
+  );
 
   function replaceLink(updated: QuickLink) {
     setLinks((current) =>
@@ -431,7 +439,9 @@ export default function QuickLinkClient() {
                     <TableBody>
                       {links.map((quickLink) => {
                         const url = `${QUICK_LINK_BASE_URL}${quickLink.shortName}`;
-                        const expired = new Date(quickLink.expiresAt).getTime() <= Date.now();
+                        const remainingMs = new Date(quickLink.expiresAt).getTime() - refreshedAt;
+                        const expired = remainingMs <= 0;
+                        const expiringSoon = !expired && remainingMs < URGENT_WINDOW_MS;
                         return (
                           <TableRow key={quickLink.shortName} hover>
                             <TableCell>
@@ -450,8 +460,8 @@ export default function QuickLinkClient() {
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 700 }}>{quickLink.clickCount}</TableCell>
                             <TableCell>
-                              <Typography variant="caption" sx={{ display: "block" }}>{formatDate(quickLink.expiresAt, locale)}</Typography>
-                              <Chip size="small" label={expired ? copy.expired : copy.active} color={expired ? "default" : "success"} sx={{ height: 20, mt: 0.25 }} />
+                              <Typography variant="caption" color={expiringSoon ? "error.main" : undefined} sx={{ display: "block", fontWeight: expiringSoon ? 700 : undefined }}>{formatDate(quickLink.expiresAt, locale)}</Typography>
+                              <Chip size="small" label={expired ? copy.expired : expiringSoon ? copy.expiringSoon : copy.active} color={expiringSoon ? "error" : expired ? "default" : "success"} sx={{ height: 20, mt: 0.25 }} />
                             </TableCell>
                             <TableCell align="right">
                               <Tooltip title={copy.copy}>
@@ -476,14 +486,14 @@ export default function QuickLinkClient() {
       </Box>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
-        <MenuItem onClick={openEditor}><EditRoundedIcon fontSize="small" sx={{ mr: 1 }} />{copy.edit}</MenuItem>
+        <MenuItem onClick={openEditor}><EditRoundedIcon fontSize="small" sx={{ mr: 1 }} />{selectedLink && new Date(selectedLink.expiresAt).getTime() <= refreshedAt ? copy.reactivate : copy.edit}</MenuItem>
         <MenuItem onClick={() => void disableSelected()}><BlockRoundedIcon fontSize="small" sx={{ mr: 1 }} />{copy.disable}</MenuItem>
         <MenuItem onClick={() => void deleteSelected()} sx={{ color: "error.main" }}><DeleteOutlineRoundedIcon fontSize="small" sx={{ mr: 1 }} />{copy.delete}</MenuItem>
       </Menu>
 
       <Dialog open={Boolean(editDraft)} onClose={() => !saving && setEditDraft(null)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={saveEdit}>
-          <DialogTitle>{copy.editTitle}</DialogTitle>
+          <DialogTitle>{editDraft && new Date(editDraft.link.expiresAt).getTime() <= refreshedAt ? copy.reactivateTitle : copy.editTitle}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {editError ? <Alert severity="error">{editError}</Alert> : null}
@@ -513,7 +523,7 @@ export default function QuickLinkClient() {
                 fullWidth
               />
               <TextField
-                label={copy.extendExpiration}
+                label={editDraft && new Date(editDraft.link.expiresAt).getTime() <= refreshedAt ? copy.newExpiration : copy.extendExpiration}
                 type="datetime-local"
                 value={editDraft?.expiresAt ?? ""}
                 onChange={(event) =>
@@ -521,7 +531,7 @@ export default function QuickLinkClient() {
                     current ? { ...current, expiresAt: event.target.value } : current
                   )
                 }
-                helperText={copy.extendHint}
+                helperText={editDraft && new Date(editDraft.link.expiresAt).getTime() <= refreshedAt ? copy.reactivateHint : copy.extendHint}
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
               />

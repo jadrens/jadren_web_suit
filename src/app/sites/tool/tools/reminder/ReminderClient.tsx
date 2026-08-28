@@ -12,6 +12,10 @@ import {
   CircularProgress,
   Collapse,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   IconButton,
   Stack,
@@ -27,9 +31,11 @@ import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsActiveRounded";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import Footer from "@tool/components/layout/Footer";
 import { ShowNavbarLoginStatus } from "@tool/components/layout/NavbarLoginStatus";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
+import { useAutoRefresh } from "@tool/hooks/useAutoRefresh";
 import {
   ApiError,
   remindersApi,
@@ -38,6 +44,8 @@ import {
 } from "@tool/lib/client-api";
 import { useAuth } from "@tool/lib/client-api/use-auth";
 import { useI18n } from "@tool/lib/i18n";
+
+const URGENT_WINDOW_MS = 30 * 60_000;
 
 function formatDate(value: string, locale: "en" | "zh") {
   const date = new Date(value);
@@ -59,6 +67,11 @@ function statusColor(status: Reminder["status"]) {
   return "default" as const;
 }
 
+function isDueSoon(reminder: Reminder, now: number) {
+  return reminder.status === "active" &&
+    new Date(reminder.nextRemindAt).getTime() - now < URGENT_WINDOW_MS;
+}
+
 export default function ReminderClient() {
   const { t, locale } = useI18n();
   const copy = t.tools.reminder;
@@ -76,19 +89,36 @@ export default function ReminderClient() {
   const [creating, setCreating] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [reactivating, setReactivating] = useState<Reminder | null>(null);
+  const [reactivateAt, setReactivateAt] = useState("");
+  const [reactivateSaving, setReactivateSaving] = useState(false);
+  const [refreshedAt, setRefreshedAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const loadReminders = useCallback(async () => {
-    setLoading(true);
+  const loadReminders = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const response = await remindersApi.list();
       setReminders(response.reminders);
+      setRefreshedAt(Date.now());
     } catch {
       setError(copy.loadFailed);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
+    }
+  }, [copy.loadFailed]);
+
+  const loadAudits = useCallback(async (showLoading = true) => {
+    if (showLoading) setAuditLoading(true);
+    try {
+      const response = await remindersApi.audit();
+      setAudits(response.audits);
+    } catch {
+      setError(copy.loadFailed);
+    } finally {
+      if (showLoading) setAuditLoading(false);
     }
   }, [copy.loadFailed]);
 
@@ -98,6 +128,16 @@ export default function ReminderClient() {
       return () => window.clearTimeout(timer);
     }
   }, [isAuthenticated, loadReminders, status, user?.status, user?.userId]);
+
+  useAutoRefresh(
+    async () => {
+      await Promise.all([
+        loadReminders(false),
+        auditOpen ? loadAudits(false) : Promise.resolve(),
+      ]);
+    },
+    status === "authenticated" && user?.status === 1
+  );
 
   async function createReminder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -183,19 +223,44 @@ export default function ReminderClient() {
     }
   }
 
+  async function reactivateReminder(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!reactivating) return;
+    const date = new Date(reactivateAt);
+    if (!reactivateAt || !Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+      setError(copy.invalidTime);
+      return;
+    }
+
+    setReactivateSaving(true);
+    setError(null);
+    try {
+      const response = await remindersApi.reactivate(
+        reactivating.reminderId,
+        date.toISOString()
+      );
+      setReminders((current) =>
+        current.map((item) =>
+          item.reminderId === response.reminder.reminderId
+            ? response.reminder
+            : item
+        )
+      );
+      setReactivating(null);
+      setReactivateAt("");
+      setMessage(copy.reactivated);
+    } catch {
+      setError(copy.reactivateFailed);
+    } finally {
+      setReactivateSaving(false);
+    }
+  }
+
   async function toggleAudit() {
     const nextOpen = !auditOpen;
     setAuditOpen(nextOpen);
     if (!nextOpen) return;
-    setAuditLoading(true);
-    try {
-      const response = await remindersApi.audit();
-      setAudits(response.audits);
-    } catch {
-      setError(copy.loadFailed);
-    } finally {
-      setAuditLoading(false);
-    }
+    await loadAudits();
   }
 
   const authLoading = status === "uninitialized" || status === "refreshing";
@@ -262,13 +327,15 @@ export default function ReminderClient() {
                             <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}><Typography variant="h6" sx={{ fontWeight: 700 }}>{reminder.title}</Typography><Chip size="small" color={statusColor(reminder.status)} label={copy[reminder.status]} /><Chip size="small" variant="outlined" label={reminder.repeats ? copy.repeating(reminder.repeatIntervalMinutes ?? 30) : copy.once} /></Stack>
                             <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{reminder.note}</Typography>
                             <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 0.25, sm: 2 }} sx={{ mt: 1.5 }}>
-                              <Typography variant="caption" color="text.secondary">{copy.nextAt}: {formatDate(reminder.nextRemindAt, locale)}</Typography>
+                              <Typography variant="caption" color={isDueSoon(reminder, refreshedAt) ? "error.main" : "text.secondary"} sx={{ fontWeight: isDueSoon(reminder, refreshedAt) ? 700 : undefined }}>{copy.nextAt}: {formatDate(reminder.nextRemindAt, locale)}</Typography>
                               <Typography variant="caption" color="text.secondary">{copy.lastSentAt}: {reminder.lastSentAt ? formatDate(reminder.lastSentAt, locale) : copy.neverSent}</Typography>
                             </Stack>
+                            {isDueSoon(reminder, refreshedAt) ? <Typography variant="caption" color="error.main" sx={{ display: "block", fontWeight: 700, mt: 0.5 }}>{copy.dueSoon}</Typography> : null}
                             {reminder.lastDeliveryStatus === "rate_limited" ? <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 0.5 }}>{copy.rateLimited}</Typography> : null}
                           </Box>
                           <Stack direction="row">
                             {reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
+                            {reminder.status === "completed" && !reminder.repeats ? <Tooltip title={copy.reactivate}><IconButton color="primary" onClick={() => { setReactivating(reminder); setReactivateAt(""); }}><ReplayRoundedIcon /></IconButton></Tooltip> : null}
                             <Tooltip title={copy.delete}><IconButton color="error" onClick={() => void deleteReminder(reminder)}><DeleteOutlineRoundedIcon /></IconButton></Tooltip>
                           </Stack>
                         </Stack>
@@ -300,6 +367,21 @@ export default function ReminderClient() {
           </Stack>
         )}
       </Box>
+      <Dialog open={Boolean(reactivating)} onClose={() => !reactivateSaving && setReactivating(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={reactivateReminder}>
+          <DialogTitle>{copy.reactivateTitle}</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1.5} sx={{ pt: 1 }}>
+              <Typography variant="body2" color="text.secondary">{copy.reactivateDescription}</Typography>
+              <TextField label={copy.remindAt} type="datetime-local" value={reactivateAt} onChange={(event) => setReactivateAt(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setReactivating(null)} disabled={reactivateSaving}>{copy.cancel}</Button>
+            <Button type="submit" variant="contained" disabled={reactivateSaving}>{reactivateSaving ? copy.reactivating : copy.reactivate}</Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
       <Footer />
     </div>
   );

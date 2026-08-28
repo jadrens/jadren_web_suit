@@ -92,6 +92,10 @@ export interface UpdateQuickLinkRequest {
   disable?: boolean;
 }
 
+export interface ReactivateReminderRequest {
+  remindAt: string;
+}
+
 export type ReminderStatus = "active" | "paused" | "completed";
 export type ReminderDeliveryStatus = "sent" | "rate_limited" | null;
 

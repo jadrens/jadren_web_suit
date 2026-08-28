@@ -28,9 +28,12 @@ async function sendAuditedEmail(input: {
   idempotencyKey: string;
   metadata?: Record<string, unknown>;
 }) {
+  const senderEmail = input.category === "reminder"
+    ? process.env.REMINDER_FROM_EMAIL?.trim() || AUTH_CONFIG.reminderFromEmail
+    : process.env.AUTH_FROM_EMAIL?.trim() || AUTH_CONFIG.verificationFromEmail;
   const contentSha256 = createHash("sha256")
     .update(JSON.stringify({
-      from: AUTH_CONFIG.resendFromEmail,
+      from: senderEmail,
       to: input.recipient,
       subject: input.subject,
       text: input.text,
@@ -49,7 +52,7 @@ async function sendAuditedEmail(input: {
      RETURNING audit_id, content_sha256, status, provider_email_id`,
     [
       randomUUID(), input.userId, input.reminderId, input.category,
-      input.recipient, AUTH_CONFIG.resendFromEmail, input.subject,
+      input.recipient, senderEmail, input.subject,
       input.text, input.html, contentSha256, input.idempotencyKey,
       JSON.stringify(input.metadata ?? {}),
     ]
@@ -76,7 +79,7 @@ async function sendAuditedEmail(input: {
     const resend = new Resend(apiKey);
     const { data, error } = await resend.emails.send(
       {
-        from: AUTH_CONFIG.resendFromEmail,
+        from: senderEmail,
         to: [input.recipient],
         subject: input.subject,
         html: input.html,
