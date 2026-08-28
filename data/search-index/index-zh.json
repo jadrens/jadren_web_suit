@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-22T09:41:23.685Z",
+  "postsByDate": [
+    {
+      "slug": "fix-dolphin-1",
+      "title": "解决 Arch/Hyprland 环境下引入 Nix 导致 Dolphin 无法自动关联打开应用的问题",
+      "description": "测试发现 Dolphin 无法自动关联打开应用。经过排查，发现是 Nix 变动路径导致的缓存问题。",
+      "date": "2026-08-22T09:41:23.683Z",
+      "tags": [
+        "dolphin",
+        "issue"
+      ],
+      "locale": "zh"
+    },
+    {
+      "slug": "github-mirror",
+      "title": "搭建了一个 GitHub 镜像站",
+      "description": "使用 Nginx 搭建 GitHub 镜像站，加速访问",
+      "date": "2026-06-16T16:37:27.438Z",
+      "tags": [
+        "website",
+        "mirror"
+      ],
+      "locale": "zh"
+    },
+    {
+      "slug": "markdown-test",
+      "title": "Markdown 功能测试",
+      "description": "全面测试所有 markdown 功能",
+      "date": "2026-06-16T11:45:48.864Z",
+      "tags": [
+        "Markdown",
+        "测试"
+      ],
+      "locale": "zh"
+    }
+  ],
+  "postsByTag": {
+    "dolphin": [
+      {
+        "slug": "fix-dolphin-1",
+        "title": "解决 Arch/Hyprland 环境下引入 Nix 导致 Dolphin 无法自动关联打开应用的问题",
+        "description": "测试发现 Dolphin 无法自动关联打开应用。经过排查，发现是 Nix 变动路径导致的缓存问题。",
+        "date": "2026-08-22T09:41:23.683Z",
+        "tags": [
+          "dolphin",
+          "issue"
+        ],
+        "locale": "zh"
+      }
+    ],
+    "issue": [
+      {
+        "slug": "fix-dolphin-1",
+        "title": "解决 Arch/Hyprland 环境下引入 Nix 导致 Dolphin 无法自动关联打开应用的问题",
+        "description": "测试发现 Dolphin 无法自动关联打开应用。经过排查，发现是 Nix 变动路径导致的缓存问题。",
+        "date": "2026-08-22T09:41:23.683Z",
+        "tags": [
+          "dolphin",
+          "issue"
+        ],
+        "locale": "zh"
+      }
+    ],
+    "website": [
+      {
+        "slug": "github-mirror",
+        "title": "搭建了一个 GitHub 镜像站",
+        "description": "使用 Nginx 搭建 GitHub 镜像站，加速访问",
+        "date": "2026-06-16T16:37:27.438Z",
+        "tags": [
+          "website",
+          "mirror"
+        ],
+        "locale": "zh"
+      }
+    ],
+    "mirror": [
+      {
+        "slug": "github-mirror",
+        "title": "搭建了一个 GitHub 镜像站",
+        "description": "使用 Nginx 搭建 GitHub 镜像站，加速访问",
+        "date": "2026-06-16T16:37:27.438Z",
+        "tags": [
+          "website",
+          "mirror"
+        ],
+        "locale": "zh"
+      }
+    ],
+    "Markdown": [
+      {
+        "slug": "markdown-test",
+        "title": "Markdown 功能测试",
+        "description": "全面测试所有 markdown 功能",
+        "date": "2026-06-16T11:45:48.864Z",
+        "tags": [
+          "Markdown",
+          "测试"
+        ],
+        "locale": "zh"
+      }
+    ],
+    "测试": [
+      {
+        "slug": "markdown-test",
+        "title": "Markdown 功能测试",
+        "description": "全面测试所有 markdown 功能",
+        "date": "2026-06-16T11:45:48.864Z",
+        "tags": [
+          "Markdown",
+          "测试"
+        ],
+        "locale": "zh"
+      }
+    ]
+  }
+}

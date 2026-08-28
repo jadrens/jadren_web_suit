@@ -1,0 +1,86 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --background: #f8f6f3;
+  --foreground: #4a4a4a;
+  --primary: #89a0d2;
+  --secondary: #c9a87c;
+  --paper: #fdfcfb;
+  --divider: #e8e4df;
+  --hover: #f0ede8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-paper: var(--paper);
+  --color-divider: var(--divider);
+  --color-hover: var(--hover);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1e1e1e;
+    --foreground: #e8e4df;
+  }
+}
+
+[data-theme="dark"] {
+  --background: #1e1e1e;
+  --foreground: #e8e4df;
+  --primary: #9db4d4;
+  --secondary: #c9a87c;
+  --paper: #2a2a2a;
+  --divider: #3a3a3a;
+  --hover: #2f2f2f;
+}
+
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), "MiSans", var(--font-nunito), system-ui, -apple-system, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.page-below-navbar { min-height: calc(100dvh - 64px); }
+
+@media (max-width: 599.95px) {
+  .page-below-navbar { min-height: calc(100dvh - 56px); }
+}
+
+a {
+  color: #8b9dc3;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover { color: #c9a87c; }
+
+code,
+pre { font-family: var(--font-jetbrains-mono), "JetBrains Mono", Consolas, monospace; }
+
+text { z-index: 3; }
+
+::selection {
+  background: #c9a87c;
+  color: #fdfcfb;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  background: #c9a87c;
+  border-radius: 3px;
+}

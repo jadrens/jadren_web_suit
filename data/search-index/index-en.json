@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-22T09:41:45.148Z",
+  "postsByDate": [
+    {
+      "slug": "fix-dolphin-1",
+      "title": "Fixing Dolphin Application Associations After Installing Nix on Arch/Hyprland",
+      "description": "Dolphin could no longer open files with their associated applications because Nix changed the data-directory paths and invalidated the KSycoca cache.",
+      "date": "2026-08-22T09:41:45.147Z",
+      "tags": [
+        "dolphin",
+        "issue"
+      ],
+      "locale": "en"
+    },
+    {
+      "slug": "github-mirror",
+      "title": "Set Up a GitHub Mirror Site",
+      "description": "Using Nginx to set up a GitHub mirror site for faster access",
+      "date": "2026-06-11T00:00:00.000Z",
+      "tags": [
+        "website",
+        "mirror"
+      ],
+      "locale": "en"
+    },
+    {
+      "slug": "markdown-test",
+      "title": "Markdown Features Test",
+      "description": "A comprehensive test of all markdown features",
+      "date": "2026-05-25T00:00:00.000Z",
+      "tags": [
+        "Markdown",
+        "Test"
+      ],
+      "locale": "en"
+    }
+  ],
+  "postsByTag": {
+    "dolphin": [
+      {
+        "slug": "fix-dolphin-1",
+        "title": "Fixing Dolphin Application Associations After Installing Nix on Arch/Hyprland",
+        "description": "Dolphin could no longer open files with their associated applications because Nix changed the data-directory paths and invalidated the KSycoca cache.",
+        "date": "2026-08-22T09:41:45.147Z",
+        "tags": [
+          "dolphin",
+          "issue"
+        ],
+        "locale": "en"
+      }
+    ],
+    "issue": [
+      {
+        "slug": "fix-dolphin-1",
+        "title": "Fixing Dolphin Application Associations After Installing Nix on Arch/Hyprland",
+        "description": "Dolphin could no longer open files with their associated applications because Nix changed the data-directory paths and invalidated the KSycoca cache.",
+        "date": "2026-08-22T09:41:45.147Z",
+        "tags": [
+          "dolphin",
+          "issue"
+        ],
+        "locale": "en"
+      }
+    ],
+    "website": [
+      {
+        "slug": "github-mirror",
+        "title": "Set Up a GitHub Mirror Site",
+        "description": "Using Nginx to set up a GitHub mirror site for faster access",
+        "date": "2026-06-11T00:00:00.000Z",
+        "tags": [
+          "website",
+          "mirror"
+        ],
+        "locale": "en"
+      }
+    ],
+    "mirror": [
+      {
+        "slug": "github-mirror",
+        "title": "Set Up a GitHub Mirror Site",
+        "description": "Using Nginx to set up a GitHub mirror site for faster access",
+        "date": "2026-06-11T00:00:00.000Z",
+        "tags": [
+          "website",
+          "mirror"
+        ],
+        "locale": "en"
+      }
+    ],
+    "Markdown": [
+      {
+        "slug": "markdown-test",
+        "title": "Markdown Features Test",
+        "description": "A comprehensive test of all markdown features",
+        "date": "2026-05-25T00:00:00.000Z",
+        "tags": [
+          "Markdown",
+          "Test"
+        ],
+        "locale": "en"
+      }
+    ],
+    "Test": [
+      {
+        "slug": "markdown-test",
+        "title": "Markdown Features Test",
+        "description": "A comprehensive test of all markdown features",
+        "date": "2026-05-25T00:00:00.000Z",
+        "tags": [
+          "Markdown",
+          "Test"
+        ],
+        "locale": "en"
+      }
+    ]
+  }
+}
