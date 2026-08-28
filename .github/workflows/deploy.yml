@@ -87,6 +87,7 @@ jobs:
           envs: DEPLOY_PATH,ARCHIVE_NAME,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,RESEND_API_KEY
           command_timeout: 10m
           script: |
+            bash -c '
             set -Eeuo pipefail
             export PATH="$HOME/.bun/bin:$PATH"
             repository="https://github.com/${{ github.repository }}.git"
@@ -108,15 +109,15 @@ jobs:
 
             umask 077
             {
-              printf 'DNS_MANAGER_TOKEN=%s\n' "$DNS_MANAGER_TOKEN"
-              printf 'POSTGRES_USER=%s\n' "$POSTGRES_USER"
-              printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
-              printf 'POSTGRES_DB=%s\n' "$POSTGRES_DB"
-              printf 'POSTGRES_HOST=%s\n' "$POSTGRES_HOST"
-              printf 'POSTGRES_PORT=%s\n' "$POSTGRES_PORT"
-              printf 'POSTGRES_SSL=%s\n' "$POSTGRES_SSL"
-              printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
-              printf 'RESEND_API_KEY=%s\n' "$RESEND_API_KEY"
+              printf "DNS_MANAGER_TOKEN=%s\n" "$DNS_MANAGER_TOKEN"
+              printf "POSTGRES_USER=%s\n" "$POSTGRES_USER"
+              printf "POSTGRES_PASSWORD=%s\n" "$POSTGRES_PASSWORD"
+              printf "POSTGRES_DB=%s\n" "$POSTGRES_DB"
+              printf "POSTGRES_HOST=%s\n" "$POSTGRES_HOST"
+              printf "POSTGRES_PORT=%s\n" "$POSTGRES_PORT"
+              printf "POSTGRES_SSL=%s\n" "$POSTGRES_SSL"
+              printf "JWT_SECRET=%s\n" "$JWT_SECRET"
+              printf "RESEND_API_KEY=%s\n" "$RESEND_API_KEY"
             } > .env
 
             mkdir -p data .data
@@ -129,7 +130,7 @@ jobs:
 
             for attempt in 1 2 3 4 5; do
               if curl --fail --silent --show-error \
-                --header 'Host: jadren.me' \
+                --header "Host: jadren.me" \
                 http://127.0.0.1:3000/ > /dev/null; then
                 exit 0
               fi
@@ -138,3 +139,4 @@ jobs:
 
             sudo journalctl -u jadren-web-suit.service -n 100 --no-pager
             exit 1
+            '
