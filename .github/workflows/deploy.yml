@@ -130,9 +130,13 @@ jobs:
             bun run db:migrate
 
             sudo install -m 0644 deploy/jadren-web-suit.service /etc/systemd/system/jadren-web-suit.service
+            sudo install -m 0644 deploy/jadren-reminder-dispatch.service /etc/systemd/system/jadren-reminder-dispatch.service
+            sudo install -m 0644 deploy/jadren-reminder-dispatch.timer /etc/systemd/system/jadren-reminder-dispatch.timer
             sudo systemctl daemon-reload
             sudo systemctl enable jadren-web-suit.service
+            sudo systemctl enable --now jadren-reminder-dispatch.timer
             sudo systemctl restart jadren-web-suit.service
+            sudo systemctl is-active --quiet jadren-reminder-dispatch.timer
 
             for attempt in 1 2 3 4 5; do
               if curl --fail --silent --show-error \

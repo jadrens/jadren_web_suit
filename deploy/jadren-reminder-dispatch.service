@@ -1,0 +1,19 @@
+[Unit]
+Description=Dispatch due Jadren reminder emails
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=dragonren
+Group=dragonren
+WorkingDirectory=/home/dragonren/service/web/jadren_web_suit
+Environment=NODE_ENV=production
+EnvironmentFile=/home/dragonren/service/web/jadren_web_suit/.env
+ExecStart=/home/dragonren/.bun/bin/bun scripts/dispatch-reminders.ts
+TimeoutStartSec=5min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only

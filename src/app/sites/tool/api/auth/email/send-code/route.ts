@@ -50,7 +50,7 @@ export async function POST(request: Request) {
              expire_at = EXCLUDED.expire_at`,
       [email, codeBcrypt, expiresAt]
     );
-    await sendVerificationEmail(email, code, locale);
+    await sendVerificationEmail(user.user_id, email, code, locale);
 
     return NextResponse.json({
       message: "verification code generated",

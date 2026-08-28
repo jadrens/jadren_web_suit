@@ -92,6 +92,59 @@ export interface UpdateQuickLinkRequest {
   disable?: boolean;
 }
 
+export type ReminderStatus = "active" | "paused" | "completed";
+export type ReminderDeliveryStatus = "sent" | "rate_limited" | null;
+
+export interface Reminder {
+  reminderId: string;
+  title: string;
+  note: string;
+  remindAt: string;
+  nextRemindAt: string;
+  repeats: boolean;
+  repeatIntervalMinutes: number | null;
+  status: ReminderStatus;
+  createdAt: string;
+  updatedAt: string;
+  lastSentAt: string | null;
+  completedAt: string | null;
+  lastDeliveryStatus: ReminderDeliveryStatus;
+}
+
+export interface ReminderListResponse {
+  reminders: Reminder[];
+}
+
+export interface CreateReminderRequest {
+  title: string;
+  note: string;
+  remindAt: string;
+  repeats: boolean;
+  repeatIntervalMinutes: number | null;
+}
+
+export interface ReminderResponse {
+  reminder: Reminder;
+}
+
+export interface EmailAudit {
+  auditId: string;
+  reminderId: string | null;
+  recipientEmail: string;
+  subject: string;
+  bodyText: string;
+  contentSha256: string;
+  status: "pending" | "sent" | "failed";
+  providerEmailId: string | null;
+  failureMessage: string | null;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export interface EmailAuditListResponse {
+  audits: EmailAudit[];
+}
+
 export type AuthStatus =
   | "uninitialized"
   | "anonymous"

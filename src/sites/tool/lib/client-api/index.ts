@@ -30,5 +30,26 @@ export const quickLinksApi = {
     ),
 };
 
+export const remindersApi = {
+  list: () =>
+    apiClient.get<import("./types").ReminderListResponse>("/api/reminders"),
+  create: (input: import("./types").CreateReminderRequest) =>
+    apiClient.post<
+      import("./types").ReminderResponse,
+      import("./types").CreateReminderRequest
+    >("/api/reminders", input),
+  setStatus: (reminderId: string, status: "active" | "paused") =>
+    apiClient.patch<
+      import("./types").ReminderResponse,
+      { status: "active" | "paused" }
+    >(`/api/reminders/${encodeURIComponent(reminderId)}`, { status }),
+  delete: (reminderId: string) =>
+    apiClient.delete<void>(`/api/reminders/${encodeURIComponent(reminderId)}`),
+  audit: () =>
+    apiClient.get<import("./types").EmailAuditListResponse>(
+      "/api/reminders/audit"
+    ),
+};
+
 export * from "./http";
 export * from "./types";

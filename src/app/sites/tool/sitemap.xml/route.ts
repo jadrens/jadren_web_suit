@@ -15,6 +15,7 @@ const PUBLIC_ROUTES = [
   { path: "/tools/ip", priority: "0.7" },
   { path: "/tools/qrcode", priority: "0.7" },
   { path: "/tools/quick-link", priority: "0.7" },
+  { path: "/tools/reminder", priority: "0.7" },
 ] as const;
 
 function escapeXml(value: string): string {

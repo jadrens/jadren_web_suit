@@ -8,7 +8,8 @@
     "build": "bun --bun next build",
     "start": "bun --bun next start",
     "lint": "eslint",
-    "db:migrate": "bun database/migrate.ts"
+    "db:migrate": "bun database/migrate.ts",
+    "reminder:dispatch": "bun scripts/dispatch-reminders.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

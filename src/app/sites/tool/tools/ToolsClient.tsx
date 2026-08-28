@@ -13,6 +13,7 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import ColorLensIcon from "@mui/icons-material/ColorLens";
 import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
+import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsActiveRounded";
 
 interface ToolItem {
   key: string;
@@ -28,6 +29,13 @@ export default function ToolsClient() {
   useDocumentTitle(t.tools.title);
 
   const tools: ToolItem[] = [
+    {
+      key: "reminder",
+      title: t.tools.reminder.title,
+      description: t.tools.reminder.cardDescription,
+      href: "/tools/reminder",
+      icon: <NotificationsActiveRoundedIcon sx={{ fontSize: 32 }} />,
+    },
     {
       key: "quickLink",
       title: t.tools.quickLink.title,
