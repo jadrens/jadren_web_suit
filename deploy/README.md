@@ -7,10 +7,11 @@ The GitHub Actions workflow deploys to `usgp1.koi.ci` as `dragonren` and runs th
 Password authentication is disabled on the server. Add this dedicated public key as one line in `/home/dragonren/.ssh/authorized_keys`:
 
 ```text
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAd4+GuCGelSBgNg78Nv4TPFRk+2aeUU1LzGPJ7ne8B0 github-actions:jadrens/jadren_web_suit
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH63zwEBRtMwQIvEoZJ1PRqTUxoSAdjlJ1UZyW44Nf6f jadren@jadren.dev
 ```
 
-The matching private key exists only in the repository's `SSH_PRIVATE_KEY` Actions secret.
+The matching encrypted private key is stored in the repository's `SSH_PRIVATE_KEY`
+Actions secret. Its passphrase is stored separately as `SSH_KEY_PASSPHRASE`.
 
 ## Enable deployment
 

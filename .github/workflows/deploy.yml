@@ -58,6 +58,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           source: ${{ env.ARCHIVE_NAME }}
           target: /home/dragonren/
@@ -81,6 +82,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           envs: DEPLOY_PATH,ARCHIVE_NAME,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,RESEND_API_KEY
           command_timeout: 10m
