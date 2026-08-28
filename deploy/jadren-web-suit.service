@@ -1,0 +1,27 @@
+[Unit]
+Description=Jadren unified Next.js web suite
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dragonren
+Group=dragonren
+WorkingDirectory=/home/dragonren/service/web/jadren_web_suit
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=/home/dragonren/service/web/jadren_web_suit/.env
+ExecStart=/home/dragonren/.bun/bin/bun --bun next start -p 3000
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/dragonren/service/web/jadren_web_suit/data
+ReadWritePaths=/home/dragonren/service/web/jadren_web_suit/.data
+
+[Install]
+WantedBy=multi-user.target
