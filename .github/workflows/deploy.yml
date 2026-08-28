@@ -101,6 +101,12 @@ jobs:
             git fetch origin run
             git checkout run
             git reset --hard origin/run
+
+            if ! command -v bun > /dev/null || [ "$(bun --version)" != "1.4.0" ]; then
+              curl -fsSL https://bun.com/install | bash -s "bun-v1.4.0"
+              hash -r
+            fi
+
             bun install --frozen-lockfile
 
             rm -rf build
