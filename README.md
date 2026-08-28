@@ -25,4 +25,4 @@ Edit `HOST_TO_SITE` in `src/proxy.ts` to replace the example production domains 
 
 The production workflow is in `.github/workflows/deploy.yml`. It builds on GitHub Actions, uploads only the verified Next.js build, synchronizes the server checkout, runs database migrations, installs the systemd unit, restarts the service, and performs a local health check.
 
-Deployment remains disabled until the repository variable `DEPLOY_ENABLED=true` is configured. See `deploy/nginx.conf.example` for routing all three public hostnames to port 3000.
+Deployment remains disabled until the repository variable `DEPLOY_ENABLED=true` is configured. A push to the `run` branch deploys production. See `deploy/nginx.conf.example` for routing all three public hostnames to port 3000.
