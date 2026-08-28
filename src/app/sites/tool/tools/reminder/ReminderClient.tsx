@@ -40,11 +40,17 @@ import { useAuth } from "@tool/lib/client-api/use-auth";
 import { useI18n } from "@tool/lib/i18n";
 
 function formatDate(value: string, locale: "en" | "zh") {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
     timeZoneName: "short",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 function statusColor(status: Reminder["status"]) {

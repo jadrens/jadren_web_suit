@@ -9,15 +9,15 @@ import {
 } from "react";
 import { en, TranslationKeys } from "./en";
 import { zh } from "./zh";
+import {
+  readGlobalLocale,
+  subscribeToGlobalLocale,
+  writeGlobalLocale,
+} from "@shared/i18n/locale-preference";
 
 export type Locale = "en" | "zh";
 
 export const SUPPORTED_LOCALES: Locale[] = ["en", "zh"];
-
-function normalizeLocale(lang: string): Locale {
-  if (lang.startsWith("zh")) return "zh";
-  return "en";
-}
 
 const translations: Record<Locale, TranslationKeys> = {
   en,
@@ -45,19 +45,20 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem("locale") as Locale | null;
-    if (stored && translations[stored]) {
-      setLocale(stored);
-    } else {
-      const browserLang = navigator.language;
-      setLocale(normalizeLocale(browserLang));
-    }
+    const timer = window.setTimeout(() => {
+      setLocale(readGlobalLocale());
+      setMounted(true);
+    }, 0);
+    const unsubscribe = subscribeToGlobalLocale(setLocale);
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   const handleSetLocale = (newLocale: Locale) => {
     setLocale(newLocale);
-    localStorage.setItem("locale", newLocale);
+    writeGlobalLocale(newLocale);
   };
 
   return (
