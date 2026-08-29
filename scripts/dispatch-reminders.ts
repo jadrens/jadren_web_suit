@@ -68,7 +68,8 @@ async function processReminder(candidate: CandidateRow) {
          FROM reminder_event r
          JOIN user_main u ON u.user_id = r.user_id
         WHERE r.reminder_id = $1 AND r.user_id = $2
-          AND r.status = 'active' AND r.next_remind_at <= NOW()
+          AND r.status = 'active' AND r.schedule_type <> 'never'
+          AND r.next_remind_at IS NOT NULL AND r.next_remind_at <= NOW()
         FOR UPDATE OF r`,
       [candidate.reminder_id, candidate.user_id]
     );
@@ -161,7 +162,8 @@ async function dispatch() {
   const candidates = await db.query<CandidateRow>(
     `SELECT reminder_id, user_id
        FROM reminder_event
-      WHERE status = 'active' AND next_remind_at <= NOW()
+      WHERE status = 'active' AND schedule_type <> 'never'
+        AND next_remind_at IS NOT NULL AND next_remind_at <= NOW()
       ORDER BY next_remind_at ASC
       LIMIT 100`
   );

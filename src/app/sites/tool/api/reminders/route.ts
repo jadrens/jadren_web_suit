@@ -23,7 +23,7 @@ export async function GET(request: Request) {
         WHERE r.user_id = $1
         ORDER BY
           CASE r.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END,
-          r.next_remind_at ASC,
+          r.next_remind_at ASC NULLS LAST,
           r.created_at DESC`,
       [user!.sub]
     );
@@ -51,10 +51,11 @@ export async function POST(request: Request) {
     const result = await db.query<ReminderRow>(
       `INSERT INTO reminder_event (
          reminder_id, user_id, title, note, remind_at, next_remind_at,
-         repeat_interval_minutes
-       ) VALUES ($1, $2, $3, $4, $5, $5, $6)
+         repeat_interval_minutes, schedule_type, status
+       ) VALUES ($1, $2, $3, $4, $5, $5, $6, $7,
+                 CASE WHEN $7 = 'never' THEN 'paused' ELSE 'active' END)
        RETURNING reminder_id, title, note, remind_at, next_remind_at,
-                 repeat_interval_minutes, status, created_at, updated_at,
+                 repeat_interval_minutes, schedule_type, status, created_at, updated_at,
                  last_sent_at, completed_at, NULL::varchar AS last_delivery_status`,
       [
         reminderId,
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
         value.note,
         value.remindAt,
         value.repeatIntervalMinutes,
+        value.scheduleType,
       ]
     );
     const reminder = result.rows[0];

@@ -97,15 +97,17 @@ export interface ReactivateReminderRequest {
 }
 
 export type ReminderStatus = "active" | "paused" | "completed";
+export type ReminderScheduleType = "one_time" | "repeat" | "never";
 export type ReminderDeliveryStatus = "sent" | "rate_limited" | null;
 
 export interface Reminder {
   reminderId: string;
   title: string;
   note: string;
-  remindAt: string;
-  nextRemindAt: string;
+  remindAt: string | null;
+  nextRemindAt: string | null;
   repeats: boolean;
+  scheduleType: ReminderScheduleType;
   repeatIntervalMinutes: number | null;
   status: ReminderStatus;
   createdAt: string;
@@ -122,8 +124,14 @@ export interface ReminderListResponse {
 export interface CreateReminderRequest {
   title: string;
   note: string;
-  remindAt: string;
-  repeats: boolean;
+  remindAt: string | null;
+  scheduleType: ReminderScheduleType;
+  repeatIntervalMinutes: number | null;
+}
+
+export interface UpdateReminderScheduleRequest {
+  scheduleType: ReminderScheduleType;
+  remindAt: string | null;
   repeatIntervalMinutes: number | null;
 }
 

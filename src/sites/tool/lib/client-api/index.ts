@@ -43,6 +43,14 @@ export const remindersApi = {
       import("./types").ReminderResponse,
       { status: "active" | "paused" }
     >(`/api/reminders/${encodeURIComponent(reminderId)}`, { status }),
+  updateSchedule: (
+    reminderId: string,
+    input: import("./types").UpdateReminderScheduleRequest
+  ) =>
+    apiClient.patch<
+      import("./types").ReminderResponse,
+      import("./types").UpdateReminderScheduleRequest
+    >(`/api/reminders/${encodeURIComponent(reminderId)}`, input),
   reactivate: (reminderId: string, remindAt: string) =>
     apiClient.patch<
       import("./types").ReminderResponse,

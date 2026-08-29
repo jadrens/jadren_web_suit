@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { nextOccurrenceAfter, parseReminderInput, utcHourWindow } from "./validation";
+import {
+  nextOccurrenceAfter,
+  parseReminderInput,
+  parseReminderSchedule,
+  utcHourWindow,
+} from "./validation";
 
 describe("reminder validation", () => {
   test("rejects repeat intervals below 30 minutes", () => {
@@ -22,6 +27,26 @@ describe("reminder validation", () => {
       repeatIntervalMinutes: 30,
     });
     expect(result.value?.repeatIntervalMinutes).toBe(30);
+  });
+
+  test("accepts never without a reminder time", () => {
+    const result = parseReminderInput({
+      title: "Reference note",
+      note: "Keep this without emailing it",
+      scheduleType: "never",
+    });
+    expect(result.value).toEqual({
+      title: "Reference note",
+      note: "Keep this without emailing it",
+      scheduleType: "never",
+      remindAt: null,
+      repeatIntervalMinutes: null,
+    });
+  });
+
+  test("requires a future time when changing to one-time", () => {
+    const result = parseReminderSchedule({ scheduleType: "one_time", remindAt: null });
+    expect(result.code).toBe("invalid_remind_at");
   });
 });
 

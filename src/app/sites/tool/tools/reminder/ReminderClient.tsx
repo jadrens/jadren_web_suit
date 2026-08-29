@@ -16,22 +16,24 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Stack,
-  Switch,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import AddAlertRoundedIcon from "@mui/icons-material/AddAlertRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import EditNotificationsRoundedIcon from "@mui/icons-material/EditNotificationsRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsActiveRounded";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
-import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import Footer from "@tool/components/layout/Footer";
 import { ShowNavbarLoginStatus } from "@tool/components/layout/NavbarLoginStatus";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
@@ -41,11 +43,30 @@ import {
   remindersApi,
   type EmailAudit,
   type Reminder,
+  type ReminderScheduleType,
 } from "@tool/lib/client-api";
 import { useAuth } from "@tool/lib/client-api/use-auth";
 import { useI18n } from "@tool/lib/i18n";
 
 const URGENT_WINDOW_MS = 30 * 60_000;
+const MAX_REPEAT_INTERVAL_MINUTES = 525_600;
+type RepeatIntervalUnit = "minutes" | "hours" | "days";
+
+const INTERVAL_UNIT_MINUTES: Record<RepeatIntervalUnit, number> = {
+  minutes: 1,
+  hours: 60,
+  days: 1_440,
+};
+
+function intervalParts(minutes: number): { value: string; unit: RepeatIntervalUnit } {
+  if (minutes % 1_440 === 0) return { value: String(minutes / 1_440), unit: "days" };
+  if (minutes % 60 === 0) return { value: String(minutes / 60), unit: "hours" };
+  return { value: String(minutes), unit: "minutes" };
+}
+
+function intervalInMinutes(value: string, unit: RepeatIntervalUnit) {
+  return Number(value) * INTERVAL_UNIT_MINUTES[unit];
+}
 
 function formatDate(value: string, locale: "en" | "zh") {
   const date = new Date(value);
@@ -69,7 +90,15 @@ function statusColor(status: Reminder["status"]) {
 
 function isDueSoon(reminder: Reminder, now: number) {
   return reminder.status === "active" &&
+    reminder.nextRemindAt !== null &&
     new Date(reminder.nextRemindAt).getTime() - now < URGENT_WINDOW_MS;
+}
+
+function toDateTimeLocal(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 export default function ReminderClient() {
@@ -83,15 +112,19 @@ export default function ReminderClient() {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [remindAt, setRemindAt] = useState("");
-  const [repeats, setRepeats] = useState(false);
+  const [scheduleType, setScheduleType] = useState<ReminderScheduleType>("one_time");
   const [repeatInterval, setRepeatInterval] = useState("30");
+  const [repeatIntervalUnit, setRepeatIntervalUnit] = useState<RepeatIntervalUnit>("minutes");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
-  const [reactivating, setReactivating] = useState<Reminder | null>(null);
-  const [reactivateAt, setReactivateAt] = useState("");
-  const [reactivateSaving, setReactivateSaving] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<Reminder | null>(null);
+  const [editScheduleType, setEditScheduleType] = useState<ReminderScheduleType>("one_time");
+  const [editRemindAt, setEditRemindAt] = useState("");
+  const [editRepeatInterval, setEditRepeatInterval] = useState("30");
+  const [editRepeatIntervalUnit, setEditRepeatIntervalUnit] = useState<RepeatIntervalUnit>("minutes");
+  const [scheduleSaving, setScheduleSaving] = useState(false);
   const [refreshedAt, setRefreshedAt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -145,8 +178,8 @@ export default function ReminderClient() {
     setMessage(null);
     const normalizedTitle = title.trim();
     const normalizedNote = note.trim();
-    const date = new Date(remindAt);
-    const interval = Number(repeatInterval);
+    const date = scheduleType === "never" ? null : new Date(remindAt);
+    const interval = intervalInMinutes(repeatInterval, repeatIntervalUnit);
     if (!normalizedTitle || normalizedTitle.length > 160) {
       setError(copy.invalidTitle);
       return;
@@ -155,11 +188,11 @@ export default function ReminderClient() {
       setError(copy.invalidNote);
       return;
     }
-    if (!remindAt || !Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+    if (scheduleType !== "never" && (!date || !Number.isFinite(date.getTime()) || date.getTime() <= Date.now())) {
       setError(copy.invalidTime);
       return;
     }
-    if (repeats && (!Number.isInteger(interval) || interval < 30)) {
+    if (scheduleType === "repeat" && (!Number.isInteger(interval) || interval < 30 || interval > MAX_REPEAT_INTERVAL_MINUTES)) {
       setError(copy.invalidInterval);
       return;
     }
@@ -169,16 +202,17 @@ export default function ReminderClient() {
       const response = await remindersApi.create({
         title: normalizedTitle,
         note: normalizedNote,
-        remindAt: date.toISOString(),
-        repeats,
-        repeatIntervalMinutes: repeats ? interval : null,
+        remindAt: date?.toISOString() ?? null,
+        scheduleType,
+        repeatIntervalMinutes: scheduleType === "repeat" ? interval : null,
       });
       setReminders((current) => [response.reminder, ...current]);
       setTitle("");
       setNote("");
       setRemindAt("");
-      setRepeats(false);
+      setScheduleType("one_time");
       setRepeatInterval("30");
+      setRepeatIntervalUnit("minutes");
       setMessage(copy.created);
     } catch (requestError) {
       setError(
@@ -223,22 +257,37 @@ export default function ReminderClient() {
     }
   }
 
-  async function reactivateReminder(event: FormEvent<HTMLFormElement>) {
+  function openScheduleEditor(reminder: Reminder) {
+    setEditingSchedule(reminder);
+    setEditScheduleType(reminder.scheduleType);
+    setEditRemindAt(toDateTimeLocal(reminder.nextRemindAt));
+    const interval = intervalParts(reminder.repeatIntervalMinutes ?? 30);
+    setEditRepeatInterval(interval.value);
+    setEditRepeatIntervalUnit(interval.unit);
+  }
+
+  async function updateReminderSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!reactivating) return;
-    const date = new Date(reactivateAt);
-    if (!reactivateAt || !Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+    if (!editingSchedule) return;
+    const date = editScheduleType === "never" ? null : new Date(editRemindAt);
+    const interval = intervalInMinutes(editRepeatInterval, editRepeatIntervalUnit);
+    if (editScheduleType !== "never" && (!date || !Number.isFinite(date.getTime()) || date.getTime() <= Date.now())) {
       setError(copy.invalidTime);
       return;
     }
+    if (editScheduleType === "repeat" && (!Number.isInteger(interval) || interval < 30 || interval > MAX_REPEAT_INTERVAL_MINUTES)) {
+      setError(copy.invalidInterval);
+      return;
+    }
 
-    setReactivateSaving(true);
+    setScheduleSaving(true);
     setError(null);
     try {
-      const response = await remindersApi.reactivate(
-        reactivating.reminderId,
-        date.toISOString()
-      );
+      const response = await remindersApi.updateSchedule(editingSchedule.reminderId, {
+        scheduleType: editScheduleType,
+        remindAt: date?.toISOString() ?? null,
+        repeatIntervalMinutes: editScheduleType === "repeat" ? interval : null,
+      });
       setReminders((current) =>
         current.map((item) =>
           item.reminderId === response.reminder.reminderId
@@ -246,13 +295,12 @@ export default function ReminderClient() {
             : item
         )
       );
-      setReactivating(null);
-      setReactivateAt("");
-      setMessage(copy.reactivated);
+      setEditingSchedule(null);
+      setMessage(copy.scheduleUpdated);
     } catch {
-      setError(copy.reactivateFailed);
+      setError(copy.updateFailed);
     } finally {
-      setReactivateSaving(false);
+      setScheduleSaving(false);
     }
   }
 
@@ -261,6 +309,13 @@ export default function ReminderClient() {
     setAuditOpen(nextOpen);
     if (!nextOpen) return;
     await loadAudits();
+  }
+
+  function repeatLabel(minutes: number) {
+    const interval = intervalParts(minutes);
+    if (interval.unit === "days") return copy.repeatingDays(Number(interval.value));
+    if (interval.unit === "hours") return copy.repeatingHours(Number(interval.value));
+    return copy.repeating(Number(interval.value));
   }
 
   const authLoading = status === "uninitialized" || status === "refreshing";
@@ -303,12 +358,27 @@ export default function ReminderClient() {
                   <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><AddAlertRoundedIcon color="primary" /><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{copy.createTitle}</Typography></Stack>
                   <TextField label={copy.reminderTitle} value={title} onChange={(event) => setTitle(event.target.value.slice(0, 160))} helperText={copy.titleHint} required slotProps={{ htmlInput: { maxLength: 160 } }} />
                   <TextField label={copy.note} value={note} onChange={(event) => setNote(event.target.value.slice(0, 5000))} helperText={copy.noteHint} required multiline minRows={4} slotProps={{ htmlInput: { maxLength: 5000 } }} />
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "flex-start" } }}>
-                    <TextField label={copy.remindAt} type="datetime-local" value={remindAt} onChange={(event) => setRemindAt(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} />
-                    <FormControlLabel control={<Switch checked={repeats} onChange={(event) => setRepeats(event.target.checked)} />} label={copy.repeats} sx={{ minWidth: 210 }} />
-                  </Stack>
-                  <Collapse in={repeats} unmountOnExit>
-                    <TextField label={copy.repeatEvery} type="number" value={repeatInterval} onChange={(event) => setRepeatInterval(event.target.value)} helperText={copy.repeatHint} required fullWidth slotProps={{ htmlInput: { min: 30, max: 525600, step: 1 } }} />
+                  <FormControl fullWidth>
+                    <InputLabel>{copy.scheduleType}</InputLabel>
+                    <Select label={copy.scheduleType} value={scheduleType} onChange={(event) => setScheduleType(event.target.value as ReminderScheduleType)}>
+                      <MenuItem value="one_time">{copy.once}</MenuItem>
+                      <MenuItem value="repeat">{copy.repeat}</MenuItem>
+                      <MenuItem value="never">{copy.never}</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {scheduleType !== "never" ? <TextField label={copy.remindAt} type="datetime-local" value={remindAt} onChange={(event) => setRemindAt(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} /> : null}
+                  <Collapse in={scheduleType === "repeat"} unmountOnExit>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                      <TextField label={copy.repeatEvery} type="number" value={repeatInterval} onChange={(event) => setRepeatInterval(event.target.value)} helperText={copy.repeatHint} required fullWidth slotProps={{ htmlInput: { min: repeatIntervalUnit === "minutes" ? 30 : 1, max: Math.floor(MAX_REPEAT_INTERVAL_MINUTES / INTERVAL_UNIT_MINUTES[repeatIntervalUnit]), step: 1 } }} />
+                      <FormControl sx={{ minWidth: { sm: 160 } }}>
+                        <InputLabel>{copy.intervalUnit}</InputLabel>
+                        <Select label={copy.intervalUnit} value={repeatIntervalUnit} onChange={(event) => setRepeatIntervalUnit(event.target.value as RepeatIntervalUnit)}>
+                          <MenuItem value="minutes">{copy.minutes}</MenuItem>
+                          <MenuItem value="hours">{copy.hours}</MenuItem>
+                          <MenuItem value="days">{copy.days}</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Stack>
                   </Collapse>
                   <Button type="submit" variant="contained" disabled={creating} sx={{ alignSelf: "flex-start", minWidth: 150 }}>{creating ? <CircularProgress size={20} color="inherit" /> : copy.create}</Button>
                 </Stack>
@@ -324,18 +394,18 @@ export default function ReminderClient() {
                       <CardContent sx={{ p: 2.5 }}>
                         <Stack direction="row" spacing={2} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
                           <Box sx={{ minWidth: 0 }}>
-                            <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}><Typography variant="h6" sx={{ fontWeight: 700 }}>{reminder.title}</Typography><Chip size="small" color={statusColor(reminder.status)} label={copy[reminder.status]} /><Chip size="small" variant="outlined" label={reminder.repeats ? copy.repeating(reminder.repeatIntervalMinutes ?? 30) : copy.once} /></Stack>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}><Typography variant="h6" sx={{ fontWeight: 700 }}>{reminder.title}</Typography>{reminder.scheduleType !== "never" ? <Chip size="small" color={statusColor(reminder.status)} label={copy[reminder.status]} /> : null}<Chip size="small" variant="outlined" label={reminder.scheduleType === "repeat" ? repeatLabel(reminder.repeatIntervalMinutes ?? 30) : reminder.scheduleType === "never" ? copy.never : copy.once} /></Stack>
                             <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{reminder.note}</Typography>
                             <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 0.25, sm: 2 }} sx={{ mt: 1.5 }}>
-                              <Typography variant="caption" color={isDueSoon(reminder, refreshedAt) ? "error.main" : "text.secondary"} sx={{ fontWeight: isDueSoon(reminder, refreshedAt) ? 700 : undefined }}>{copy.nextAt}: {formatDate(reminder.nextRemindAt, locale)}</Typography>
+                              {reminder.nextRemindAt ? <Typography variant="caption" color={isDueSoon(reminder, refreshedAt) ? "error.main" : "text.secondary"} sx={{ fontWeight: isDueSoon(reminder, refreshedAt) ? 700 : undefined }}>{copy.nextAt}: {formatDate(reminder.nextRemindAt, locale)}</Typography> : null}
                               <Typography variant="caption" color="text.secondary">{copy.lastSentAt}: {reminder.lastSentAt ? formatDate(reminder.lastSentAt, locale) : copy.neverSent}</Typography>
                             </Stack>
                             {isDueSoon(reminder, refreshedAt) ? <Typography variant="caption" color="error.main" sx={{ display: "block", fontWeight: 700, mt: 0.5 }}>{copy.dueSoon}</Typography> : null}
                             {reminder.lastDeliveryStatus === "rate_limited" ? <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 0.5 }}>{copy.rateLimited}</Typography> : null}
                           </Box>
                           <Stack direction="row">
-                            {reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
-                            {reminder.status === "completed" && !reminder.repeats ? <Tooltip title={copy.reactivate}><IconButton color="primary" onClick={() => { setReactivating(reminder); setReactivateAt(""); }}><ReplayRoundedIcon /></IconButton></Tooltip> : null}
+                            {reminder.scheduleType !== "never" && reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
+                            <Tooltip title={copy.editSchedule}><IconButton color="primary" onClick={() => openScheduleEditor(reminder)}><EditNotificationsRoundedIcon /></IconButton></Tooltip>
                             <Tooltip title={copy.delete}><IconButton color="error" onClick={() => void deleteReminder(reminder)}><DeleteOutlineRoundedIcon /></IconButton></Tooltip>
                           </Stack>
                         </Stack>
@@ -367,18 +437,37 @@ export default function ReminderClient() {
           </Stack>
         )}
       </Box>
-      <Dialog open={Boolean(reactivating)} onClose={() => !reactivateSaving && setReactivating(null)} fullWidth maxWidth="xs">
-        <Box component="form" onSubmit={reactivateReminder}>
-          <DialogTitle>{copy.reactivateTitle}</DialogTitle>
+      <Dialog open={Boolean(editingSchedule)} onClose={() => !scheduleSaving && setEditingSchedule(null)} fullWidth maxWidth="xs">
+        <Box component="form" onSubmit={updateReminderSchedule}>
+          <DialogTitle>{copy.editSchedule}</DialogTitle>
           <DialogContent>
             <Stack spacing={1.5} sx={{ pt: 1 }}>
-              <Typography variant="body2" color="text.secondary">{copy.reactivateDescription}</Typography>
-              <TextField label={copy.remindAt} type="datetime-local" value={reactivateAt} onChange={(event) => setReactivateAt(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} />
+              <Typography variant="body2" color="text.secondary">{copy.editScheduleDescription}</Typography>
+              <FormControl fullWidth>
+                <InputLabel>{copy.scheduleType}</InputLabel>
+                <Select label={copy.scheduleType} value={editScheduleType} onChange={(event) => setEditScheduleType(event.target.value as ReminderScheduleType)}>
+                  <MenuItem value="one_time">{copy.once}</MenuItem>
+                  <MenuItem value="repeat">{copy.repeat}</MenuItem>
+                  <MenuItem value="never">{copy.never}</MenuItem>
+                </Select>
+              </FormControl>
+              {editScheduleType !== "never" ? <TextField label={copy.remindAt} type="datetime-local" value={editRemindAt} onChange={(event) => setEditRemindAt(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} /> : null}
+              {editScheduleType === "repeat" ? <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <TextField label={copy.repeatEvery} type="number" value={editRepeatInterval} onChange={(event) => setEditRepeatInterval(event.target.value)} helperText={copy.repeatHint} required fullWidth slotProps={{ htmlInput: { min: editRepeatIntervalUnit === "minutes" ? 30 : 1, max: Math.floor(MAX_REPEAT_INTERVAL_MINUTES / INTERVAL_UNIT_MINUTES[editRepeatIntervalUnit]), step: 1 } }} />
+                <FormControl sx={{ minWidth: { sm: 150 } }}>
+                  <InputLabel>{copy.intervalUnit}</InputLabel>
+                  <Select label={copy.intervalUnit} value={editRepeatIntervalUnit} onChange={(event) => setEditRepeatIntervalUnit(event.target.value as RepeatIntervalUnit)}>
+                    <MenuItem value="minutes">{copy.minutes}</MenuItem>
+                    <MenuItem value="hours">{copy.hours}</MenuItem>
+                    <MenuItem value="days">{copy.days}</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack> : null}
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setReactivating(null)} disabled={reactivateSaving}>{copy.cancel}</Button>
-            <Button type="submit" variant="contained" disabled={reactivateSaving}>{reactivateSaving ? copy.reactivating : copy.reactivate}</Button>
+            <Button onClick={() => setEditingSchedule(null)} disabled={scheduleSaving}>{copy.cancel}</Button>
+            <Button type="submit" variant="contained" disabled={scheduleSaving}>{scheduleSaving ? copy.saving : copy.save}</Button>
           </DialogActions>
         </Box>
       </Dialog>

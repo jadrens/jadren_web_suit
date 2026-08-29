@@ -4,10 +4,19 @@ export const MAX_REMINDER_TITLE_LENGTH = 160;
 export const MAX_REMINDER_NOTE_LENGTH = 5_000;
 export const REMINDER_EMAILS_PER_UTC_HOUR = 25;
 
+export type ReminderScheduleType = "one_time" | "repeat" | "never";
+
+export interface ReminderScheduleInput {
+  scheduleType: ReminderScheduleType;
+  remindAt: Date | null;
+  repeatIntervalMinutes: number | null;
+}
+
 export interface ReminderInput {
   title: string;
   note: string;
-  remindAt: Date;
+  scheduleType: ReminderScheduleType;
+  remindAt: Date | null;
   repeatIntervalMinutes: number | null;
 }
 
@@ -15,15 +24,18 @@ export type ReminderInputResult =
   | { value: ReminderInput; error?: never; code?: never }
   | { value?: never; error: string; code: string };
 
-export function parseReminderInput(body: Record<string, unknown>): ReminderInputResult {
-  const title = typeof body.title === "string" ? body.title.trim() : "";
-  if (!title || title.length > MAX_REMINDER_TITLE_LENGTH) {
-    return { error: `Title must contain 1-${MAX_REMINDER_TITLE_LENGTH} characters`, code: "invalid_title" };
+export function parseReminderSchedule(body: Record<string, unknown>):
+  | { value: ReminderScheduleInput; error?: never; code?: never }
+  | { value?: never; error: string; code: string } {
+  // Keep accepting the original create payload while clients roll forward.
+  const scheduleType = body.scheduleType === undefined
+    ? (body.repeats === true ? "repeat" : "one_time")
+    : body.scheduleType;
+  if (scheduleType !== "one_time" && scheduleType !== "repeat" && scheduleType !== "never") {
+    return { error: "Schedule type is invalid", code: "invalid_schedule_type" };
   }
-
-  const note = typeof body.note === "string" ? body.note.trim() : "";
-  if (!note || note.length > MAX_REMINDER_NOTE_LENGTH) {
-    return { error: `Note must contain 1-${MAX_REMINDER_NOTE_LENGTH} characters`, code: "invalid_note" };
+  if (scheduleType === "never") {
+    return { value: { scheduleType, remindAt: null, repeatIntervalMinutes: null } };
   }
 
   const remindAt = typeof body.remindAt === "string" ? new Date(body.remindAt) : null;
@@ -34,9 +46,8 @@ export function parseReminderInput(body: Record<string, unknown>): ReminderInput
     return { error: "Reminder time must be in the future", code: "remind_at_not_future" };
   }
 
-  const repeats = body.repeats === true;
   let repeatIntervalMinutes: number | null = null;
-  if (repeats) {
+  if (scheduleType === "repeat") {
     const interval = body.repeatIntervalMinutes;
     if (
       typeof interval !== "number" ||
@@ -52,7 +63,24 @@ export function parseReminderInput(body: Record<string, unknown>): ReminderInput
     repeatIntervalMinutes = interval;
   }
 
-  return { value: { title, note, remindAt, repeatIntervalMinutes } };
+  return { value: { scheduleType, remindAt, repeatIntervalMinutes } };
+}
+
+export function parseReminderInput(body: Record<string, unknown>): ReminderInputResult {
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title || title.length > MAX_REMINDER_TITLE_LENGTH) {
+    return { error: `Title must contain 1-${MAX_REMINDER_TITLE_LENGTH} characters`, code: "invalid_title" };
+  }
+
+  const note = typeof body.note === "string" ? body.note.trim() : "";
+  if (!note || note.length > MAX_REMINDER_NOTE_LENGTH) {
+    return { error: `Note must contain 1-${MAX_REMINDER_NOTE_LENGTH} characters`, code: "invalid_note" };
+  }
+
+  const schedule = parseReminderSchedule(body);
+  if (!schedule.value) return schedule;
+
+  return { value: { title, note, ...schedule.value } };
 }
 
 export function nextOccurrenceAfter(scheduledFor: Date, intervalMinutes: number, now: Date) {

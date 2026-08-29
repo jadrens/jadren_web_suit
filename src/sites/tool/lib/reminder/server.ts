@@ -1,6 +1,7 @@
 import { db } from "@tool/lib/auth/db";
 import { apiError, internalError } from "@tool/lib/auth/http";
 import { bearerToken, verifyAccessToken } from "@tool/lib/auth/jwt";
+import type { ReminderScheduleType } from "./validation";
 
 export type ReminderStatus = "active" | "paused" | "completed";
 
@@ -8,9 +9,10 @@ export interface ReminderRow {
   reminder_id: string;
   title: string;
   note: string;
-  remind_at: string | Date;
-  next_remind_at: string | Date;
+  remind_at: string | Date | null;
+  next_remind_at: string | Date | null;
   repeat_interval_minutes: number | null;
+  schedule_type: ReminderScheduleType;
   status: ReminderStatus;
   created_at: string | Date;
   updated_at: string | Date;
@@ -60,10 +62,11 @@ export function toReminder(row: ReminderRow) {
     reminderId: row.reminder_id,
     title: row.title,
     note: row.note,
-    remindAt: new Date(row.remind_at).toISOString(),
-    nextRemindAt: new Date(row.next_remind_at).toISOString(),
+    remindAt: row.remind_at ? new Date(row.remind_at).toISOString() : null,
+    nextRemindAt: row.next_remind_at ? new Date(row.next_remind_at).toISOString() : null,
     repeatIntervalMinutes: row.repeat_interval_minutes,
-    repeats: row.repeat_interval_minutes !== null,
+    repeats: row.schedule_type === "repeat",
+    scheduleType: row.schedule_type,
     status: row.status,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
@@ -75,7 +78,7 @@ export function toReminder(row: ReminderRow) {
 
 export const reminderSelect = `
   SELECT r.reminder_id, r.title, r.note, r.remind_at, r.next_remind_at,
-         r.repeat_interval_minutes, r.status, r.created_at, r.updated_at,
+         r.repeat_interval_minutes, r.schedule_type, r.status, r.created_at, r.updated_at,
          r.last_sent_at, r.completed_at,
          (SELECT d.status
             FROM reminder_delivery d

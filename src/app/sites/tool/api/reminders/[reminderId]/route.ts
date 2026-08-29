@@ -10,6 +10,7 @@ import {
   type ReminderRow,
   type ReminderStatus,
 } from "@tool/lib/reminder/server";
+import { parseReminderSchedule } from "@tool/lib/reminder/validation";
 
 interface RouteContext {
   params: Promise<{ reminderId: string }>;
@@ -22,6 +23,35 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (authError) return authError;
     const { reminderId } = await context.params;
     const body = await request.json().catch(() => null);
+
+    if (body?.scheduleType !== undefined) {
+      const parsed = parseReminderSchedule(body as Record<string, unknown>);
+      if (!parsed.value) return apiError(parsed.error, 400, parsed.code);
+      const schedule = parsed.value;
+      const result = await db.query<ReminderRow>(
+        `UPDATE reminder_event
+            SET schedule_type = $3, remind_at = $4, next_remind_at = $4,
+                repeat_interval_minutes = $5,
+                status = CASE WHEN $3 = 'never' THEN 'paused' ELSE 'active' END,
+                completed_at = NULL, updated_at = NOW()
+          WHERE reminder_id = $1 AND user_id = $2
+          RETURNING reminder_id, title, note, remind_at, next_remind_at,
+                    repeat_interval_minutes, schedule_type, status, created_at, updated_at,
+                    last_sent_at, completed_at, NULL::varchar AS last_delivery_status`,
+        [
+          reminderId,
+          user!.sub,
+          schedule.scheduleType,
+          schedule.remindAt,
+          schedule.repeatIntervalMinutes,
+        ]
+      );
+      const reminder = firstRow(result.rows);
+      if (!reminder) {
+        return apiError("Reminder was not found", 404, "reminder_not_found");
+      }
+      return NextResponse.json({ reminder: toReminder(reminder) });
+    }
 
     if (typeof body?.remindAt === "string") {
       const remindAt = new Date(body.remindAt);
@@ -43,7 +73,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           WHERE reminder_id = $1 AND user_id = $2
             AND status = 'completed' AND repeat_interval_minutes IS NULL
           RETURNING reminder_id, title, note, remind_at, next_remind_at,
-                    repeat_interval_minutes, status, created_at, updated_at,
+                    repeat_interval_minutes, schedule_type, status, created_at, updated_at,
                     last_sent_at, completed_at, NULL::varchar AS last_delivery_status`,
         [reminderId, user!.sub, remindAt]
       );
@@ -72,8 +102,9 @@ export async function PATCH(request: Request, context: RouteContext) {
               END,
               updated_at = NOW()
         WHERE reminder_id = $1 AND user_id = $2 AND status <> 'completed'
+          AND schedule_type <> 'never'
         RETURNING reminder_id, title, note, remind_at, next_remind_at,
-                  repeat_interval_minutes, status, created_at, updated_at,
+                  repeat_interval_minutes, schedule_type, status, created_at, updated_at,
                   last_sent_at, completed_at, NULL::varchar AS last_delivery_status`,
       [reminderId, user!.sub, nextStatus]
     );
