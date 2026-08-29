@@ -52,8 +52,8 @@ export async function POST(request: Request) {
       `INSERT INTO reminder_event (
          reminder_id, user_id, title, note, remind_at, next_remind_at,
          repeat_interval_minutes, schedule_type, status
-       ) VALUES ($1, $2, $3, $4, $5, $5, $6, $7,
-                 CASE WHEN $7 = 'never' THEN 'paused' ELSE 'active' END)
+       ) VALUES ($1, $2, $3, $4, $5, $5, $6, $7::varchar,
+                 CASE WHEN $7::varchar = 'never' THEN 'paused' ELSE 'active' END)
        RETURNING reminder_id, title, note, remind_at, next_remind_at,
                  repeat_interval_minutes, schedule_type, status, created_at, updated_at,
                  last_sent_at, completed_at, NULL::varchar AS last_delivery_status`,

@@ -30,9 +30,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       const schedule = parsed.value;
       const result = await db.query<ReminderRow>(
         `UPDATE reminder_event
-            SET schedule_type = $3, remind_at = $4, next_remind_at = $4,
+            SET schedule_type = $3::varchar, remind_at = $4, next_remind_at = $4,
                 repeat_interval_minutes = $5,
-                status = CASE WHEN $3 = 'never' THEN 'paused' ELSE 'active' END,
+                status = CASE WHEN $3::varchar = 'never' THEN 'paused' ELSE 'active' END,
                 completed_at = NULL, updated_at = NOW()
           WHERE reminder_id = $1 AND user_id = $2
           RETURNING reminder_id, title, note, remind_at, next_remind_at,
