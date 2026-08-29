@@ -93,6 +93,7 @@ export default function QuickLinkClient() {
   const [targetUrl, setTargetUrl] = useState("");
   const [note, setNote] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,6 +185,7 @@ export default function QuickLinkClient() {
       setTargetUrl("");
       setNote("");
       setExpiresAt("");
+      setCreateOpen(false);
     } catch (requestError) {
       setError(
         requestError instanceof ApiError && requestError.code === "quick_link_exists"
@@ -362,58 +364,7 @@ export default function QuickLinkClient() {
         ) : (
           <Stack spacing={2.5}>
             {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
-            <Card elevation={0} sx={{ border: 1, borderColor: "divider", borderRadius: 2.5 }}>
-              <CardContent sx={{ p: 2.5 }}>
-                <Stack component="form" spacing={2} onSubmit={createLink} noValidate>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <AddLinkRoundedIcon color="primary" />
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{copy.createTitle}</Typography>
-                  </Stack>
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "0.75fr 1.25fr" }, gap: 1.5 }}>
-                    <TextField
-                      size="small"
-                      label={copy.shortName}
-                      value={shortName}
-                      onChange={(event) => setShortName(event.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 64))}
-                      helperText={copy.shortNameHint}
-                      required
-                      slotProps={{ htmlInput: { maxLength: 64, pattern: "[A-Za-z0-9]{1,64}" } }}
-                    />
-                    <TextField
-                      size="small"
-                      label={copy.targetUrl}
-                      placeholder={copy.targetPlaceholder}
-                      value={targetUrl}
-                      onChange={(event) => setTargetUrl(event.target.value)}
-                      required
-                    />
-                    <TextField
-                      size="small"
-                      label={copy.note}
-                      value={note}
-                      onChange={(event) => setNote(event.target.value.slice(0, 255))}
-                      helperText={copy.noteHint}
-                      slotProps={{ htmlInput: { maxLength: 255 } }}
-                    />
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                      <TextField
-                        size="small"
-                        label={copy.expiration}
-                        type="datetime-local"
-                        value={expiresAt}
-                        onChange={(event) => setExpiresAt(event.target.value)}
-                        required
-                        fullWidth
-                        slotProps={{ inputLabel: { shrink: true } }}
-                      />
-                      <Button type="submit" variant="contained" disabled={creating} sx={{ minWidth: 108, height: 40 }}>
-                        {creating ? <CircularProgress size={20} color="inherit" /> : copy.create}
-                      </Button>
-                    </Stack>
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
+            <Button startIcon={<AddLinkRoundedIcon />} variant="contained" onClick={() => { setError(null); setCreateOpen(true); }} sx={{ alignSelf: "flex-start" }}>{copy.createTitle}</Button>
 
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{copy.listTitle}</Typography>
@@ -484,6 +435,58 @@ export default function QuickLinkClient() {
           </Stack>
         )}
       </Box>
+
+      <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
+        <Box component="form" onSubmit={createLink} noValidate>
+          <DialogTitle>{copy.createTitle}</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
+              <TextField
+                label={copy.shortName}
+                value={shortName}
+                onChange={(event) => setShortName(event.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 64))}
+                helperText={copy.shortNameHint}
+                required
+                autoFocus
+                fullWidth
+                slotProps={{ htmlInput: { maxLength: 64, pattern: "[A-Za-z0-9]{1,64}" } }}
+              />
+              <TextField
+                label={copy.targetUrl}
+                placeholder={copy.targetPlaceholder}
+                value={targetUrl}
+                onChange={(event) => setTargetUrl(event.target.value)}
+                required
+                fullWidth
+              />
+              <TextField
+                label={copy.note}
+                value={note}
+                onChange={(event) => setNote(event.target.value.slice(0, 255))}
+                helperText={copy.noteHint}
+                slotProps={{ htmlInput: { maxLength: 255 } }}
+                multiline
+                minRows={2}
+                fullWidth
+              />
+              <TextField
+                label={copy.expiration}
+                type="datetime-local"
+                value={expiresAt}
+                onChange={(event) => setExpiresAt(event.target.value)}
+                required
+                fullWidth
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCreateOpen(false)} disabled={creating}>{copy.cancel}</Button>
+            <Button type="submit" variant="contained" disabled={creating}>{creating ? copy.creating : copy.create}</Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeMenu}>
         <MenuItem onClick={openEditor}><EditRoundedIcon fontSize="small" sx={{ mr: 1 }} />{selectedLink && new Date(selectedLink.expiresAt).getTime() <= refreshedAt ? copy.reactivate : copy.edit}</MenuItem>
