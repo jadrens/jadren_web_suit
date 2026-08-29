@@ -1,43 +1,40 @@
-import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
-import path from "path";
+import { db } from "@tool/lib/auth/db";
 
-const dataDir = path.join(process.cwd(), "data");
-const dbPath = path.join(dataDir, "views.db");
-
-mkdirSync(dataDir, { recursive: true });
-
-const db = new Database(dbPath, { create: true });
-
-db.run(`
-  CREATE TABLE IF NOT EXISTS views (
-    slug TEXT PRIMARY KEY,
-    count INTEGER DEFAULT 0
-  )
-`);
-
-// 预编译语句
-const selectViews = db.query("SELECT count FROM views WHERE slug = ?");
-const insertView = db.query("INSERT INTO views (slug, count) VALUES (?, 1)");
-const updateView = db.query("UPDATE views SET count = count + 1 WHERE slug = ?");
-const selectAllViews = db.query("SELECT slug, count FROM views");
-
-export function getPostViews(slug: string): number {
-  const result = selectViews.get(slug) as { count: number } | null;
-  return result?.count ?? 0;
+interface ViewCountRow {
+  slug: string;
+  view_count: string | number | bigint;
 }
 
-export function incrementPostViews(slug: string): void {
-  const result = selectViews.get(slug);
-  
-  if (result === null) {
-    insertView.run(slug);
-  } else {
-    updateView.run(slug);
-  }
+function viewCount(value: ViewCountRow["view_count"] | undefined) {
+  if (value === undefined) return 0;
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : 0;
 }
 
-export function getAllPostViews(): Record<string, number> {
-  const rows = selectAllViews.all() as Array<{ slug: string; count: number }>;
-  return Object.fromEntries(rows.map(r => [r.slug, r.count]));
+export async function getPostViews(slug: string): Promise<number> {
+  const result = await db.query<Pick<ViewCountRow, "view_count">>(
+    "SELECT view_count FROM blog_post_view WHERE slug = $1 LIMIT 1",
+    [slug]
+  );
+  return viewCount(result.rows[0]?.view_count);
+}
+
+export async function incrementPostViews(slug: string): Promise<void> {
+  await db.query(
+    `INSERT INTO blog_post_view (slug, view_count)
+     VALUES ($1, 1)
+     ON CONFLICT (slug) DO UPDATE
+       SET view_count = blog_post_view.view_count + 1,
+           updated_at = NOW()`,
+    [slug]
+  );
+}
+
+export async function getAllPostViews(): Promise<Record<string, number>> {
+  const result = await db.query<ViewCountRow>(
+    "SELECT slug, view_count FROM blog_post_view"
+  );
+  return Object.fromEntries(
+    result.rows.map((row) => [row.slug, viewCount(row.view_count)])
+  );
 }

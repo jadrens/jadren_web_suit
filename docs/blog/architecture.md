@@ -8,12 +8,12 @@
 | UI Library | React 19 |
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS v4 + MUI v9 (Emotion) |
-| Runtime | Bun (required for `bun:sqlite`) |
+| Runtime | Bun |
 | Markdown | react-markdown + remark-gfm + remark-math |
 | Code Highlight | Shiki + rehype-highlight |
 | Math | KaTeX (rehype-katex) |
 | Animation | Framer Motion, Matter.js |
-| Database | bun:sqlite (server-only, views counter) |
+| Database | PostgreSQL (server-only view counters and tool data) |
 | Search | Pre-built JSON index via gray-matter |
 
 ## Directory Structure
@@ -27,7 +27,7 @@
 │       └── zh/                  # Chinese articles (*.md)
 │
 ├── data/                        # Runtime generated data
-│   ├── views.db                 # SQLite database (page view counters)
+│   ├── views.db                 # Legacy view-counter backup/import source
 │   └── search-index/            # Pre-built search indices
 │       ├── index-en.json
 │       └── index-zh.json
@@ -104,7 +104,7 @@
 │   ├── lib/                     # Core library modules
 │   │   ├── posts.ts             # Post reader (reads content/posts/ + search index)
 │   │   ├── search-index.ts      # Search index builder (gray-matter → JSON index)
-│   │   ├── db.ts                # SQLite view counter (bun:sqlite)
+│   │   ├── db.ts                # PostgreSQL view counter
 │   │   └── i18n/
 │   │       ├── index.tsx        # I18nProvider + useI18n hook (React context)
 │   │       ├── en.ts            # English translations
@@ -168,7 +168,7 @@ src/app/blog/                      # Renders pages with MarkdownContent
 ### View Counter
 
 ```
-src/lib/db.ts (bun:sqlite)
+src/lib/db.ts (PostgreSQL)
         │
         ▼
 src/app/blog/actions.ts            # Server actions (getPostViews, incrementPostViews)
@@ -177,8 +177,9 @@ src/app/blog/actions.ts            # Server actions (getPostViews, incrementPost
 src/app/blog/[locale]/[slug]/PostClient.tsx  # Client component calls incrementView
 ```
 
-- Database: `data/views.db`, table `views(slug TEXT PRIMARY KEY, count INTEGER)`
-- Pre-compiled SQL statements for performance
+- Database: PostgreSQL table `blog_post_view(slug, view_count, created_at, updated_at)`
+- Atomic `INSERT ... ON CONFLICT` increments avoid lost counts under concurrent visits
+- `bun run blog-views:migrate` imports legacy `data/views.db` counts idempotently
 
 ### i18n
 
@@ -229,4 +230,3 @@ PostClient
   └─ Adjacent post navigation  ← Prev / Next post links
 Footer
 ```
-

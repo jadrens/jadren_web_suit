@@ -9,6 +9,7 @@
     "start": "bun --bun next start",
     "lint": "eslint",
     "db:migrate": "bun database/migrate.ts",
+    "blog-views:migrate": "bun scripts/migrate-blog-views.ts",
     "reminder:dispatch": "bun scripts/dispatch-reminders.ts"
   },
   "dependencies": {

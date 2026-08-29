@@ -40,7 +40,7 @@ tags: [tag1, tag2]
 ![文章页面（暗色模式）](./pics/markdown-test-dark-cn.png)
 
 ### Step1:克隆项目 安装依赖 测试运行
-> 由于本项目使用了bun独有的组件 bun:sqlite 所以你只能用bun(一个追求性能的nodejs解释器兼包管理器)来运行该项目,为了以防万一不能使用,推荐在使用bun时添加 --bun 参数,以下实例都使用了 --bun 参数
+> 本项目使用 Bun 运行，并使用 PostgreSQL 保存博客浏览量及工具站数据。请先配置数据库环境变量并运行 `bun run db:migrate`。如需导入旧版 `data/views.db` 浏览量，再运行 `bun run blog-views:migrate`。
 
 ```shell
 # 克隆该项目

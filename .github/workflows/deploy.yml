@@ -135,7 +135,11 @@ jobs:
             sudo systemctl daemon-reload
             sudo systemctl enable jadren-web-suit.service
             sudo systemctl enable --now jadren-reminder-dispatch.timer
-            sudo systemctl restart jadren-web-suit.service
+            if sudo systemctl is-active --quiet jadren-web-suit.service; then
+              sudo systemctl stop jadren-web-suit.service
+            fi
+            bun run blog-views:migrate
+            sudo systemctl start jadren-web-suit.service
             sudo systemctl is-active --quiet jadren-reminder-dispatch.timer
 
             for attempt in 1 2 3 4 5; do
