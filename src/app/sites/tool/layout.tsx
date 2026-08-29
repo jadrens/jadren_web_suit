@@ -6,6 +6,7 @@ import SITE_CONFIG from "@tool/var/config";
 import AuthLifecycle from "@tool/components/auth/AuthLifecycle";
 import Navbar from "@tool/components/layout/Navbar";
 import { NavbarLoginStatusProvider } from "@tool/components/layout/NavbarLoginStatus";
+import { SHARED_SITE_ICONS } from "@shared/site-icons";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_CONFIG.baseUrl),
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
     template: `%s | ${SITE_CONFIG.siteName}`,
   },
   description: "Free online tools for Base64, DNS, IP lookup, QR codes, colours, and short links.",
+  icons: SHARED_SITE_ICONS,
   openGraph: { siteName: SITE_CONFIG.siteName, type: "website", locale: "en_US" },
   twitter: { card: "summary" },
 };
