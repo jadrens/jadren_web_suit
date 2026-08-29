@@ -135,6 +135,11 @@ export interface UpdateReminderScheduleRequest {
   repeatIntervalMinutes: number | null;
 }
 
+export interface UpdateReminderContentRequest {
+  title: string;
+  note: string;
+}
+
 export interface ReminderResponse {
   reminder: Reminder;
 }

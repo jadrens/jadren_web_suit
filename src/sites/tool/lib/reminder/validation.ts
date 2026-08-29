@@ -12,6 +12,11 @@ export interface ReminderScheduleInput {
   repeatIntervalMinutes: number | null;
 }
 
+export interface ReminderContentInput {
+  title: string;
+  note: string;
+}
+
 export interface ReminderInput {
   title: string;
   note: string;
@@ -23,6 +28,22 @@ export interface ReminderInput {
 export type ReminderInputResult =
   | { value: ReminderInput; error?: never; code?: never }
   | { value?: never; error: string; code: string };
+
+export function parseReminderContent(body: Record<string, unknown>):
+  | { value: ReminderContentInput; error?: never; code?: never }
+  | { value?: never; error: string; code: string } {
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  if (!title || title.length > MAX_REMINDER_TITLE_LENGTH) {
+    return { error: `Title must contain 1-${MAX_REMINDER_TITLE_LENGTH} characters`, code: "invalid_title" };
+  }
+
+  const note = typeof body.note === "string" ? body.note.trim() : "";
+  if (!note || note.length > MAX_REMINDER_NOTE_LENGTH) {
+    return { error: `Note must contain 1-${MAX_REMINDER_NOTE_LENGTH} characters`, code: "invalid_note" };
+  }
+
+  return { value: { title, note } };
+}
 
 export function parseReminderSchedule(body: Record<string, unknown>):
   | { value: ReminderScheduleInput; error?: never; code?: never }
@@ -67,20 +88,13 @@ export function parseReminderSchedule(body: Record<string, unknown>):
 }
 
 export function parseReminderInput(body: Record<string, unknown>): ReminderInputResult {
-  const title = typeof body.title === "string" ? body.title.trim() : "";
-  if (!title || title.length > MAX_REMINDER_TITLE_LENGTH) {
-    return { error: `Title must contain 1-${MAX_REMINDER_TITLE_LENGTH} characters`, code: "invalid_title" };
-  }
-
-  const note = typeof body.note === "string" ? body.note.trim() : "";
-  if (!note || note.length > MAX_REMINDER_NOTE_LENGTH) {
-    return { error: `Note must contain 1-${MAX_REMINDER_NOTE_LENGTH} characters`, code: "invalid_note" };
-  }
+  const content = parseReminderContent(body);
+  if (!content.value) return content;
 
   const schedule = parseReminderSchedule(body);
   if (!schedule.value) return schedule;
 
-  return { value: { title, note, ...schedule.value } };
+  return { value: { ...content.value, ...schedule.value } };
 }
 
 export function nextOccurrenceAfter(scheduledFor: Date, intervalMinutes: number, now: Date) {

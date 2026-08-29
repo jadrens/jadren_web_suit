@@ -51,6 +51,14 @@ export const remindersApi = {
       import("./types").ReminderResponse,
       import("./types").UpdateReminderScheduleRequest
     >(`/api/reminders/${encodeURIComponent(reminderId)}`, input),
+  updateContent: (
+    reminderId: string,
+    input: import("./types").UpdateReminderContentRequest
+  ) =>
+    apiClient.patch<
+      import("./types").ReminderResponse,
+      import("./types").UpdateReminderContentRequest
+    >(`/api/reminders/${encodeURIComponent(reminderId)}`, input),
   reactivate: (reminderId: string, remindAt: string) =>
     apiClient.patch<
       import("./types").ReminderResponse,

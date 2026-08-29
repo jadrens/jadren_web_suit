@@ -1,9 +1,11 @@
+import { GITHUB_REPO_BRANCH, GITHUB_REPO_URL } from "@shared/github";
+
 const SITE_CONFIG = {
   baseUrl: "https://tool.jadren.me",
   siteName: "jadren tools",
   description: "Useful online tools",
-  githubRepo: "https://github.com/jadrens/dra_tool",
-  githubBranch: "master",
+  githubRepo: GITHUB_REPO_URL,
+  githubBranch: GITHUB_REPO_BRANCH,
   githubClipEnabled: true,
   githubEditEnabled: false,
 } as const;

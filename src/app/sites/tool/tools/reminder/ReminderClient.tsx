@@ -28,6 +28,7 @@ import {
 } from "@mui/material";
 import AddAlertRoundedIcon from "@mui/icons-material/AddAlertRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import EditNotificationsRoundedIcon from "@mui/icons-material/EditNotificationsRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
@@ -115,10 +116,15 @@ export default function ReminderClient() {
   const [scheduleType, setScheduleType] = useState<ReminderScheduleType>("one_time");
   const [repeatInterval, setRepeatInterval] = useState("30");
   const [repeatIntervalUnit, setRepeatIntervalUnit] = useState<RepeatIntervalUnit>("minutes");
+  const [createOpen, setCreateOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [editingContent, setEditingContent] = useState<Reminder | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [contentSaving, setContentSaving] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Reminder | null>(null);
   const [editScheduleType, setEditScheduleType] = useState<ReminderScheduleType>("one_time");
   const [editRemindAt, setEditRemindAt] = useState("");
@@ -213,6 +219,7 @@ export default function ReminderClient() {
       setScheduleType("one_time");
       setRepeatInterval("30");
       setRepeatIntervalUnit("minutes");
+      setCreateOpen(false);
       setMessage(copy.created);
     } catch (requestError) {
       setError(
@@ -257,7 +264,58 @@ export default function ReminderClient() {
     }
   }
 
+  function openContentEditor(reminder: Reminder) {
+    setError(null);
+    setEditingContent(reminder);
+    setEditTitle(reminder.title);
+    setEditNote(reminder.note);
+  }
+
+  async function updateReminderContent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingContent) return;
+    const normalizedTitle = editTitle.trim();
+    const normalizedNote = editNote.trim();
+    if (!normalizedTitle || normalizedTitle.length > 160) {
+      setError(copy.invalidTitle);
+      return;
+    }
+    if (!normalizedNote || normalizedNote.length > 5000) {
+      setError(copy.invalidNote);
+      return;
+    }
+
+    setContentSaving(true);
+    setError(null);
+    try {
+      const response = await remindersApi.updateContent(editingContent.reminderId, {
+        title: normalizedTitle,
+        note: normalizedNote,
+      });
+      setReminders((current) =>
+        current.map((item) =>
+          item.reminderId === response.reminder.reminderId
+            ? response.reminder
+            : item
+        )
+      );
+      setEditingContent(null);
+      setMessage(copy.contentUpdated);
+    } catch (requestError) {
+      setError(
+        requestError instanceof ApiError && requestError.code === "invalid_title"
+          ? copy.invalidTitle
+          : requestError instanceof ApiError && requestError.code === "invalid_note"
+            ? copy.invalidNote
+            : copy.updateFailed
+      );
+    } finally {
+      setContentSaving(false);
+    }
+  }
+
   function openScheduleEditor(reminder: Reminder) {
+    setError(null);
     setEditingSchedule(reminder);
     setEditScheduleType(reminder.scheduleType);
     setEditRemindAt(toDateTimeLocal(reminder.nextRemindAt));
@@ -352,38 +410,7 @@ export default function ReminderClient() {
             {message ? <Alert severity="success" onClose={() => setMessage(null)}>{message}</Alert> : null}
             <Alert severity="info">{copy.quotaInfo}</Alert>
 
-            <Card elevation={0} sx={{ border: 1, borderColor: "divider", borderRadius: 2.5 }}>
-              <CardContent sx={{ p: 2.5 }}>
-                <Stack component="form" spacing={2} onSubmit={createReminder} noValidate>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><AddAlertRoundedIcon color="primary" /><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{copy.createTitle}</Typography></Stack>
-                  <TextField label={copy.reminderTitle} value={title} onChange={(event) => setTitle(event.target.value.slice(0, 160))} helperText={copy.titleHint} required slotProps={{ htmlInput: { maxLength: 160 } }} />
-                  <TextField label={copy.note} value={note} onChange={(event) => setNote(event.target.value.slice(0, 5000))} helperText={copy.noteHint} required multiline minRows={4} slotProps={{ htmlInput: { maxLength: 5000 } }} />
-                  <FormControl fullWidth>
-                    <InputLabel>{copy.scheduleType}</InputLabel>
-                    <Select label={copy.scheduleType} value={scheduleType} onChange={(event) => setScheduleType(event.target.value as ReminderScheduleType)}>
-                      <MenuItem value="one_time">{copy.once}</MenuItem>
-                      <MenuItem value="repeat">{copy.repeat}</MenuItem>
-                      <MenuItem value="never">{copy.never}</MenuItem>
-                    </Select>
-                  </FormControl>
-                  {scheduleType !== "never" ? <TextField label={copy.remindAt} type="datetime-local" value={remindAt} onChange={(event) => setRemindAt(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} /> : null}
-                  <Collapse in={scheduleType === "repeat"} unmountOnExit>
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                      <TextField label={copy.repeatEvery} type="number" value={repeatInterval} onChange={(event) => setRepeatInterval(event.target.value)} helperText={copy.repeatHint} required fullWidth slotProps={{ htmlInput: { min: repeatIntervalUnit === "minutes" ? 30 : 1, max: Math.floor(MAX_REPEAT_INTERVAL_MINUTES / INTERVAL_UNIT_MINUTES[repeatIntervalUnit]), step: 1 } }} />
-                      <FormControl sx={{ minWidth: { sm: 160 } }}>
-                        <InputLabel>{copy.intervalUnit}</InputLabel>
-                        <Select label={copy.intervalUnit} value={repeatIntervalUnit} onChange={(event) => setRepeatIntervalUnit(event.target.value as RepeatIntervalUnit)}>
-                          <MenuItem value="minutes">{copy.minutes}</MenuItem>
-                          <MenuItem value="hours">{copy.hours}</MenuItem>
-                          <MenuItem value="days">{copy.days}</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Stack>
-                  </Collapse>
-                  <Button type="submit" variant="contained" disabled={creating} sx={{ alignSelf: "flex-start", minWidth: 150 }}>{creating ? <CircularProgress size={20} color="inherit" /> : copy.create}</Button>
-                </Stack>
-              </CardContent>
-            </Card>
+            <Button startIcon={<AddAlertRoundedIcon />} variant="contained" onClick={() => { setError(null); setCreateOpen(true); }} sx={{ alignSelf: "flex-start" }}>{copy.addReminder}</Button>
 
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{copy.listTitle}</Typography>
@@ -405,6 +432,7 @@ export default function ReminderClient() {
                           </Box>
                           <Stack direction="row">
                             {reminder.scheduleType !== "never" && reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
+                            <Tooltip title={copy.editContent}><IconButton onClick={() => openContentEditor(reminder)}><EditRoundedIcon /></IconButton></Tooltip>
                             <Tooltip title={copy.editSchedule}><IconButton color="primary" onClick={() => openScheduleEditor(reminder)}><EditNotificationsRoundedIcon /></IconButton></Tooltip>
                             <Tooltip title={copy.delete}><IconButton color="error" onClick={() => void deleteReminder(reminder)}><DeleteOutlineRoundedIcon /></IconButton></Tooltip>
                           </Stack>
@@ -437,6 +465,58 @@ export default function ReminderClient() {
           </Stack>
         )}
       </Box>
+      <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
+        <Box component="form" onSubmit={createReminder} noValidate>
+          <DialogTitle>{copy.createTitle}</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
+              <TextField label={copy.reminderTitle} value={title} onChange={(event) => setTitle(event.target.value.slice(0, 160))} helperText={copy.titleHint} required autoFocus slotProps={{ htmlInput: { maxLength: 160 } }} />
+              <TextField label={copy.note} value={note} onChange={(event) => setNote(event.target.value.slice(0, 5000))} helperText={copy.noteHint} required multiline minRows={4} slotProps={{ htmlInput: { maxLength: 5000 } }} />
+              <FormControl fullWidth>
+                <InputLabel>{copy.scheduleType}</InputLabel>
+                <Select label={copy.scheduleType} value={scheduleType} onChange={(event) => setScheduleType(event.target.value as ReminderScheduleType)}>
+                  <MenuItem value="one_time">{copy.once}</MenuItem>
+                  <MenuItem value="repeat">{copy.repeat}</MenuItem>
+                  <MenuItem value="never">{copy.never}</MenuItem>
+                </Select>
+              </FormControl>
+              {scheduleType !== "never" ? <TextField label={copy.remindAt} type="datetime-local" value={remindAt} onChange={(event) => setRemindAt(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} /> : null}
+              {scheduleType === "repeat" ? <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <TextField label={copy.repeatEvery} type="number" value={repeatInterval} onChange={(event) => setRepeatInterval(event.target.value)} helperText={copy.repeatHint} required fullWidth slotProps={{ htmlInput: { min: repeatIntervalUnit === "minutes" ? 30 : 1, max: Math.floor(MAX_REPEAT_INTERVAL_MINUTES / INTERVAL_UNIT_MINUTES[repeatIntervalUnit]), step: 1 } }} />
+                <FormControl sx={{ minWidth: { sm: 160 } }}>
+                  <InputLabel>{copy.intervalUnit}</InputLabel>
+                  <Select label={copy.intervalUnit} value={repeatIntervalUnit} onChange={(event) => setRepeatIntervalUnit(event.target.value as RepeatIntervalUnit)}>
+                    <MenuItem value="minutes">{copy.minutes}</MenuItem>
+                    <MenuItem value="hours">{copy.hours}</MenuItem>
+                    <MenuItem value="days">{copy.days}</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack> : null}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCreateOpen(false)} disabled={creating}>{copy.cancel}</Button>
+            <Button type="submit" variant="contained" disabled={creating}>{creating ? copy.creating : copy.create}</Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+      <Dialog open={Boolean(editingContent)} onClose={() => !contentSaving && setEditingContent(null)} fullWidth maxWidth="sm">
+        <Box component="form" onSubmit={updateReminderContent} noValidate>
+          <DialogTitle>{copy.editContent}</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
+              <TextField label={copy.reminderTitle} value={editTitle} onChange={(event) => setEditTitle(event.target.value.slice(0, 160))} helperText={copy.titleHint} required autoFocus slotProps={{ htmlInput: { maxLength: 160 } }} />
+              <TextField label={copy.note} value={editNote} onChange={(event) => setEditNote(event.target.value.slice(0, 5000))} helperText={copy.noteHint} required multiline minRows={5} slotProps={{ htmlInput: { maxLength: 5000 } }} />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditingContent(null)} disabled={contentSaving}>{copy.cancel}</Button>
+            <Button type="submit" variant="contained" disabled={contentSaving}>{contentSaving ? copy.saving : copy.save}</Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
       <Dialog open={Boolean(editingSchedule)} onClose={() => !scheduleSaving && setEditingSchedule(null)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={updateReminderSchedule}>
           <DialogTitle>{copy.editSchedule}</DialogTitle>

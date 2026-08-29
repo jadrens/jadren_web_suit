@@ -2,9 +2,9 @@
 
 import { Box, Typography, Chip, Avatar } from "@mui/material";
 import EmailIcon from "@mui/icons-material/Email";
-import LinkIcon from "@mui/icons-material/Link";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import { useI18n } from "@main/lib/i18n";
+import { GITHUB_REPO_URL } from "@shared/github";
 import BouncingAvatar from "./BouncingAvatar";
 
 export default function Footer() {
@@ -79,7 +79,7 @@ export default function Footer() {
             icon={<GitHubIcon sx={{ fontSize: 14 }} />}
             label={t.footer.github}
             component="a"
-            href="https://github.com/jadrens"
+            href={GITHUB_REPO_URL}
             clickable
             size="small"
             variant="outlined"

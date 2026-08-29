@@ -10,7 +10,10 @@ import {
   type ReminderRow,
   type ReminderStatus,
 } from "@tool/lib/reminder/server";
-import { parseReminderSchedule } from "@tool/lib/reminder/validation";
+import {
+  parseReminderContent,
+  parseReminderSchedule,
+} from "@tool/lib/reminder/validation";
 
 interface RouteContext {
   params: Promise<{ reminderId: string }>;
@@ -23,6 +26,25 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (authError) return authError;
     const { reminderId } = await context.params;
     const body = await request.json().catch(() => null);
+
+    if (body?.title !== undefined || body?.note !== undefined) {
+      const parsed = parseReminderContent(body as Record<string, unknown>);
+      if (!parsed.value) return apiError(parsed.error, 400, parsed.code);
+      const result = await db.query<ReminderRow>(
+        `UPDATE reminder_event
+            SET title = $3, note = $4, updated_at = NOW()
+          WHERE reminder_id = $1 AND user_id = $2
+          RETURNING reminder_id, title, note, remind_at, next_remind_at,
+                    repeat_interval_minutes, schedule_type, status, created_at, updated_at,
+                    last_sent_at, completed_at, NULL::varchar AS last_delivery_status`,
+        [reminderId, user!.sub, parsed.value.title, parsed.value.note]
+      );
+      const reminder = firstRow(result.rows);
+      if (!reminder) {
+        return apiError("Reminder was not found", 404, "reminder_not_found");
+      }
+      return NextResponse.json({ reminder: toReminder(reminder) });
+    }
 
     if (body?.scheduleType !== undefined) {
       const parsed = parseReminderSchedule(body as Record<string, unknown>);

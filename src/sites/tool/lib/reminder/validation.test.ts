@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   nextOccurrenceAfter,
+  parseReminderContent,
   parseReminderInput,
   parseReminderSchedule,
   utcHourWindow,
@@ -47,6 +48,14 @@ describe("reminder validation", () => {
   test("requires a future time when changing to one-time", () => {
     const result = parseReminderSchedule({ scheduleType: "one_time", remindAt: null });
     expect(result.code).toBe("invalid_remind_at");
+  });
+
+  test("validates and trims edited content", () => {
+    expect(parseReminderContent({ title: " Updated ", note: " Note " }).value).toEqual({
+      title: "Updated",
+      note: "Note",
+    });
+    expect(parseReminderContent({ title: "", note: "Note" }).code).toBe("invalid_title");
   });
 });
 
