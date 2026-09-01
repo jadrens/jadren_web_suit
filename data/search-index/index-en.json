@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-22T09:41:45.148Z",
+  "generatedAt": "2026-08-29T12:42:26.153Z",
   "postsByDate": [
     {
       "slug": "fix-dolphin-1",
@@ -10,17 +10,6 @@
       "tags": [
         "dolphin",
         "issue"
-      ],
-      "locale": "en"
-    },
-    {
-      "slug": "github-mirror",
-      "title": "Set Up a GitHub Mirror Site",
-      "description": "Using Nginx to set up a GitHub mirror site for faster access",
-      "date": "2026-06-11T00:00:00.000Z",
-      "tags": [
-        "website",
-        "mirror"
       ],
       "locale": "en"
     },
@@ -59,32 +48,6 @@
         "tags": [
           "dolphin",
           "issue"
-        ],
-        "locale": "en"
-      }
-    ],
-    "website": [
-      {
-        "slug": "github-mirror",
-        "title": "Set Up a GitHub Mirror Site",
-        "description": "Using Nginx to set up a GitHub mirror site for faster access",
-        "date": "2026-06-11T00:00:00.000Z",
-        "tags": [
-          "website",
-          "mirror"
-        ],
-        "locale": "en"
-      }
-    ],
-    "mirror": [
-      {
-        "slug": "github-mirror",
-        "title": "Set Up a GitHub Mirror Site",
-        "description": "Using Nginx to set up a GitHub mirror site for faster access",
-        "date": "2026-06-11T00:00:00.000Z",
-        "tags": [
-          "website",
-          "mirror"
         ],
         "locale": "en"
       }

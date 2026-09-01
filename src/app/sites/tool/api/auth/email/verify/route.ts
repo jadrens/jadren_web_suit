@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
-import { withTransaction, firstRow } from "@tool/lib/auth/db";
-import { apiError, internalError } from "@tool/lib/auth/http";
-import { isVerificationCode, normalizeEmail } from "@tool/lib/auth/input";
-import { toPublicUser, type UserRow } from "@tool/lib/auth/types";
+import { withTransaction, firstRow } from "@shared/libs/auth/db";
+import { apiError, internalError } from "@shared/libs/auth/http";
+import { isVerificationCode, normalizeEmail } from "@shared/libs/auth/input";
+import { toPublicUser, type UserRow } from "@shared/libs/auth/types";
 
 interface VerificationRow {
   email: string;

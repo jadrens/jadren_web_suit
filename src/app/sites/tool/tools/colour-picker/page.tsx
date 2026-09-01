@@ -1,5 +1,5 @@
 import ColourPickerClient from "./ColourPickerClient";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata = createPageMetadata({
   title: "Colour Picker and Converter",

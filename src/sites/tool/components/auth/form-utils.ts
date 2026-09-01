@@ -1,4 +1,4 @@
-import { ApiError } from "@tool/lib/client-api";
+import { ApiError } from "@shared/libs/client-api";
 
 export function authErrorMessage(
   error: unknown,

@@ -5,7 +5,7 @@ import { Box, List, ListItem, ListItemButton, ListItemText, Collapse, Typography
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useReadingProgress, Heading } from "../reading/ReadingProgressContext";
-import { useI18n } from "@blog/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/blog";
 import { tocDesktopWidth } from "@blog/var/toc";
 
 const NAV_HEIGHT = 64;

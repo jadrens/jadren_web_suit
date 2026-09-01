@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { apiError, internalError } from "@tool/lib/auth/http";
+import { apiError, internalError } from "@shared/libs/auth/http";
 import {
   db,
   reminderAuthFailure,
@@ -9,8 +9,8 @@ import {
   requireVerifiedReminderUser,
   toReminder,
   type ReminderRow,
-} from "@tool/lib/reminder/server";
-import { parseReminderInput } from "@tool/lib/reminder/validation";
+} from "@shared/libs/reminder/server";
+import { parseReminderInput } from "@shared/libs/reminder/validation";
 
 export async function GET(request: Request) {
   try {

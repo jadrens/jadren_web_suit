@@ -12,7 +12,6 @@ import {
   IconButton,
   Avatar,
   Drawer,
-  List,
   ListItem,
   ListItemButton,
   ListItemText,
@@ -33,7 +32,9 @@ import ArticleIcon from "@mui/icons-material/Article";
 import PersonIcon from "@mui/icons-material/Person";
 import ThemeToggle from "../navigation/ThemeToggle";
 import LocaleSwitcher from "../navigation/LocaleSwitcher";
-import { useI18n } from "@blog/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/blog";
+import { useAuth } from "@shared/libs/client-api/use-auth";
+import { useSiteUrl } from "@shared/site-url";
 import { alpha } from "@mui/material";
 import React from "react";
 
@@ -47,6 +48,39 @@ interface SearchResult {
 interface SearchResponse {
   results: SearchResult[];
   tags: string[];
+}
+
+function AccountArea({ nickname, href }: { nickname: string; href: string }) {
+  return (
+    <Box
+      component={Link}
+      href={href}
+      title={nickname}
+      sx={{
+        display: "flex",
+        width: 88,
+        height: 32,
+        px: 1,
+        overflow: "hidden",
+        flexShrink: 0,
+        alignItems: "center",
+        justifyContent: "center",
+        border: 1,
+        borderColor: "divider",
+        borderRadius: 1.5,
+        color: "text.primary",
+        textDecoration: "none",
+        fontSize: "0.75rem",
+        fontWeight: 700,
+        lineHeight: 1.5,
+        textAlign: "center",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {nickname}
+    </Box>
+  );
 }
 
 export default function Navbar() {
@@ -65,6 +99,8 @@ export default function Navbar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { t, locale } = useI18n();
+  const { isAuthenticated, user } = useAuth();
+  const accountUrl = useSiteUrl("tool", "/user-status");
 
   const navItems = [
     { key: "home", href: "/" },
@@ -91,7 +127,7 @@ export default function Navbar() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [searchFocused]);
 
   // 搜索请求
   useEffect(() => {
@@ -185,13 +221,17 @@ export default function Navbar() {
         }}
       >
         <Toolbar sx={{ px: { xs: 2, sm: 4 }, display: "flex", flexDirection: "row", alignItems: "center", gap: 1 }}>
-          <Avatar
-            component={Link}
-            href="/"
-            src="/shared/avatar.svg"
-            alt="jadren"
-            sx={{ width: 36, height: 36, flexShrink: 0, flexGrow: 0 }}
-          />
+          {isAuthenticated && user ? (
+            <AccountArea nickname={user.nickname} href={accountUrl} />
+          ) : (
+            <Avatar
+              component={Link}
+              href="/"
+              src="/shared/avatar.svg"
+              alt="jadren"
+              sx={{ width: 36, height: 36, flexShrink: 0, flexGrow: 0 }}
+            />
+          )}
 
           {/* 移动端布局 */}
           {isMobile ? (

@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { db, firstRow } from "@tool/lib/auth/db";
-import { apiError, internalError } from "@tool/lib/auth/http";
+import { db, firstRow } from "@shared/libs/auth/db";
+import { apiError, internalError } from "@shared/libs/auth/http";
 import {
   bearerToken,
   createAccessToken,
   tokenMetadata,
   verifyRefreshableToken,
-} from "@tool/lib/auth/jwt";
-import { toPublicUser, type UserRow } from "@tool/lib/auth/types";
+} from "@shared/libs/auth/jwt";
+import { toPublicUser, type UserRow } from "@shared/libs/auth/types";
 
 export async function POST(request: Request) {
   try {

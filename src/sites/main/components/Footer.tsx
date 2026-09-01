@@ -3,7 +3,7 @@
 import { Box, Typography, Chip, Avatar } from "@mui/material";
 import EmailIcon from "@mui/icons-material/Email";
 import GitHubIcon from "@mui/icons-material/GitHub";
-import { useI18n } from "@main/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/main";
 import { GITHUB_REPO_URL } from "@shared/github";
 import BouncingAvatar from "./BouncingAvatar";
 

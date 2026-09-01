@@ -28,6 +28,16 @@
   }
 }
 
+[data-theme="light"] {
+  --background: #f8f6f3;
+  --foreground: #4a4a4a;
+  --primary: #89a0d2;
+  --secondary: #c9a87c;
+  --paper: #fdfcfb;
+  --divider: #e8e4df;
+  --hover: #f0ede8;
+}
+
 [data-theme="dark"] {
   --background: #1e1e1e;
   --foreground: #e8e4df;

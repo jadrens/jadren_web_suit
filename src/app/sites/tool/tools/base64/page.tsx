@@ -1,5 +1,5 @@
 import Base64Client from "./Base64Client";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata = createPageMetadata({
   title: "Base64 Encoder and Decoder",

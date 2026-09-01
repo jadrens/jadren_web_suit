@@ -24,10 +24,10 @@ import HomeIcon from "@mui/icons-material/Home";
 import BuildIcon from "@mui/icons-material/Build";
 import ThemeToggle from "../navigation/ThemeToggle";
 import LocaleSwitcher from "../navigation/LocaleSwitcher";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 import { alpha } from "@mui/material";
 import React from "react";
-import { useAuth } from "@tool/lib/client-api/use-auth";
+import { useAuth } from "@shared/libs/client-api/use-auth";
 import { useNavbarLoginStatus } from "./NavbarLoginStatus";
 
 function AccountArea({

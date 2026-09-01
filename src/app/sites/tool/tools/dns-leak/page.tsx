@@ -1,5 +1,5 @@
 import DnsLeakClient from "./DnsLeakClient";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata = createPageMetadata({
   title: "DNS Leak Test",

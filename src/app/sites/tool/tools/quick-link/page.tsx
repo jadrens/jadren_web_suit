@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import QuickLinkClient from "./QuickLinkClient";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata: Metadata = createPageMetadata({
   title: "Short Link Manager",

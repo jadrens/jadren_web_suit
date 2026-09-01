@@ -13,25 +13,21 @@
 | Code Highlight | Shiki + rehype-highlight |
 | Math | KaTeX (rehype-katex) |
 | Animation | Framer Motion, Matter.js |
-| Database | PostgreSQL (server-only view counters and tool data) |
-| Search | Pre-built JSON index via gray-matter |
+| Database | PostgreSQL (articles, drafts, tags, views, and tool data) |
+| Search | PostgreSQL-backed in-process metadata index |
 
 ## Directory Structure
 
 ```
 .
-├── content/                     # User-editable content
+├── content/                     # Import source and non-article Markdown
 │   ├── about/                   # About page markdown (en.md / zh.md)
-│   └── posts/                   # Blog articles
+│   └── posts/                   # One-time legacy article import source
 │       ├── en/                  # English articles (*.md)
 │       └── zh/                  # Chinese articles (*.md)
 │
-├── data/                        # Runtime generated data
-│   ├── views.db                 # Legacy view-counter backup/import source
-│   └── search-index/            # Pre-built search indices
-│       ├── index-en.json
-│       └── index-zh.json
-│
+├── database/schema.sql          # PostgreSQL schema, including blog tables
+├── scripts/import-blog-posts.ts # One-time Markdown → PostgreSQL importer
 ├── docs/                        # Documentation
 │   ├── architecture.md
 │   ├── getting-start-zh_CN.md
@@ -61,9 +57,10 @@
 │   │   │       └── [slug]/
 │   │   │           ├── page.tsx # Blog post page (SSR)
 │   │   │           └── PostClient.tsx  # Post client component (TOC, sidebar, nav)
+│   │   ├── editor/              # Authenticated Markdown editor
 │   │   └── api/
-│   │       └── search/
-│   │           └── route.ts     # Search API endpoint
+│   │       ├── search/          # Public search endpoint
+│   │       └── editor/          # Draft and publish endpoints
 │   │
 │   ├── components/
 │   │   ├── content/             # Markdown rendering
@@ -102,8 +99,9 @@
 │   │   └── useScrollProgress.ts # Scroll position tracker (0–100%)
 │   │
 │   ├── lib/                     # Core library modules
-│   │   ├── posts.ts             # Post reader (reads content/posts/ + search index)
-│   │   ├── search-index.ts      # Search index builder (gray-matter → JSON index)
+│   │   ├── posts.ts             # Published article PostgreSQL queries
+│   │   ├── search-index.ts      # Builds request-local metadata/tag maps
+│   │   ├── editor.ts            # Draft, publish, ownership, and validation logic
 │   │   ├── db.ts                # PostgreSQL view counter
 │   │   └── i18n/
 │   │       ├── index.tsx        # I18nProvider + useI18n hook (React context)
@@ -135,6 +133,7 @@
 | `/blog/en` | `src/app/blog/[locale]/page.tsx` | English blog listing |
 | `/blog/zh` | `src/app/blog/[locale]/page.tsx` | Chinese blog listing |
 | `/blog/en/<slug>` | `src/app/blog/[locale]/[slug]/page.tsx` | Single blog post |
+| `/editor` | `src/app/editor/page.tsx` | Authenticated Markdown editor |
 | `/api/search` | `src/app/api/search/route.ts` | Search API (GET) |
 
 All blog pages use `dynamic = "force-dynamic"` (SSR only, no static generation).
@@ -144,26 +143,25 @@ All blog pages use `dynamic = "force-dynamic"` (SSR only, no static generation).
 ### Content Pipeline
 
 ```
-content/posts/{locale}/*.md        # Raw markdown with YAML frontmatter
+PostgreSQL blog_post + blog_post_tag
         │
         ▼
-src/lib/search-index.ts            # gray-matter parses frontmatter
-        │                           # Builds PostMeta[], generates JSON index
-        ▼
-data/search-index/index-{locale}.json   # Cached search index
+src/lib/posts.ts                   # Parameterized published-article queries
         │
-        ▼
-src/lib/posts.ts                   # Reads index + markdown files
-        │                           # Returns Post[] with content
+        ├── src/lib/search-index.ts # Request-local PostMeta/tag maps
         ▼
 src/app/blog/                      # Renders pages with MarkdownContent
 ```
 
-### Search Index Strategy
+### Editing and Publishing
 
-- **Build-on-read**: The index is regenerated lazily when `getSearchIndex()` is called and file changes are detected (mtime + slug set comparison)
-- **Auto-fill**: Missing `date` or `description` fields in frontmatter are auto-populated and written back to the `.md` file on first access
-- **No build step needed**: Content changes are picked up on next request without restarting
+- Saving writes the article and tags to `blog_post_pending` and `blog_post_pending_tag`.
+- Publishing uses one transaction to update `blog_post` and `blog_post_tag`, then removes the pending copy.
+- Every verified user may submit pending changes; only users with `user_main.is_admin = TRUE` may approve and publish them from `/admin`.
+- Administrators can reject a pending submission with a required reason. The pending row is deleted only after a rejection audit row is written, then an audited email is sent to its author.
+- Pending rows separately track `author_id`, `owner_id`, and `last_edited_user`. Non-admin users only query and update rows they own; admins may update all rows or fork one into a new admin-owned pending submission while preserving the original `author_id` for notifications.
+- Approval can include an administrator message, sends an audited email to the `author_id` account, and upserts the submission author and last editor into `blog_post_contributor`.
+- `bun run blog:import` imports the repository Markdown files once when migrating an existing installation.
 
 ### View Counter
 
@@ -179,7 +177,7 @@ src/app/blog/[locale]/[slug]/PostClient.tsx  # Client component calls incrementV
 
 - Database: PostgreSQL table `blog_post_view(slug, view_count, created_at, updated_at)`
 - Atomic `INSERT ... ON CONFLICT` increments avoid lost counts under concurrent visits
-- `bun run blog-views:migrate` imports legacy `data/views.db` counts idempotently
+- Deployment-specific one-time tasks can be placed in `scripts/deploy/` and are run automatically
 
 ### i18n
 

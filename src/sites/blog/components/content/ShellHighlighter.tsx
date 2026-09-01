@@ -28,7 +28,11 @@ export default function ShellHighlighter({ code, isDark }: ShellHighlighterProps
   return (
     <>
       {tokenizeShell(code).map((token, index) => (
-        <span key={index} style={{ color: colors[token.type][isDark ? "dark" : "light"] }}>
+        <span
+          key={index}
+          className={`code-token code-token-${token.type}`}
+          style={{ color: colors[token.type][isDark ? "dark" : "light"] }}
+        >
           {token.text}
         </span>
       ))}

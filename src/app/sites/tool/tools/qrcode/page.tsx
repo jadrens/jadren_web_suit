@@ -1,5 +1,5 @@
 import QrcodeClient from "./QrcodeClient";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata = createPageMetadata({
   title: "QR Code Generator",

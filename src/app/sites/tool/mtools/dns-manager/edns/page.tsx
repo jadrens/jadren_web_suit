@@ -39,8 +39,8 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { alpha } from "@mui/material";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { hasToken, listEdns, deleteEdns } from "@tool/lib/dns-manager/api";
-import type { EdnsItem } from "@tool/lib/dns-manager/types";
+import { hasToken, listEdns, deleteEdns } from "@shared/libs/dns-manager/api";
+import type { EdnsItem } from "@shared/libs/dns-manager/types";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 
 const PAGE_SIZE = 20;

@@ -34,8 +34,8 @@ import CachedIcon from "@mui/icons-material/Cached";
 import { alpha } from "@mui/material";
 import Link from "next/link";
 import LinkIcon from "@mui/icons-material/Link";
-import { hasToken, getGeoCache, deleteGeoCache } from "@tool/lib/dns-manager/api";
-import type { GeoCacheEntry } from "@tool/lib/dns-manager/types";
+import { hasToken, getGeoCache, deleteGeoCache } from "@shared/libs/dns-manager/api";
+import type { GeoCacheEntry } from "@shared/libs/dns-manager/types";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 
 const PAGE_SIZE = 20;

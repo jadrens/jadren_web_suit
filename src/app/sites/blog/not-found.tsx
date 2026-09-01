@@ -3,7 +3,7 @@
 import { Box, Typography, Button } from "@mui/material";
 import Navbar from "@blog/components/layout/Navbar";
 import Link from "next/link";
-import { useI18n } from "@blog/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/blog";
 
 const GOOGLE_COLORS = [
   "#4285F4",

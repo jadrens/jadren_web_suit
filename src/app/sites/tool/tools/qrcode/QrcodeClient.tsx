@@ -18,7 +18,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import { alpha } from "@mui/material";
 import Footer from "@tool/components/layout/Footer";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 import QRCode from "qrcode";
 import SITE_CONFIG from "@tool/var/config";

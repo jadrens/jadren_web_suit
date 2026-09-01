@@ -28,8 +28,8 @@ import CachedIcon from "@mui/icons-material/Cached";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import { alpha } from "@mui/material";
-import { hasToken, getStats, listZones, checkHealth, getServerConfig, updateServerConfig } from "@tool/lib/dns-manager/api";
-import type { StatsResponse, ZoneListResponse, ServerConfig } from "@tool/lib/dns-manager/types";
+import { hasToken, getStats, listZones, checkHealth, getServerConfig, updateServerConfig } from "@shared/libs/dns-manager/api";
+import type { StatsResponse, ZoneListResponse, ServerConfig } from "@shared/libs/dns-manager/types";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 
 export default function DnsManagerDashboard() {

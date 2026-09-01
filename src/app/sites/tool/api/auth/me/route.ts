@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { apiError, internalError } from "@tool/lib/auth/http";
-import { bearerToken, verifyAccessToken } from "@tool/lib/auth/jwt";
+import { apiError, internalError } from "@shared/libs/auth/http";
+import { bearerToken, verifyAccessToken } from "@shared/libs/auth/jwt";
 
 export async function GET(request: Request) {
   const token = bearerToken(request);

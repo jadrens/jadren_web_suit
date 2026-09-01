@@ -17,8 +17,8 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import Footer from "@tool/components/layout/Footer";
 import { ShowNavbarLoginStatus } from "@tool/components/layout/NavbarLoginStatus";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
-import { useAuth } from "@tool/lib/client-api/use-auth";
-import { useI18n } from "@tool/lib/i18n";
+import { useAuth } from "@shared/libs/client-api/use-auth";
+import { useI18n } from "@shared/libs/i18n/tool";
 
 export default function UserStatusClient() {
   const { t, locale } = useI18n();

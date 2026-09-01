@@ -3,7 +3,7 @@
 import { Box, Typography, Card, CardActionArea } from "@mui/material";
 import Footer from "@tool/components/layout/Footer";
 import Link from "next/link";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 import { alpha, useTheme } from "@mui/material";
 import LockIcon from "@mui/icons-material/Lock";

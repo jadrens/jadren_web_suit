@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Box, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
+import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
-import { useI18n } from "@blog/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/blog";
 import { mdiLanguageTypescript
 , mdiLanguagePython
 , mdiLanguageRust
@@ -21,6 +21,7 @@ mdiCodeJson,
  } from "@mdi/js"
 import {Icon} from "@mdi/react"
 import ShellHighlighter from "./ShellHighlighter";
+import { useTheme } from "@shared/theme/ThemeProvider";
 
 interface CodeBlockProps {
   children: React.ReactNode;
@@ -101,8 +102,8 @@ const languageIcons: Record<string, string> = {
 
 export default function CodeBlock({ children, className }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
-  const theme = useTheme();
-  const isDark = theme.palette.mode === "dark";
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const { t } = useI18n();
   const language = className?.match(/(?:^|\s)language-([\w-]+)/)?.[1] || "";
   const iconColor = (isDark ? languageColorsDark[language] : languageColorsLight[language]) || (isDark ? "#808080" : "#6d6d6d");
@@ -139,9 +140,13 @@ export default function CodeBlock({ children, className }: CodeBlockProps) {
         }
 
         const tokens = tokenizeNginx(codeText);
-        return React.cloneElement(child, {
-          children: tokens.map((token, i) => (
-            <span key={i} style={{ color: getNginxTokenColor(token.type, isDark) }}>
+          return React.cloneElement(child, {
+            children: tokens.map((token, i) => (
+            <span
+              key={i}
+              className={`code-token code-token-${token.type}`}
+              style={{ color: getNginxTokenColor(token.type, isDark) }}
+            >
               {token.text}
             </span>
           )),
@@ -160,12 +165,60 @@ export default function CodeBlock({ children, className }: CodeBlockProps) {
   return (
     <Box
       sx={{
+        "--code-bg": "#ffffff",
+        "--code-header-bg": "#ebebeb",
+        "--code-border": "#e0e0e0",
+        "--code-muted": "#6d6d6d",
+        "--code-text": "#24292e",
+        "--code-keyword": "#d73a49",
+        "--code-string": "#032f62",
+        "--code-number": "#005cc5",
+        "--code-comment": "#6a737d",
+        "--code-function": "#6f42c1",
+        "--code-class": "#22863a",
+        "--code-variable": "#e36209",
+        "--code-operator": "#005cc5",
+        "--code-property": "#005cc5",
+        "--code-builtin": "#22863a",
+        "html[data-theme='dark'] &": {
+          "--code-bg": "#1e1e1e",
+          "--code-header-bg": "#252526",
+          "--code-border": "#3c3c3c",
+          "--code-muted": "#9a9a9a",
+          "--code-text": "#d4d4d4",
+          "--code-keyword": "#569cd6",
+          "--code-string": "#ce9178",
+          "--code-number": "#b5cea8",
+          "--code-comment": "#6a9955",
+          "--code-function": "#dcdcaa",
+          "--code-class": "#4ec9b0",
+          "--code-variable": "#9cdcfe",
+          "--code-operator": "#d4d4d4",
+          "--code-property": "#9cdcfe",
+          "--code-builtin": "#4ec9b0",
+        },
         mb: 2,
         borderRadius: 1,
         overflow: "hidden",
-        bgcolor: isDark ? "#1e1e1e" : "#ffffff",
+        bgcolor: "var(--code-bg)",
         border: 1,
-        borderColor: isDark ? "#3c3c3c" : "#e0e0e0",
+        borderColor: "var(--code-border)",
+        "& .code-token": { color: "var(--code-text) !important" },
+        "& .code-token-comment": { color: "var(--code-comment) !important" },
+        "& .code-token-string, & .code-token-path": { color: "var(--code-string) !important" },
+        "& .code-token-variable": { color: "var(--code-variable) !important" },
+        "& .code-token-option": { color: "var(--code-function) !important" },
+        "& .code-token-command": { color: "var(--code-function) !important" },
+        "& .code-token-keyword": { color: "var(--code-keyword) !important" },
+        "& .code-token-operator": { color: "var(--code-operator) !important" },
+        "& .code-token-number": { color: "var(--code-number) !important" },
+        "& .code-token-permission, & .code-token-prompt, & .code-token-directive": {
+          color: "var(--code-builtin) !important",
+        },
+        "& .code-token-timestamp, & .code-token-date, & .code-token-block": {
+          color: "var(--code-function) !important",
+        },
+        "& .code-token-status, & .code-token-boolean": { color: "var(--code-keyword) !important" },
       }}
     >
       <Box
@@ -175,9 +228,9 @@ export default function CodeBlock({ children, className }: CodeBlockProps) {
           alignItems: "center",
           px: 1.5,
           py: 0.5,
-          bgcolor: isDark ? "#252526" : "#ebebeb",
+          bgcolor: "var(--code-header-bg)",
           borderBottom: 1,
-          borderColor: isDark ? "#3c3c3c" : "#d5d5d5",
+          borderColor: "var(--code-border)",
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -185,7 +238,7 @@ export default function CodeBlock({ children, className }: CodeBlockProps) {
           <Typography
             variant="caption"
             sx={{
-              color: isDark ? "#808080" : "#6d6d6d",
+              color: "var(--code-muted)",
               fontFamily: "'JetBrains Mono', Consolas, monospace",
               fontSize: "0.7rem",
             }}
@@ -198,7 +251,7 @@ export default function CodeBlock({ children, className }: CodeBlockProps) {
             onClick={handleCopy}
             size="small"
             sx={{
-              color: isDark ? "#808080" : "#6d6d6d",
+              color: "var(--code-muted)",
               p: 0.5,
               "&:hover": {
                 color: isDark ? "#fff" : "#000",
@@ -269,19 +322,19 @@ export default function CodeBlock({ children, className }: CodeBlockProps) {
               lineHeight: 1.6,
               whiteSpace: "pre-wrap",
               wordBreak: "break-all",
-              color: isDark ? "#d4d4d4" : "#24292e",
-              "& .hljs-keyword": { color: isDark ? "#569cd6" : "#d73a49" },
-              "& .hljs-string": { color: isDark ? "#ce9178" : "#032f62" },
-              "& .hljs-number": { color: isDark ? "#b5cea8" : "#005cc5" },
-              "& .hljs-comment": { color: isDark ? "#6a9955" : "#6a737d" },
-              "& .hljs-function": { color: isDark ? "#dcdcaa" : "#6f42c1" },
-              "& .hljs-class": { color: isDark ? "#4ec9b0" : "#22863a" },
-              "& .hljs-variable": { color: isDark ? "#9cdcfe" : "#e36209" },
-              "& .hljs-operator": { color: isDark ? "#d4d4d4" : "#005cc5" },
-              "& .hljs-punctuation": { color: isDark ? "#d4d4d4" : "#24292e" },
-              "& .hljs-property": { color: isDark ? "#9cdcfe" : "#005cc5" },
-              "& .hljs-params": { color: isDark ? "#d4d4d4" : "#24292e" },
-              "& .hljs-built_in": { color: isDark ? "#4ec9b0" : "#22863a" },
+              color: "var(--code-text)",
+              "& .hljs-keyword": { color: "var(--code-keyword)" },
+              "& .hljs-string": { color: "var(--code-string)" },
+              "& .hljs-number": { color: "var(--code-number)" },
+              "& .hljs-comment": { color: "var(--code-comment)" },
+              "& .hljs-function": { color: "var(--code-function)" },
+              "& .hljs-class": { color: "var(--code-class)" },
+              "& .hljs-variable": { color: "var(--code-variable)" },
+              "& .hljs-operator": { color: "var(--code-operator)" },
+              "& .hljs-punctuation": { color: "var(--code-text)" },
+              "& .hljs-property": { color: "var(--code-property)" },
+              "& .hljs-params": { color: "var(--code-text)" },
+              "& .hljs-built_in": { color: "var(--code-builtin)" },
             },
           }}
         >

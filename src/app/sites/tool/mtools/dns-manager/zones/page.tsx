@@ -46,9 +46,9 @@ import {
   saveZone,
   deleteZone,
   deleteZoneCountry,
-} from "@tool/lib/dns-manager/api";
-import { validateRecordValue } from "@tool/lib/dns-manager/validation";
-import type { Zone, DnsRecordSet, ZoneCountries } from "@tool/lib/dns-manager/types";
+} from "@shared/libs/dns-manager/api";
+import { validateRecordValue } from "@shared/libs/dns-manager/validation";
+import type { Zone, DnsRecordSet, ZoneCountries } from "@shared/libs/dns-manager/types";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 
 const RECORD_TYPES = ["a", "aaaa", "txt", "cname"] as const;

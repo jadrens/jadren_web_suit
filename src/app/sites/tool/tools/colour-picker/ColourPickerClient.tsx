@@ -20,7 +20,7 @@ import ColorLensIcon from "@mui/icons-material/ColorLens";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import Footer from "@tool/components/layout/Footer";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 
 type Rgba = { r: number; g: number; b: number; a: number };

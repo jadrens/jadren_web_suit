@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { firstRow } from "@tool/lib/auth/db";
-import { apiError, internalError } from "@tool/lib/auth/http";
+import { firstRow } from "@shared/libs/auth/db";
+import { apiError, internalError } from "@shared/libs/auth/http";
 import {
   db,
   reminderAuthFailure,
@@ -9,11 +9,11 @@ import {
   toReminder,
   type ReminderRow,
   type ReminderStatus,
-} from "@tool/lib/reminder/server";
+} from "@shared/libs/reminder/server";
 import {
   parseReminderContent,
   parseReminderSchedule,
-} from "@tool/lib/reminder/validation";
+} from "@shared/libs/reminder/validation";
 
 interface RouteContext {
   params: Promise<{ reminderId: string }>;

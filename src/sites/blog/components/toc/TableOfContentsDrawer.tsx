@@ -6,7 +6,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { useState, useEffect } from "react";
 import { useReadingProgress, Heading } from "../reading/ReadingProgressContext";
-import { useI18n } from "@blog/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/blog";
 import { tocMobileWidth } from "@blog/var/toc";
 
 interface TocItemProps {

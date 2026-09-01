@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   distDir: "build",
+  allowedDevOrigins: [
+    "jadren.debug",
+    "blog.jadren.debug",
+    "tool.jadren.debug",
+  ],
   experimental: {
     workerThreads: process.env.CI ? false : undefined,
     cpus: process.env.CI ? 1 : undefined,

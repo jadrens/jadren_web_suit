@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import ThemeToggle from "./ThemeToggle";
 import LocaleToggle from "./LocaleToggle";
-import { useI18n } from "@main/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/main";
 import { useSiteUrl } from "@shared/site-url";
 
 export default function Navbar() {

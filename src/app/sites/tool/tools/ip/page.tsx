@@ -1,5 +1,5 @@
 import IpClient from "./IpClient";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata = createPageMetadata({
   title: "What Is My IP Address?",

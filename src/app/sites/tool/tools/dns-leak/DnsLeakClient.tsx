@@ -29,7 +29,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CloseIcon from "@mui/icons-material/Close";
 import { alpha } from "@mui/material";
 import Footer from "@tool/components/layout/Footer";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 
 // ---------------------------------------------------------------------------
 // Types

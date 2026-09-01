@@ -1,8 +1,8 @@
 "use server";
 
-import { getAllPosts, Locale } from "@blog/lib/posts";
-import { getAllPostViews, getPostViews } from "@blog/lib/db";
-import { incrementPostViews } from "@blog/lib/db";
+import { getAllPosts, Locale } from "@shared/libs/blog/posts";
+import { getAllPostViews, getPostViews } from "@shared/libs/blog/db";
+import { incrementPostViews } from "@shared/libs/blog/db";
 
 export async function getPosts(locale: Locale) {
   return getAllPosts(locale);

@@ -1,7 +1,7 @@
 "use client";
 
 import { IconButton } from "@mui/material";
-import { useI18n, Locale, SUPPORTED_LOCALES } from "@main/lib/i18n";
+import { useI18n, Locale, SUPPORTED_LOCALES } from "@shared/libs/i18n/main";
 
 export default function LocaleToggle() {
   const { locale, setLocale } = useI18n();

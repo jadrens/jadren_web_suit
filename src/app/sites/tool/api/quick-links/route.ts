@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { db, firstRow } from "@tool/lib/auth/db";
+import { db, firstRow } from "@shared/libs/auth/db";
 import {
   apiError,
   internalError,
   isUniqueViolation,
-} from "@tool/lib/auth/http";
-import { bearerToken, verifyAccessToken } from "@tool/lib/auth/jwt";
+} from "@shared/libs/auth/http";
+import { bearerToken, verifyAccessToken } from "@shared/libs/auth/jwt";
 
 interface QuickLinkRow {
   short_name: string;

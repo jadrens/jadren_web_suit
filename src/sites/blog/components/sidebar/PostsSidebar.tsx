@@ -5,9 +5,9 @@ import { Box, List, ListItem, ListItemButton, ListItemText, Typography, IconButt
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import CloseIcon from "@mui/icons-material/Close";
 import Link from "next/link";
-import { useI18n } from "@blog/lib/i18n";
-import { PostMeta } from "@blog/lib/search-index";
-import { Locale } from "@blog/lib/posts";
+import { useI18n } from "@shared/libs/i18n/blog";
+import { PostMeta } from "@shared/libs/blog/search-index";
+import { Locale } from "@shared/libs/blog/posts";
 import { tocDesktopWidth } from "@blog/var/toc";
 
 const NAV_HEIGHT = 64;

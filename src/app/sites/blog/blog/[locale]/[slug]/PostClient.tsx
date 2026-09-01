@@ -20,9 +20,9 @@ import BackToTopButton from "@blog/components/reading/BackToTopButton";
 import { ReadingProgressProvider } from "@blog/components/reading/ReadingProgressContext";
 import { useScrollProgress } from "@blog/hooks/useScrollProgress";
 import { useBrowserConfig, BrowserConfigKeys } from "@blog/hooks/useBrowserConfig";
-import { useI18n } from "@blog/lib/i18n";
-import { Locale } from "@blog/lib/posts";
-import { PostMeta } from "@blog/lib/search-index";
+import { useI18n } from "@shared/libs/i18n/blog";
+import { Locale } from "@shared/libs/blog/posts";
+import { PostMeta } from "@shared/libs/blog/search-index";
 import { SITE_CONFIG } from "@blog/var/config";
 
 interface PostClientProps {
@@ -293,14 +293,12 @@ function PostContent({ post, views, slug, incrementView, locale, allPosts, title
               </Box>
             )}
             <Box sx={{ mt: 4, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-              {SITE_CONFIG.githubEditEnabled && (
+              {SITE_CONFIG.articleEditEnabled && (
                 <Chip
-                  component="a"
-                  href={`${SITE_CONFIG.githubRepo}/edit/${SITE_CONFIG.githubBranch}/content/posts/${locale}/${post.slug}.md`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  component={Link}
+                  href={`/editor?locale=${locale}&slug=${encodeURIComponent(post.slug)}`}
                   icon={<EditIcon />}
-                  label={t.blog.editOnGithub}
+                  label={t.blog.editPage}
                   variant="outlined"
                   size="small"
                   clickable

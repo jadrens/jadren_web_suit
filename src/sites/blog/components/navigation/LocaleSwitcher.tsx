@@ -2,7 +2,7 @@
 
 import { IconButton, Menu, MenuItem, Typography } from "@mui/material";
 import { useState } from "react";
-import { useI18n, Locale } from "@blog/lib/i18n";
+import { useI18n, Locale } from "@shared/libs/i18n/blog";
 import TranslateIcon from "@mui/icons-material/Translate";
 import { useRouter, usePathname } from "next/navigation";
 

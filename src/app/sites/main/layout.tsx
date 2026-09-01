@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import ThemeRegistry from "@main/components/ThemeRegistry";
-import { I18nProvider } from "@main/lib/i18n";
-import LocaleHtml from "@main/lib/i18n/LocaleHtml";
+import { I18nProvider } from "@shared/libs/i18n/main";
+import LocaleHtml from "@shared/libs/i18n/main/LocaleHtml";
 import { SHARED_SITE_ICONS } from "@shared/site-icons";
 
 export const metadata: Metadata = {

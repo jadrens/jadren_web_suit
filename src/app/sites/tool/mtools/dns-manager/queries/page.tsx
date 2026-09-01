@@ -37,8 +37,8 @@ import CachedIcon from "@mui/icons-material/Cached";
 import LinkIcon from "@mui/icons-material/Link";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { alpha } from "@mui/material";
-import { hasToken, listQueries, deleteQueries, deleteQueryById } from "@tool/lib/dns-manager/api";
-import type { QueryItem } from "@tool/lib/dns-manager/types";
+import { hasToken, listQueries, deleteQueries, deleteQueryById } from "@shared/libs/dns-manager/api";
+import type { QueryItem } from "@shared/libs/dns-manager/types";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 
 const PAGE_SIZE = 20;

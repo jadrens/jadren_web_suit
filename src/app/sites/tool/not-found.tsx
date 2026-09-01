@@ -2,7 +2,7 @@
 
 import { Box, Typography, Button } from "@mui/material";
 import Link from "next/link";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 
 const GOOGLE_COLORS = [
   "#4285F4",

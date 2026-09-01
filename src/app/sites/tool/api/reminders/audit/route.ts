@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { internalError } from "@tool/lib/auth/http";
+import { internalError } from "@shared/libs/auth/http";
 import {
   db,
   reminderAuthFailure,
   requestReminderUser,
   requireVerifiedReminderUser,
-} from "@tool/lib/reminder/server";
+} from "@shared/libs/reminder/server";
 
 interface EmailAuditRow {
   audit_id: string;

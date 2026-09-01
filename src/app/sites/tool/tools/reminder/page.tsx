@@ -1,5 +1,5 @@
 import ReminderClient from "./ReminderClient";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata = createPageMetadata({
   title: "Email Reminder",

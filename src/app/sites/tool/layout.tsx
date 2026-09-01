@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import ThemeRegistry from "@tool/components/layout/ThemeRegistry/ThemeRegistry";
-import { I18nProvider } from "@tool/lib/i18n";
+import { I18nProvider } from "@shared/libs/i18n/tool";
 import LoadingBar from "@tool/components/layout/LoadingBar";
 import SITE_CONFIG from "@tool/var/config";
 import AuthLifecycle from "@tool/components/auth/AuthLifecycle";

@@ -1,7 +1,7 @@
 "use client";
 
 import { Box } from "@mui/material";
-import { useI18n } from "@main/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/main";
 
 const PART1_COLORS = [
   "#6bb6eb",

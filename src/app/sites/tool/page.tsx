@@ -2,7 +2,7 @@ import { Box, Avatar } from "@mui/material";
 import StylizedName from "@tool/components/home/StylizedName";
 import ConfettiBackground from "@shared/background/ConfettiBackground";
 import Footer from "@tool/components/layout/Footer";
-import { createPageMetadata } from "@tool/lib/seo";
+import { createPageMetadata } from "@shared/libs/seo";
 
 export const metadata = createPageMetadata({
   title: "Free Online Developer Tools",

@@ -2,7 +2,7 @@
 
 import { IconButton, Menu, MenuItem, Typography } from "@mui/material";
 import { useState } from "react";
-import { useI18n, Locale } from "@tool/lib/i18n";
+import { useI18n, Locale } from "@shared/libs/i18n/tool";
 import TranslateIcon from "@mui/icons-material/Translate";
 
 const localeLabels: Record<Locale, string> = {

@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import { Box, Typography, Card, CardContent, CardActionArea } from "@mui/material";
 import Footer from "@tool/components/layout/Footer";
 import Link from "next/link";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 import { alpha, useTheme } from "@mui/material";
 import DnsIcon from "@mui/icons-material/Dns";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
-import { checkHealth } from "@tool/lib/dns-manager/api";
+import { checkHealth } from "@shared/libs/dns-manager/api";
 
 interface ToolItem {
   key: string;

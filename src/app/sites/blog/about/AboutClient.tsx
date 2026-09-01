@@ -6,7 +6,7 @@ import Footer from "@blog/components/layout/Footer";
 import MarkdownContent from "@blog/components/content/MarkdownContent";
 import { ReadingProgressProvider } from "@blog/components/reading/ReadingProgressContext";
 import { Box, Paper, Avatar, Link as MuiLink, useTheme, Snackbar, Alert } from "@mui/material";
-import { useI18n } from "@blog/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/blog";
 import { alpha } from "@mui/material";
 import { CONTACT_CONFIG, resolveContactColor } from "@blog/var/contact";
 import { CONTACT_ICON_REGISTRY } from "@blog/var/contact-icons";

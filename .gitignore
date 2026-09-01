@@ -16,7 +16,6 @@
 
 # runtime data and secrets
 /.data/
-/data/views.db
 .env*
 
 # logs and local tooling

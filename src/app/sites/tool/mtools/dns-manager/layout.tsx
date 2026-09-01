@@ -35,8 +35,8 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { alpha } from "@mui/material";
-import TokenDialog from "@tool/lib/dns-manager/TokenDialog";
-import { hasToken, removeToken, getApiBase, setApiBase } from "@tool/lib/dns-manager/api";
+import TokenDialog from "@shared/libs/dns-manager/TokenDialog";
+import { hasToken, removeToken, getApiBase, setApiBase } from "@shared/libs/dns-manager/api";
 import React from "react";
 
 const navItems = [

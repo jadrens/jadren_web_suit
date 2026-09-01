@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Box, Container, Paper, Stack, Typography } from "@mui/material";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 
 interface AuthPageShellProps {
   eyebrow: string;

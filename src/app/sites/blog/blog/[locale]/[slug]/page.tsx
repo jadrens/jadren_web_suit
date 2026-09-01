@@ -1,11 +1,11 @@
 import Navbar from "@blog/components/layout/Navbar";
-import { getPostBySlug, getAdjacentPosts, Locale } from "@blog/lib/posts";
-import { getSearchIndex } from "@blog/lib/search-index";
+import { getPostBySlug, getAdjacentPosts, getAllPostMetas, Locale } from "@shared/libs/blog/posts";
 import { getPostView, incrementView } from "../../actions";
 import PostClient from "./PostClient";
 import { Metadata } from "next";
 import MarkdownContent from "@blog/components/content/MarkdownContent";
 import { Typography } from "@mui/material";
+import { notFound } from "next/navigation";
 
 interface Props {
   params: Promise<{ slug: string; locale: Locale }>;
@@ -13,7 +13,8 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, locale } = await params;
-  const post = getPostBySlug(slug, locale);
+  const post = await getPostBySlug(slug, locale);
+  if (!post) return {};
   return {
     title: post.title,
     description: `Post: ${post.title}`,
@@ -24,12 +25,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function PostPage({ params }: Props) {
   const { slug, locale } = await params;
-  const [post, views, adjacent] = await Promise.all([
+  const [post, views, allPosts] = await Promise.all([
     getPostBySlug(slug, locale),
     getPostView(slug),
-    getAdjacentPosts(slug, locale),
+    getAllPostMetas(locale),
   ]);
-  const allPosts = getSearchIndex(locale).postsByDate;
+  if (!post) notFound();
+  const adjacent = getAdjacentPosts(slug, allPosts);
   const wordCount = post.content.replace(/\s/g, "").length;
   const date = post.date;
   const client_post = {

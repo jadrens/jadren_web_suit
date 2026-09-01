@@ -2,11 +2,22 @@
 
 ## 这是一个自己闲暇编写的一个博客/简单文档站点
 ### 如果想查看该项目的效果, 请访问:
-- [rayou's blog(https://blog.rayou.me)](https://blog.rayou.me)
+- [jadren blog (https://blog.jadren.me)](https://blog.jadren.me)
 
 
-## 关于提交文章或者更改文章
-请按如下格式更改或创建并提交到 **master** 分支
+## 关于创建或修改文章
+
+所有已验证账号都可以访问博客域名下的 `/editor` 并提交 pending 修改。管理员权限通过 PostgreSQL 设置：
+
+```sql
+UPDATE user_main SET is_admin = TRUE WHERE user_id = '你的用户 UUID';
+```
+
+编辑器支持 Markdown 实时预览。普通用户和管理员的保存操作都会写入 pending；管理员在 `/admin` 审核批准后，才会用事务同步正式文章与标签。旧版仓库 Markdown 可通过 `bun run blog:import` 一次性导入。
+
+管理员也可以填写理由后驳回并删除 pending。系统会保存驳回与邮件投递审计记录，并向提交者的注册邮箱发送通知。
+
+Pending 会分别记录作者、所有者和最后编辑用户。普通用户只能查看和修改自己拥有的 pending；管理员可以修改全部 pending，或 Fork 一份归自己所有、但保留原 `author_id` 的副本。批准发布时可以附带留言，系统会通知 `author_id` 对应邮箱，并更新正式文章的贡献者记录。
 
 ### 文章格式
 
@@ -28,7 +39,7 @@ tags: [tag1, tag2]
 - `description` — 文章简介（可选），留空会自动把标题变成描述
 - `tags` — 文章标签（可选）
 
-之后会合并到 run 分支并部署到服务器上
+上面的 frontmatter 格式仅供旧文章导入脚本使用；导入完成后 PostgreSQL 是文章的唯一数据源。
 
 ## 关于使用此项目作为自己的博客或者文档站点
 ### 效果预览
@@ -40,21 +51,18 @@ tags: [tag1, tag2]
 ![文章页面（暗色模式）](./pics/markdown-test-dark-cn.png)
 
 ### Step1:克隆项目 安装依赖 测试运行
-> 本项目使用 Bun 运行，并使用 PostgreSQL 保存博客浏览量及工具站数据。请先配置数据库环境变量并运行 `bun run db:migrate`。如需导入旧版 `data/views.db` 浏览量，再运行 `bun run blog-views:migrate`。
+> 本项目使用 Bun 运行，并使用 PostgreSQL 保存文章、草稿、标签、浏览量及工具站数据。请先配置数据库环境变量并运行 `bun run db:setup`。
 
 ```shell
 # 克隆该项目
-git clone https://github.com/jadrens/dra_blog.git
+git clone https://github.com/jadrens/jadren_web_suit.git
 ```
-
-> 如果国内服务器不方便连接github可以尝试使用我搭建的镜像站(github.rayou.me **为保护你的账号安全,切勿登录**) 详情请见 [搭建了一个Github镜像站](https://blog.rayou.me/blog/zh/github-mirror) <br>
-> 此时使用 ```git clone https://github.rayou.me/jadrens/dra_blog.git```
 
 
 ```shell
 # 确保你安装了bun
 # 切换目录并安装依赖
-cd dra_blog
+cd jadren_web_suit
 bun install
 ```
 ```shell
@@ -70,14 +78,14 @@ bun --bun dev
 ```typescript
 export const SITE_CONFIG = {
   // 你的网站域名 这里用来生成sitemap.xml,有助于搜索引擎对你网站的索引
-  baseUrl: "https://blog.rayou.me",
+  baseUrl: "https://blog.jadren.me",
   // 网站标题
-  siteName: "rayoumeu blog",
+  siteName: "jadren blog",
   // 给搜索引擎看的网站介绍
   description: "A blog with markdown and LaTeX support",
   // 如果你要把你的网站开源可编辑, 这里填入你的github项目地址
-  githubRepo: "https://github.com/jadrens/drablog",
-  githubBranch: "master",
+  githubRepo: "https://github.com/jadrens/jadren_web_suit",
+  githubBranch: "main",
   // 是否在网站底部显示你的github图标
   githubClipEnabled: true,
   // 是否开启github编辑按钮
@@ -131,7 +139,7 @@ export const CONTACT_CONFIG = {
 -- 个人简介
 修改 ```/content/about/zh.md``` 和 ```/content/about/en.md```（分别是中英文）
 -- 文章
-参见上述格式在 ```/content/posts/zh/...```（中文）和 ```/content/posts/en/...```（英文）添加 markdown 格式的文章，如果日期留空，会把第一次被访问的日期变更为文章日期，描述留空会自动把标题变成描述
+通过博客站 `/editor` 创建和修改；`content/posts` 只作为旧文章的一次性导入源。
 
 ## Step 3:部署
 

@@ -5,7 +5,7 @@ import WbSunnyIcon from "@mui/icons-material/WbSunny";
 import NightsStayIcon from "@mui/icons-material/NightsStay";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@shared/theme/ThemeProvider";
-import { useI18n } from "@main/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/main";
 
 export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();

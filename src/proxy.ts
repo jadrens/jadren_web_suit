@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 const HOST_TO_SITE: Record<string, "main" | "blog" | "tool"> = {
   "main.localhost": "main",
+  "jadren.debug": "main",
   "jadren.me": "main",
-  "rayou.me": "main",
   "example.com": "main",
   "blog.localhost": "blog",
+  "blog.jadren.debug": "blog",
   "blog.jadren.me": "blog",
-  "blog.rayou.me": "blog",
   "blog.com": "blog",
   "tool.localhost": "tool",
+  "tool.jadren.debug": "tool",
   "tool.jadren.me": "tool",
-  "tool.rayou.me": "tool",
   "tool.com": "tool",
 };
 

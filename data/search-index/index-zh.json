@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-22T09:41:23.685Z",
+  "generatedAt": "2026-08-29T12:42:26.157Z",
   "postsByDate": [
     {
       "slug": "fix-dolphin-1",
@@ -10,17 +10,6 @@
       "tags": [
         "dolphin",
         "issue"
-      ],
-      "locale": "zh"
-    },
-    {
-      "slug": "github-mirror",
-      "title": "搭建了一个 GitHub 镜像站",
-      "description": "使用 Nginx 搭建 GitHub 镜像站，加速访问",
-      "date": "2026-06-16T16:37:27.438Z",
-      "tags": [
-        "website",
-        "mirror"
       ],
       "locale": "zh"
     },
@@ -59,32 +48,6 @@
         "tags": [
           "dolphin",
           "issue"
-        ],
-        "locale": "zh"
-      }
-    ],
-    "website": [
-      {
-        "slug": "github-mirror",
-        "title": "搭建了一个 GitHub 镜像站",
-        "description": "使用 Nginx 搭建 GitHub 镜像站，加速访问",
-        "date": "2026-06-16T16:37:27.438Z",
-        "tags": [
-          "website",
-          "mirror"
-        ],
-        "locale": "zh"
-      }
-    ],
-    "mirror": [
-      {
-        "slug": "github-mirror",
-        "title": "搭建了一个 GitHub 镜像站",
-        "description": "使用 Nginx 搭建 GitHub 镜像站，加速访问",
-        "date": "2026-06-16T16:37:27.438Z",
-        "tags": [
-          "website",
-          "mirror"
         ],
         "locale": "zh"
       }

@@ -35,7 +35,7 @@ Optional database settings are `POSTGRES_HOST` (default `127.0.0.1`),
 `POSTGRES_PORT` (default `5432`), `POSTGRES_SSL=false` to explicitly disable
 SSL, or a complete `DATABASE_URL`. SSL is enabled by default.
 
-Run `bun run db:migrate` before starting the API. Deployment does this
+Run `bun run db:setup` before starting the API. Deployment does this
 automatically using Bun.
 
 ## Additional tables

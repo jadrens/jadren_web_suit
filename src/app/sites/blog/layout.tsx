@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import ThemeRegistry from "@blog/components/layout/ThemeRegistry/ThemeRegistry";
-import { I18nProvider } from "@blog/lib/i18n";
+import { I18nProvider } from "@shared/libs/i18n/blog";
 import LoadingBar from "@blog/components/layout/LoadingBar";
 import { SITE_CONFIG } from "@blog/var/config";
 import { SHARED_SITE_ICONS } from "@shared/site-icons";
+import AuthLifecycle from "@tool/components/auth/AuthLifecycle";
+import "vditor/dist/index.css";
 
 export const metadata: Metadata = {
   title: SITE_CONFIG.siteName,
@@ -16,8 +18,10 @@ export default function BlogSiteLayout({ children }: Readonly<{ children: React.
   return (
     <ThemeRegistry>
       <I18nProvider>
-        <LoadingBar />
-        {children}
+        <AuthLifecycle>
+          <LoadingBar />
+          {children}
+        </AuthLifecycle>
       </I18nProvider>
     </ThemeRegistry>
   );

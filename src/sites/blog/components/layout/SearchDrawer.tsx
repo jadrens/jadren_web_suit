@@ -20,8 +20,8 @@ import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
-import { useI18n } from "@blog/lib/i18n";
-import { Locale } from "@blog/lib/posts";
+import { useI18n } from "@shared/libs/i18n/blog";
+import { Locale } from "@shared/libs/blog/posts";
 
 interface SearchResult {
   slug: string;

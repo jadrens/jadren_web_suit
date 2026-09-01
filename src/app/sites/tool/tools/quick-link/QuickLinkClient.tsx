@@ -42,9 +42,9 @@ import Footer from "@tool/components/layout/Footer";
 import { ShowNavbarLoginStatus } from "@tool/components/layout/NavbarLoginStatus";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 import { useAutoRefresh } from "@tool/hooks/useAutoRefresh";
-import { useAuth } from "@tool/lib/client-api/use-auth";
-import { ApiError, quickLinksApi, type QuickLink } from "@tool/lib/client-api";
-import { useI18n } from "@tool/lib/i18n";
+import { useAuth } from "@shared/libs/client-api/use-auth";
+import { ApiError, quickLinksApi, type QuickLink } from "@shared/libs/client-api";
+import { useI18n } from "@shared/libs/i18n/tool";
 
 const QUICK_LINK_BASE_URL = "https://koi.ci/s/";
 const SHORT_NAME_PATTERN = /^[A-Za-z0-9]{1,64}$/;

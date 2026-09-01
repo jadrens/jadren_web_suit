@@ -1,16 +1,16 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
-import { db, firstRow } from "@tool/lib/auth/db";
-import { apiError, internalError } from "@tool/lib/auth/http";
-import { createAccessToken, tokenMetadata } from "@tool/lib/auth/jwt";
-import { normalizePassword } from "@tool/lib/auth/input";
-import { toPublicUser, type UserRow } from "@tool/lib/auth/types";
-import { requestIp } from "@tool/lib/auth/email-send-rate-limit";
+import { db, firstRow } from "@shared/libs/auth/db";
+import { apiError, internalError } from "@shared/libs/auth/http";
+import { createAccessToken, tokenMetadata } from "@shared/libs/auth/jwt";
+import { normalizePassword } from "@shared/libs/auth/input";
+import { toPublicUser, type UserRow } from "@shared/libs/auth/types";
+import { requestIp } from "@shared/libs/auth/email-send-rate-limit";
 import {
   consumeLoginAttempt,
   loginRateLimitWindowSeconds,
   resetLoginAttempts,
-} from "@tool/lib/auth/login-rate-limit";
+} from "@shared/libs/auth/login-rate-limit";
 
 const DUMMY_PASSWORD_HASH =
   "$2b$12$n3eqVa2Tx2JgVVycl7yxjOGslU02wctWdDAsm3rKIgw7feQO5sH6O";

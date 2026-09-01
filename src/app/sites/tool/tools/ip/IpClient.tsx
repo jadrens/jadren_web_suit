@@ -17,7 +17,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import LanguageIcon from "@mui/icons-material/Language";
 import Footer from "@tool/components/layout/Footer";
-import { useI18n } from "@tool/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/tool";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
 import { alpha } from "@mui/material";
 import SITE_CONFIG  from "@tool/var/config"

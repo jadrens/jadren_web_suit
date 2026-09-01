@@ -127,7 +127,8 @@ jobs:
             } > .env
 
             mkdir -p data .data
-            bun run db:migrate
+            bun run db:setup
+            bun run deploy:run
 
             sudo install -m 0644 deploy/jadren-web-suit.service /etc/systemd/system/jadren-web-suit.service
             sudo install -m 0644 deploy/jadren-reminder-dispatch.service /etc/systemd/system/jadren-reminder-dispatch.service
@@ -135,11 +136,7 @@ jobs:
             sudo systemctl daemon-reload
             sudo systemctl enable jadren-web-suit.service
             sudo systemctl enable --now jadren-reminder-dispatch.timer
-            if sudo systemctl is-active --quiet jadren-web-suit.service; then
-              sudo systemctl stop jadren-web-suit.service
-            fi
-            bun run blog-views:migrate
-            sudo systemctl start jadren-web-suit.service
+            sudo systemctl restart jadren-web-suit.service
             sudo systemctl is-active --quiet jadren-reminder-dispatch.timer
 
             for attempt in 1 2 3 4 5; do

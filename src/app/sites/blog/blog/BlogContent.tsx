@@ -31,9 +31,9 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import TocIcon from "@mui/icons-material/Toc";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import { useI18n } from "@blog/lib/i18n";
+import { useI18n } from "@shared/libs/i18n/blog";
 import { useTheme } from "@mui/material/styles";
-import { Locale } from "@blog/lib/posts";
+import { Locale } from "@shared/libs/blog/posts";
 import { extractHeadings, Heading } from "@blog/components/reading/ReadingProgressContext";
 
 interface Post {

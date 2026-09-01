@@ -45,9 +45,9 @@ import {
   type EmailAudit,
   type Reminder,
   type ReminderScheduleType,
-} from "@tool/lib/client-api";
-import { useAuth } from "@tool/lib/client-api/use-auth";
-import { useI18n } from "@tool/lib/i18n";
+} from "@shared/libs/client-api";
+import { useAuth } from "@shared/libs/client-api/use-auth";
+import { useI18n } from "@shared/libs/i18n/tool";
 
 const URGENT_WINDOW_MS = 30 * 60_000;
 const MAX_REPEAT_INTERVAL_MINUTES = 525_600;

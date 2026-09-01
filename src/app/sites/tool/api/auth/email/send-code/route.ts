@@ -1,15 +1,15 @@
 import bcrypt from "bcryptjs";
 import { randomInt } from "node:crypto";
 import { NextResponse } from "next/server";
-import { db, firstRow } from "@tool/lib/auth/db";
-import { apiError, internalError } from "@tool/lib/auth/http";
-import { normalizeEmail } from "@tool/lib/auth/input";
-import { sendVerificationEmail } from "@tool/lib/auth/mailer";
+import { db, firstRow } from "@shared/libs/auth/db";
+import { apiError, internalError } from "@shared/libs/auth/http";
+import { normalizeEmail } from "@shared/libs/auth/input";
+import { sendVerificationEmail } from "@shared/libs/auth/mailer";
 import {
   requestIp,
   validateEmailSend,
-} from "@tool/lib/auth/email-send-rate-limit";
-import type { UserRow } from "@tool/lib/auth/types";
+} from "@shared/libs/auth/email-send-rate-limit";
+import type { UserRow } from "@shared/libs/auth/types";
 
 const CODE_LIFETIME_MINUTES = 10;
 
