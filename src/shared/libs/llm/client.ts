@@ -90,7 +90,10 @@ function safeJson(value: string) {
   try { return JSON.parse(value) as Record<string, unknown>; } catch { return {}; }
 }
 
-function makeRequest(profile: LlmProfile, options: LlmRequestBase, stream: boolean) {
+function makeRequest(profile: LlmProfile, options: LlmRequestBase, stream: boolean): {
+  body: Record<string, unknown>;
+  headers: Record<string, string>;
+} {
   const { model, messages, systemPrompt, tools, maxTokens, thinkingBudget, reasoningEffort, temperature } = options;
   if (profile.type === "claude") {
     const system = [systemPrompt, ...messages.filter((m) => m.role === "system").map((m) => m.content)].filter(Boolean).join("\n\n");

@@ -102,10 +102,9 @@ export default function LlmApiProfiles() {
           slotProps={{ htmlInput: { "aria-label": copy.name } }}
           sx={{ minWidth: 0, maxWidth: 320, flex: 1, "& .MuiInputBase-input": { fontWeight: 700 } }}
         /> : <Typography
-          fontWeight={700}
           title={copy.renameHint}
           onDoubleClick={() => setEditingId(profile.id)}
-          sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 4 }}
+          sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 4, fontWeight: 700 }}
         >{profile.name || `${copy.profile} ${index + 1}`}</Typography>}
         <IconButton size="small" color="error" aria-label={copy.delete} onClick={(e) => { e.stopPropagation(); setProfiles((items) => items.filter((item) => item.id !== profile.id)); }} onFocus={(e) => e.stopPropagation()} sx={{ ml: "auto", mr: 1, flexShrink: 0 }}><DeleteOutlineRoundedIcon /></IconButton>
       </Box>
@@ -123,7 +122,7 @@ export default function LlmApiProfiles() {
           inputValue={profile.baseUrl}
           onInputChange={(_event, value) => update(profile.id, { baseUrl: value })}
           onChange={(_event, value) => update(profile.id, { baseUrl: typeof value === "string" ? value : value?.url || "" })}
-          renderOption={(props, option) => <Box component="li" {...props} key={option.url} sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start !important" }}><Typography variant="body2" fontWeight={700}>{option.label}</Typography><Typography variant="caption" color="text.secondary">{option.url}</Typography></Box>}
+          renderOption={(props, option) => <Box component="li" {...props} key={option.url} sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start !important" }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{option.label}</Typography><Typography variant="caption" color="text.secondary">{option.url}</Typography></Box>}
           renderInput={(params) => <TextField {...params} fullWidth label={copy.url} placeholder={defaults[profile.type]} helperText={profile.baseUrl ? `${copy.actualEndpoint}: ${resolveLlmEndpoint(profile.type, profile.baseUrl)}` : copy.urlHelp} />}
         />
       </Stack>
@@ -136,7 +135,7 @@ export default function LlmApiProfiles() {
       {models.map((model, index) => <Accordion key={model.id} disableGutters sx={{ border: 1, borderColor: "divider", borderRadius: "12px !important", overflow: "hidden", boxShadow: "none", "&:before": { display: "none" } }}>
         <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 2.25, minHeight: 64, "& .MuiAccordionSummary-content": { minWidth: 0 } }}>
         <Box sx={{ display: "flex", alignItems: "center", width: "100%", minWidth: 0 }}>
-          {editingId === model.id ? <TextField variant="standard" value={model.name} autoFocus placeholder={`${copy.model} ${index + 1}`} onClick={(e) => e.stopPropagation()} onChange={(e) => updateModel(model.id, { name: e.target.value })} onBlur={() => setEditingId(null)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }} sx={{ minWidth: 0, maxWidth: 320, flex: 1, "& .MuiInputBase-input": { fontWeight: 700 } }} /> : <Typography fontWeight={700} title={copy.renameHint} onDoubleClick={() => setEditingId(model.id)} sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 4 }}>{model.name || `${copy.model} ${index + 1}`}</Typography>}
+          {editingId === model.id ? <TextField variant="standard" value={model.name} autoFocus placeholder={`${copy.model} ${index + 1}`} onClick={(e) => e.stopPropagation()} onChange={(e) => updateModel(model.id, { name: e.target.value })} onBlur={() => setEditingId(null)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }} sx={{ minWidth: 0, maxWidth: 320, flex: 1, "& .MuiInputBase-input": { fontWeight: 700 } }} /> : <Typography title={copy.renameHint} onDoubleClick={() => setEditingId(model.id)} sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 4, fontWeight: 700 }}>{model.name || `${copy.model} ${index + 1}`}</Typography>}
           <IconButton size="small" color="error" aria-label={copy.deleteModel} onClick={(e) => { e.stopPropagation(); setModels((items) => items.filter((item) => item.id !== model.id)); }} sx={{ ml: "auto", mr: 1 }}><DeleteOutlineRoundedIcon /></IconButton>
         </Box>
         </AccordionSummary>

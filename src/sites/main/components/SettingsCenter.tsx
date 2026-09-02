@@ -74,36 +74,36 @@ export default function SettingsCenter() {
     <Stack spacing={1.25}>
       {modes.map((item) => <Card key={item.value} variant="outlined" sx={{ borderRadius: 2.5, borderColor: mode === item.value ? "primary.main" : "divider", bgcolor: mode === item.value ? "action.selected" : "transparent", transition: "border-color .2s, background-color .2s" }}>
         <CardActionArea onClick={() => setMode(item.value)} sx={{ px: 2, py: 1.5, display: "flex", justifyContent: "space-between" }}>
-          <Typography fontWeight={mode === item.value ? 700 : 500}>{item.label}</Typography>
+          <Typography sx={{ fontWeight: mode === item.value ? 700 : 500 }}>{item.label}</Typography>
           <Radio checked={mode === item.value} value={item.value} tabIndex={-1} disableRipple />
         </CardActionArea>
       </Card>)}
     </Stack>
     {mode === "automatic" && <Box sx={{ mt: 3 }}>
       <Divider sx={{ mb: 3 }} />
-      <Typography variant="h6" fontWeight={700}>{t.settings.location}</Typography>
+      <Typography variant="h6" sx={{ fontWeight: 700 }}>{t.settings.location}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{t.settings.locationHelp}</Typography>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2}><TextField type="number" fullWidth label={t.settings.latitude} value={latitude} onChange={(e) => setLatitude(e.target.value)} /><TextField type="number" fullWidth label={t.settings.longitude} value={longitude} onChange={(e) => setLongitude(e.target.value)} /></Stack>
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}><Button variant="contained" onClick={saveManual}>{t.settings.save}</Button><Button variant="outlined" disabled={!!busy} startIcon={busy === "geo" ? <CircularProgress size={16} /> : <MyLocationIcon />} onClick={geolocate}>{t.settings.useLocation}</Button><Button variant="outlined" disabled={!!busy} startIcon={busy === "ip" ? <CircularProgress size={16} /> : <PublicIcon />} onClick={locateIp}>{t.settings.useIp}</Button></Stack>
-      {source && <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>{t.settings.source}: {t.settings.sources[source]}</Typography>}
+      {source && <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>{t.settings.source}: {t.settings.sources[source]}</Typography>}
       {solar && <Alert severity="info" sx={{ mt: 2 }}>{t.settings.solar.replace("{sunrise}", time(solar.sunrise)).replace("{sunset}", time(solar.sunset))}</Alert>}
     </Box>}
     {notice && <Alert severity={notice.error ? "error" : "success"} onClose={() => setNotice(null)} sx={{ mt: 2 }}>{notice.text}</Alert>}
   </>;
 
   return <Box sx={{ width: "100%", maxWidth: 980 }}>
-    <Typography component="h1" variant="h4" fontWeight={700} sx={{ mb: 1 }}>{t.settings.title}</Typography>
+    <Typography component="h1" variant="h4" sx={{ mb: 1, fontWeight: 700 }}>{t.settings.title}</Typography>
     <Typography color="text.secondary" sx={{ mb: 3 }}>{t.settings.description}</Typography>
 
     <Accordion disableGutters sx={{ display: { xs: "block", md: "none" }, border: 1, borderColor: "divider", borderRadius: "16px !important", overflow: "hidden", boxShadow: "none", "&:before": { display: "none" } }}>
       <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 2, minHeight: 72, bgcolor: "background.paper" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}><Box sx={{ width: 38, height: 38, borderRadius: 2, display: "grid", placeItems: "center", color: "primary.main", bgcolor: "action.hover" }}><DarkModeRoundedIcon /></Box><Box><Typography fontWeight={700}>{t.theme.toggle}</Typography><Typography variant="caption" color="text.secondary">{modes.find((item) => item.value === mode)?.label}</Typography></Box></Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}><Box sx={{ width: 38, height: 38, borderRadius: 2, display: "grid", placeItems: "center", color: "primary.main", bgcolor: "action.hover" }}><DarkModeRoundedIcon /></Box><Box><Typography sx={{ fontWeight: 700 }}>{t.theme.toggle}</Typography><Typography variant="caption" color="text.secondary">{modes.find((item) => item.value === mode)?.label}</Typography></Box></Box>
       </AccordionSummary>
       <AccordionDetails sx={{ px: 2, pb: 2.5, pt: 1 }}>{themeOptions}</AccordionDetails>
     </Accordion>
     <Accordion disableGutters sx={{ display: { xs: "block", md: "none" }, mt: 1.5, border: 1, borderColor: "divider", borderRadius: "16px !important", overflow: "hidden", boxShadow: "none", "&:before": { display: "none" } }}>
       <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 2, minHeight: 72, bgcolor: "background.paper" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}><Box sx={{ width: 38, height: 38, borderRadius: 2, display: "grid", placeItems: "center", color: "primary.main", bgcolor: "action.hover" }}><SmartToyRoundedIcon /></Box><Box><Typography fontWeight={700}>{t.settings.llm.title}</Typography><Typography variant="caption" color="text.secondary">{t.settings.llm.subtitle}</Typography></Box></Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}><Box sx={{ width: 38, height: 38, borderRadius: 2, display: "grid", placeItems: "center", color: "primary.main", bgcolor: "action.hover" }}><SmartToyRoundedIcon /></Box><Box><Typography sx={{ fontWeight: 700 }}>{t.settings.llm.title}</Typography><Typography variant="caption" color="text.secondary">{t.settings.llm.subtitle}</Typography></Box></Box>
       </AccordionSummary>
       <AccordionDetails sx={{ px: 2, pb: 2.5, pt: 1 }}><LlmApiProfiles /></AccordionDetails>
     </Accordion>
@@ -112,19 +112,19 @@ export default function SettingsCenter() {
       <Card variant="outlined" sx={{ borderRadius: 3, position: "sticky", top: 24, overflow: "hidden" }}>
         <CardActionArea onClick={() => setSection("theme")} sx={{ p: 2, display: "flex", justifyContent: "flex-start", gap: 1.5, bgcolor: section === "theme" ? "action.selected" : "transparent" }}>
           <Box sx={{ width: 38, height: 38, borderRadius: 2, display: "grid", placeItems: "center", color: "primary.main", bgcolor: "action.hover" }}><DarkModeRoundedIcon /></Box>
-          <Box sx={{ flex: 1 }}><Typography fontWeight={700}>{t.theme.toggle}</Typography><Typography variant="caption" color="text.secondary">{modes.find((item) => item.value === mode)?.label}</Typography></Box>
+          <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 700 }}>{t.theme.toggle}</Typography><Typography variant="caption" color="text.secondary">{modes.find((item) => item.value === mode)?.label}</Typography></Box>
           <ChevronRightRoundedIcon color="action" />
         </CardActionArea>
         <Divider />
         <CardActionArea onClick={() => setSection("llm")} sx={{ p: 2, display: "flex", justifyContent: "flex-start", gap: 1.5, bgcolor: section === "llm" ? "action.selected" : "transparent" }}>
           <Box sx={{ width: 38, height: 38, borderRadius: 2, display: "grid", placeItems: "center", color: "primary.main", bgcolor: "action.hover" }}><SmartToyRoundedIcon /></Box>
-          <Box sx={{ flex: 1 }}><Typography fontWeight={700}>{t.settings.llm.title}</Typography><Typography variant="caption" color="text.secondary">{t.settings.llm.subtitle}</Typography></Box>
+          <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 700 }}>{t.settings.llm.title}</Typography><Typography variant="caption" color="text.secondary">{t.settings.llm.subtitle}</Typography></Box>
           <ChevronRightRoundedIcon color="action" />
         </CardActionArea>
       </Card>
 
       <Card variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}><CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-        <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>{section === "theme" ? t.theme.toggle : t.settings.llm.title}</Typography>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>{section === "theme" ? t.theme.toggle : t.settings.llm.title}</Typography>
         {section === "theme" ? themeOptions : <LlmApiProfiles />}
       </CardContent></Card>
     </Box>
