@@ -6,6 +6,8 @@ export const en = {
     menu: "Menu",
     search: "Search",
     register: "Register",
+    settings: "Settings",
+    account: "User center",
   },
   blog: {
     views: "views",
@@ -188,6 +190,14 @@ export const en = {
     title: "Tools",
     description: "Useful online tools",
     allTools: "All Tools",
+    englishLearner: {
+      title: "For English Learners", cardDescription: "AI-assisted tools for improving English writing.", description: "Choose a learning tool.", requiresLlm: "May require LLM configuration",
+      grammar: {
+        title: "English Grammar Checker", cardDescription: "Check grammar, collocations, spelling, punctuation, and naturalness.", input: "English text", placeholder: "Enter the English text you want to check…", check: "Check grammar", checking: "Checking…", polish: "Polish", polishing: "Polishing…", polishedVersions: "Polished versions", polishFailed: "Polishing failed", result: "Result", explanations: "Explanations", reconstructed: "Reconstructed sentence", reason: "Reason", noResult: "The annotated result will appear here.",
+        strict: "Strict", strictHelp: "Flags collocations, grammar, unnatural phrasing, spelling, and punctuation.", normal: "Normal", normalHelp: "Flags collocation, grammar, spelling, and ordinary usage errors.", lenient: "Lenient", lenientHelp: "Flags grammar, collocation, and spelling while tolerating informal forms such as ain't, bro, and lib.",
+        model: "Model", noModel: "No model is configured. Add a Provider and Model in Settings first.", openSettings: "Open Settings", thinking: "Thinking", thinkingSettings: "Thinking settings", enableThinking: "Enable thinking", reasoningEffort: "Reasoning effort", thinkingBudget: "Thinking budget", close: "Done", stop: "Force stop", stopped: "Generation stopped", history: "History", noHistory: "No saved checks yet.", ok: "No problems found. This sentence is correct.", invalidInput: "Unexpected input", elapsed: "Elapsed", tokens: "Output tokens", progress: "Progress", waitingMark: "Waiting for result", okProgress: "Sentence accepted", invalidProgress: "Input rejected", marked: "mark_error completed", explaining: "desp_error {done}/{total}", reconstructedProgress: "Sentence reconstructed", failed: "Grammar check failed", invalidMarkup: "The model returned invalid or non-consecutive references.",
+      },
+    },
     base64: {
       title: "Base64 Encode / Decode",
       description: "Encode text to Base64 or decode Base64 to text",
@@ -317,6 +327,7 @@ export const en = {
       title: "Quick Links",
       description: "Create and manage short-link names for koi.ci.",
       cardDescription: "Create memorable short links and review their usage.",
+      requiresLogin: "Sign-in required",
       loginTitle: "Sign in to manage quick links",
       loginDescription: "Your quick links are private to your account. Sign in to view or create them.",
       login: "Sign in",

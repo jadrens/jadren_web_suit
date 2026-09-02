@@ -6,20 +6,20 @@ import {
   Toolbar,
   Button,
   Box,
-  Avatar,
   useTheme,
 } from "@mui/material";
 import ThemeToggle from "./ThemeToggle";
 import LocaleToggle from "./LocaleToggle";
 import { useI18n } from "@shared/libs/i18n/main";
 import { useSiteUrl } from "@shared/site-url";
+import NavbarMenu from "./NavbarMenu";
 
 export default function Navbar() {
   const theme = useTheme();
   const { t } = useI18n();
   const bg = theme.palette.mode === "dark" ? "#1e1e1e" : "#f8f6f3";
-  const blogUrl = useSiteUrl("blog");
-  const toolUrl = useSiteUrl("tool");
+  const blogUrl = useSiteUrl("blog", "/blog");
+  const toolUrl = useSiteUrl("tool", "/tools");
 
   return (
     <AppBar
@@ -43,13 +43,7 @@ export default function Navbar() {
           gap: 1,
         }}
       >
-        <Avatar
-          component={Link}
-          href="/"
-          src="/shared/avatar.svg"
-          alt="jadren"
-          sx={{ width: 36, height: 36, flexShrink: 0 }}
-        />
+        <NavbarMenu />
         <Box
           sx={{
             display: "flex",

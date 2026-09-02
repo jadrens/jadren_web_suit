@@ -14,6 +14,9 @@ import QrCode2Icon from "@mui/icons-material/QrCode2";
 import ColorLensIcon from "@mui/icons-material/ColorLens";
 import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
 import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsActiveRounded";
+import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
+import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
+import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
 
 interface ToolItem {
   key: string;
@@ -21,6 +24,8 @@ interface ToolItem {
   description: string;
   href: string;
   icon: React.ReactNode;
+  requiresLogin?: boolean;
+  requiresLlm?: boolean;
 }
 
 export default function ToolsClient() {
@@ -30,11 +35,20 @@ export default function ToolsClient() {
 
   const tools: ToolItem[] = [
     {
+      key: "englishLearner",
+      title: t.tools.englishLearner.title,
+      description: t.tools.englishLearner.cardDescription,
+      href: "/tools/english-learner",
+      icon: <SchoolRoundedIcon sx={{ fontSize: 32 }} />,
+      requiresLlm: true,
+    },
+    {
       key: "reminder",
       title: t.tools.reminder.title,
       description: t.tools.reminder.cardDescription,
       href: "/tools/reminder",
       icon: <NotificationsActiveRoundedIcon sx={{ fontSize: 32 }} />,
+      requiresLogin: true,
     },
     {
       key: "quickLink",
@@ -42,6 +56,7 @@ export default function ToolsClient() {
       description: t.tools.quickLink.cardDescription,
       href: "/tools/quick-link",
       icon: <LinkRoundedIcon sx={{ fontSize: 32 }} />,
+      requiresLogin: true,
     },
     {
       key: "colourPicker",
@@ -173,6 +188,22 @@ export default function ToolsClient() {
                     <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
                       {tool.title}
                     </Typography>
+                    {tool.requiresLogin && (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.75, color: "primary.main" }}>
+                        <LoginRoundedIcon sx={{ fontSize: 16 }} />
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                          {t.tools.quickLink.requiresLogin}
+                        </Typography>
+                      </Box>
+                    )}
+                    {tool.requiresLlm && (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.75, color: "secondary.main" }}>
+                        <SmartToyRoundedIcon sx={{ fontSize: 16 }} />
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                          {t.tools.englishLearner.requiresLlm}
+                        </Typography>
+                      </Box>
+                    )}
                     <Typography variant="body2" color="text.secondary">
                       {tool.description}
                     </Typography>

@@ -8,6 +8,8 @@ export const zh: TranslationKeys = {
     menu: "菜单",
     search: "搜索",
     register: "注册",
+    settings: "设置",
+    account: "用户中心",
   },
   blog: {
     views: "浏览",
@@ -190,6 +192,14 @@ export const zh: TranslationKeys = {
     title: "工具列表",
     description: "实用在线工具",
     allTools: "所有工具",
+    englishLearner: {
+      title: "For English Learners", cardDescription: "帮助英语学习者改进写作的 AI 工具。", description: "选择一个英语学习工具。", requiresLlm: "可能需要配置 LLM",
+      grammar: {
+        title: "English Grammar Checker", cardDescription: "检查语法、搭配、拼写、标点和表达自然度。", input: "英文文本", placeholder: "输入需要检查的英文内容…", check: "检查语法", checking: "检查中…", polish: "一键润色", polishing: "润色中…", polishedVersions: "润色版本", polishFailed: "润色失败", result: "检查结果", explanations: "错误解释", reconstructed: "重写后的句子", reason: "原因", noResult: "标注后的结果会显示在这里。",
+        strict: "严格模式", strictHelp: "标出搭配、语法、不自然表达、拼写和标点等所有问题。", normal: "普通模式", normalHelp: "标出搭配、语法、拼写和常规用法错误。", lenient: "宽松模式", lenientHelp: "标出语法、搭配和拼写错误，但容忍 ain't、bro、lib 等非正式缩略表达。",
+        model: "模型", noModel: "没有可用模型，请先在设置中添加 Provider 和 Model。", openSettings: "打开设置", thinking: "思考", thinkingSettings: "思考设置", enableThinking: "启用思考", reasoningEffort: "思考强度", thinkingBudget: "Thinking Budget", close: "完成", stop: "强制停止", stopped: "生成已停止", history: "历史记录", noHistory: "还没有保存的检查结果。", ok: "没有发现问题，这个句子是正确的。", invalidInput: "输入内容不符合要求", elapsed: "已用时间", tokens: "输出 Token", progress: "当前进度", waitingMark: "等待模型返回结果", okProgress: "句子检查通过", invalidProgress: "输入已被拒绝", marked: "已完成 mark_error", explaining: "desp_error {done}/{total}", reconstructedProgress: "已调用 recon_sen", failed: "语法检查失败", invalidMarkup: "模型返回了非法或不连续的引用标注。",
+      },
+    },
     base64: {
       title: "Base64 编码 / 解码",
       description: "将文本编码为 Base64 或将 Base64 解码为文本",
@@ -319,6 +329,7 @@ export const zh: TranslationKeys = {
       title: "短链接工具",
       description: "创建并管理 koi.ci 短链接名称。",
       cardDescription: "创建容易记忆的短链接，并查看访问情况。",
+      requiresLogin: "需要登录",
       loginTitle: "登录后管理短链接",
       loginDescription: "短链接仅对你的账户可见，请先登录再查看或创建。",
       login: "登录",

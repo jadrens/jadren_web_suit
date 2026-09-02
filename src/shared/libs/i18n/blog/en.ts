@@ -7,6 +7,8 @@ export const en = {
     about: "About",
     menu: "Menu",
     search: "Search",
+    settings: "Settings",
+    account: "User center",
   },
   blog: {
     views: "views",

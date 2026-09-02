@@ -27,70 +27,8 @@ import LocaleSwitcher from "../navigation/LocaleSwitcher";
 import { useI18n } from "@shared/libs/i18n/tool";
 import { alpha } from "@mui/material";
 import React from "react";
-import { useAuth } from "@shared/libs/client-api/use-auth";
-import { useNavbarLoginStatus } from "./NavbarLoginStatus";
-
-function AccountArea({
-  isAuthenticated,
-  nickname,
-  registerLabel,
-}: {
-  isAuthenticated: boolean;
-  nickname?: string;
-  registerLabel: string;
-}) {
-  if (!isAuthenticated) {
-    return (
-      <Button
-        component={Link}
-        href="/register"
-        size="small"
-        variant="contained"
-        sx={{
-          width: 72,
-          minWidth: 0,
-          height: 32,
-          px: 1,
-          flexShrink: 0,
-          fontSize: "0.75rem",
-        }}
-      >
-        {registerLabel}
-      </Button>
-    );
-  }
-
-  return (
-    <Box
-      component={Link}
-      href="/user-status"
-      title={nickname}
-      sx={{
-        display: "flex",
-        width: 88,
-        height: 32,
-        px: 1,
-        overflow: "hidden",
-        flexShrink: 0,
-        alignItems: "center",
-        justifyContent: "center",
-        border: 1,
-        borderColor: "divider",
-        borderRadius: 1.5,
-        color: "text.primary",
-        textDecoration: "none",
-        fontSize: "0.75rem",
-        fontWeight: 700,
-        lineHeight: 1.5,
-        textAlign: "center",
-        textOverflow: "ellipsis",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {nickname}
-    </Box>
-  );
-}
+import NavbarAccountMenu from "@shared/components/NavbarAccountMenu";
+import { useSiteUrl } from "@shared/site-url";
 
 export default function Navbar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -98,9 +36,7 @@ export default function Navbar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { t } = useI18n();
-  const { showLoginStatus } = useNavbarLoginStatus();
-  const { isAuthenticated, user } = useAuth();
-  const showAccountArea = showLoginStatus || isAuthenticated;
+  const settingsUrl = useSiteUrl("main", "/settings");
 
   const navItems = [
     { key: "home", href: "/" },
@@ -124,21 +60,7 @@ export default function Navbar() {
         }}
       >
         <Toolbar sx={{ px: { xs: 2, sm: 4 }, display: "flex", flexDirection: "row", alignItems: "center", gap: 1 }}>
-          {showAccountArea ? (
-            <AccountArea
-              isAuthenticated={isAuthenticated}
-              nickname={user?.nickname}
-              registerLabel={t.nav.register}
-            />
-          ) : (
-            <Avatar
-              component={Link}
-              href="/"
-              src="/shared/avatar.svg"
-              alt="jadren"
-              sx={{ width: 36, height: 36, flexShrink: 0, flexGrow: 0 }}
-            />
-          )}
+          <NavbarAccountMenu homeHref="/" settingsHref={settingsUrl} accountHref="/user-status" homeLabel={t.nav.home} settingsLabel={t.nav.settings} accountLabel={t.nav.account} />
 
           {/* Mobile layout */}
           {isMobile ? (

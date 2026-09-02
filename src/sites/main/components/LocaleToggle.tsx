@@ -1,33 +1,34 @@
 "use client";
 
-import { IconButton } from "@mui/material";
-import { useI18n, Locale, SUPPORTED_LOCALES } from "@shared/libs/i18n/main";
+import { useState } from "react";
+import { IconButton, Menu, MenuItem, Typography } from "@mui/material";
+import TranslateIcon from "@mui/icons-material/Translate";
+import { Locale, useI18n } from "@shared/libs/i18n/main";
+
+const localeLabels: Record<Locale, string> = {
+  en: "English",
+  zh: "简体中文",
+};
 
 export default function LocaleToggle() {
   const { locale, setLocale } = useI18n();
-
-  const toggleLocale = () => {
-    const next: Locale =
-      locale === SUPPORTED_LOCALES[0]
-        ? SUPPORTED_LOCALES[1]
-        : SUPPORTED_LOCALES[0];
-    setLocale(next);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const close = () => setAnchorEl(null);
+  const select = (nextLocale: Locale) => {
+    setLocale(nextLocale);
+    close();
   };
 
-  return (
-    <IconButton
-      onClick={toggleLocale}
-      sx={{
-        width: 40,
-        height: 40,
-        fontSize: "0.8rem",
-        fontWeight: 700,
-        borderRadius: 1,
-        "&:hover": { backgroundColor: "action.hover" },
-      }}
-      aria-label="Switch language"
-    >
-      {locale === "zh" ? "EN" : "中"}
+  return <>
+    <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} aria-label="Switch language">
+      <TranslateIcon />
     </IconButton>
-  );
+    <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={close} slotProps={{ paper: { sx: { minWidth: 120 } } }}>
+      {(Object.keys(localeLabels) as Locale[]).map((key) => (
+        <MenuItem key={key} selected={key === locale} onClick={() => select(key)}>
+          <Typography variant="body2">{localeLabels[key]}</Typography>
+        </MenuItem>
+      ))}
+    </Menu>
+  </>;
 }
