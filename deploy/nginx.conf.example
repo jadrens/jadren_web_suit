@@ -1,4 +1,4 @@
-# Point every public hostname at the single Next.js service.
+# Serve the integrated site from one canonical hostname.
 upstream jadren_web_suit {
     server 127.0.0.1:3000;
     keepalive 32;
@@ -7,7 +7,7 @@ upstream jadren_web_suit {
 server {
     listen 80;
     listen [::]:80;
-    server_name jadren.me blog.jadren.me tool.jadren.me;
+    server_name jadren.me;
 
     location / {
         proxy_pass http://jadren_web_suit;
@@ -19,4 +19,11 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name blog.jadren.me tool.jadren.me;
+    return 308 $scheme://jadren.me$request_uri;
 }

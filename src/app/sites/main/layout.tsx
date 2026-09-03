@@ -5,8 +5,8 @@ import LocaleHtml from "@shared/libs/i18n/main/LocaleHtml";
 import { SHARED_SITE_ICONS } from "@shared/site-icons";
 
 export const metadata: Metadata = {
-  title: "jadren - Start",
-  description: "Start page for jadren",
+  title: "jadren",
+  description: "Jadren's blog, tools, and projects.",
   icons: SHARED_SITE_ICONS,
 };
 

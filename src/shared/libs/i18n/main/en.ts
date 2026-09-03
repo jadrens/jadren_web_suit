@@ -1,6 +1,7 @@
 export const en = {
   nav: {
-    start: "START",
+    start: "HOME",
+    about: "ABOUT",
     blog: "BLOG",
     tools: "TOOLS",
     settings: "SETTINGS",
@@ -8,7 +9,7 @@ export const en = {
   },
   home: {
     title: "rayoumeu - Start",
-    description: "Start page for jadren",
+    description: "Jadren's blog, tools, and projects",
   },
   blogPortal: {
     title: "My Blog",
@@ -34,10 +35,10 @@ export const en = {
     saved: "Location saved and today's times calculated.", invalid: "Enter valid latitude and longitude.", locationFailed: "Location could not be retrieved. Check site permission.", ipFailed: "Coordinates could not be retrieved from the current IP.",
     solar: "Today: sunrise {sunrise}, sunset {sunset}. This is recalculated tomorrow.",
     llm: {
-      title: "LLM API", subtitle: "Local API profiles", profile: "Profile", name: "Name", renameHint: "Double-click to rename", type: "API type", token: "API token", url: "Base URL", urlHelp: "Enter a base URL or complete API endpoint", actualEndpoint: "Request endpoint", add: "Add profile", save: "Save profiles", delete: "Delete profile", empty: "No API profiles yet.", saved: "Profiles saved locally.",
+      title: "LLM API", subtitle: "Local API profiles", profile: "Profile", name: "Name", renameHint: "Rename", type: "API type", token: "API token", url: "Base URL", urlHelp: "Enter a base URL or complete API endpoint", actualEndpoint: "Request endpoint", add: "Add profile", save: "Save profiles", delete: "Delete profile", empty: "No API profiles yet.", saved: "Profiles saved locally.",
       privacy: "Your credentials are stored only in this browser's localStorage. This project is open source and does not upload or steal your credentials.",
       unsaved: "You have unsaved settings. Are you sure you want to leave?",
-      providerList: "Provider List", modelList: "Model List", provider: "Provider", model: "Model", modelId: "Model ID", addModel: "Add model", deleteModel: "Delete model", emptyModels: "No models yet.", providerRequired: "Add a provider before creating a model.",
+      providerList: "Provider List", modelList: "Model List", provider: "Provider", model: "Model", modelId: "Model ID", addModel: "Add model", deleteModel: "Delete model", emptyModels: "No models yet.", providerRequired: "Add a provider before creating a model.", incompleteModel: "Incomplete models will not appear in tools. Select a provider and enter a Model ID.", modelAutoCompleteHelp: "Open to load models from the selected provider, or enter an ID manually.", loadingModels: "Loading models…", modelLoadFailed: "Could not load models: {error}. You can still enter an ID manually.", noModelsReturned: "The provider returned no models",
     },
   },
   stylizedName: {

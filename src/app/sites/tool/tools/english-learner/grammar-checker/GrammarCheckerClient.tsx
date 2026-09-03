@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, InputLabel, LinearProgress, MenuItem, Select, Stack, Switch, TextField, Typography } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, InputLabel, LinearProgress, MenuItem, Select, Stack, Switch, TextField, Typography } from "@mui/material";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import PsychologyRoundedIcon from "@mui/icons-material/PsychologyRounded";
 import SpellcheckRoundedIcon from "@mui/icons-material/SpellcheckRounded";
@@ -25,7 +25,6 @@ interface PolishItem { id: string; text: string; running: boolean; error: string
 export default function GrammarCheckerClient() {
   const { t } = useI18n(); const copy = t.tools.englishLearner.grammar; useDocumentTitle(copy.title);
   const settingsUrl = useSiteUrl("main", "/settings");
-  const storageBridgeUrl = useSiteUrl("main", "/settings/llm-storage-bridge");
   const [models, setModels] = useState<LlmModelProfile[]>([]); const [modelId, setModelId] = useState("");
   const [providers, setProviders] = useState<LlmProfile[]>([]);
   const [input, setInput] = useState(""); const [mode, setMode] = useState<CheckMode>("normal");
@@ -42,11 +41,14 @@ export default function GrammarCheckerClient() {
   const [polishes, setPolishes] = useState<PolishItem[]>([]);
   const polishControllers = useRef(new Map<string, AbortController>());
 
-  useEffect(() => { const items = getLlmModels(); setModels(items); setProviders(getLlmProfiles()); setModelId((current) => current || items[0]?.id || ""); }, []);
+  useEffect(() => { const items = getLlmModels().filter((item) => item.id && item.providerId && typeof item.modelId === "string" && item.modelId.trim()); setModels(items); setProviders(getLlmProfiles()); setModelId((current) => items.some((item) => item.id === current) ? current : items[0]?.id || ""); }, []);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PREFERENCES_KEY) || "null") as { modelId?: string; mode?: CheckMode; thinking?: boolean; effort?: ReasoningEffort; budget?: number } | null;
-      if (saved?.modelId) setModelId(saved.modelId);
+      if (saved?.modelId) {
+        const savedModelStillExists = getLlmModels().some((item) => item.id === saved.modelId && item.providerId && typeof item.modelId === "string" && item.modelId.trim());
+        if (savedModelStillExists) setModelId(saved.modelId);
+      }
       if (saved?.mode && ["strict", "normal", "lenient"].includes(saved.mode)) setMode(saved.mode);
       if (typeof saved?.thinking === "boolean") setThinking(saved.thinking);
       if (saved?.effort && ["none", "minimal", "low", "medium", "high", "xhigh"].includes(saved.effort)) setEffort(saved.effort);
@@ -59,24 +61,6 @@ export default function GrammarCheckerClient() {
     localStorage.setItem(PREFERENCES_KEY, JSON.stringify({ modelId, mode, thinking, effort, budget }));
   }, [budget, effort, mode, modelId, preferencesReady, thinking]);
   useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); if (Array.isArray(saved)) setHistory(saved.slice(0, 32)); } catch { /* Ignore invalid history. */ } }, []);
-  useEffect(() => {
-    if (storageBridgeUrl === "#" || models.length > 0) return;
-    const requestId = `${Date.now()}-${Math.random()}`;
-    const frame = document.createElement("iframe");
-    frame.src = storageBridgeUrl; frame.hidden = true; frame.setAttribute("aria-hidden", "true");
-    const bridgeOrigin = new URL(storageBridgeUrl).origin;
-    const receive = (event: MessageEvent) => {
-      if (event.origin !== bridgeOrigin || event.data?.type !== "jadren:llm-config-response" || event.data.requestId !== requestId) return;
-      const nextModels = Array.isArray(event.data.models) ? event.data.models as LlmModelProfile[] : [];
-      const nextProviders = Array.isArray(event.data.profiles) ? event.data.profiles as LlmProfile[] : [];
-      setModels(nextModels); setProviders(nextProviders); setModelId((current) => current || nextModels[0]?.id || ""); cleanup();
-    };
-    const cleanup = () => { window.removeEventListener("message", receive); frame.remove(); };
-    frame.onload = () => frame.contentWindow?.postMessage({ type: "jadren:llm-config-request", requestId }, bridgeOrigin);
-    window.addEventListener("message", receive); document.body.appendChild(frame);
-    const timeout = window.setTimeout(cleanup, 5000);
-    return () => { window.clearTimeout(timeout); cleanup(); };
-  }, [models.length, storageBridgeUrl]);
   useEffect(() => { if (!running) return; const timer = window.setInterval(() => setElapsed((Date.now() - startedAt.current) / 1000), 100); return () => clearInterval(timer); }, [running]);
   const selected = models.find((item) => item.id === modelId);
   const explanationCount = Object.keys(explanations).length;
@@ -166,7 +150,18 @@ export default function GrammarCheckerClient() {
       </CardContent></Card>
     </Box>
     <Card variant="outlined" sx={{ mt: 2, borderRadius: 2.5 }}><CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}><Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" } }}>
-      <FormControl size="small" sx={{ minWidth: 220 }}><InputLabel>{copy.model}</InputLabel><Select label={copy.model} value={modelId} onChange={(e) => setModelId(e.target.value)}>{models.map((model) => <MenuItem key={model.id} value={model.id}>{model.name || model.modelId}</MenuItem>)}</Select></FormControl>
+      <Autocomplete
+        size="small"
+        options={models}
+        value={selected || null}
+        openOnFocus
+        clearOnBlur={false}
+        getOptionLabel={(model) => model.name || model.modelId}
+        isOptionEqualToValue={(option, value) => option.id === value.id}
+        onChange={(_event, model) => { if (model) setModelId(model.id); }}
+        renderInput={(params) => <TextField {...params} label={copy.model} />}
+        sx={{ minWidth: 220, width: { xs: "100%", sm: 264 } }}
+      />
       <Button size="small" variant="outlined" startIcon={<PsychologyRoundedIcon />} onClick={() => setThinkingOpen(true)}>{copy.thinking}: {thinking ? effort : "Off"}</Button>
       <Button size="small" variant="outlined" startIcon={<HistoryRoundedIcon />} onClick={() => setHistoryOpen(true)}>{copy.history} ({history.length})</Button>
       <Box sx={{ flex: 1 }} />

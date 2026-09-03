@@ -8,6 +8,7 @@ import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import { useI18n } from "@shared/libs/i18n/main";
 import { resolveLlmEndpoint } from "@shared/libs/llm";
 import { useUnsavedChanges } from "@shared/hooks/useUnsavedChanges";
@@ -15,6 +16,7 @@ import { useUnsavedChanges } from "@shared/hooks/useUnsavedChanges";
 type ApiType = "claude" | "openai-responses" | "openai-completions";
 interface LlmProfile { id: string; name: string; type: ApiType; token: string; baseUrl: string }
 interface LlmModel { id: string; name: string; modelId: string; providerId: string }
+interface ModelDirectory { signature: string; options: string[]; loading: boolean; error: string }
 const STORAGE_KEY = "llm-api-profiles";
 const MODELS_STORAGE_KEY = "llm-api-models";
 const defaults: Record<ApiType, string> = {
@@ -22,15 +24,30 @@ const defaults: Record<ApiType, string> = {
   "openai-responses": "https://api.openai.com/v1",
   "openai-completions": "https://api.openai.com/v1",
 };
-const endpointPresets = [
-  { label: "OpenAI / ChatGPT", url: "https://api.openai.com/v1" },
-  { label: "Claude / Anthropic", url: "https://api.anthropic.com/v1" },
-  { label: "DeepSeek", url: "https://api.deepseek.com/v1" },
-  { label: "OpenRouter", url: "https://openrouter.ai/api/v1" },
+const endpointPresets: Array<{ label: string; url: string; type: ApiType }> = [
+  { label: "OpenAI / ChatGPT", url: "https://api.openai.com/v1", type: "openai-responses" },
+  { label: "Claude / Anthropic", url: "https://api.anthropic.com/v1", type: "claude" },
+  { label: "DeepSeek", url: "https://api.deepseek.com/v1", type: "openai-completions" },
+  { label: "OpenRouter", url: "https://openrouter.ai/api/v1", type: "openai-completions" },
 ];
 
+function suggestedProfileName(baseUrl: string, type: ApiType) {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") return "Local LLM";
+    if (hostname.includes("openai.com")) return "OpenAI";
+    if (hostname.includes("anthropic.com")) return "Anthropic";
+    if (hostname.includes("deepseek.com")) return "DeepSeek";
+    if (hostname.includes("openrouter.ai")) return "OpenRouter";
+    const labels = hostname.split(".").filter((label) => label && !["www", "api", "v1"].includes(label));
+    const label = labels.length > 1 ? labels[labels.length - 2] : labels[0];
+    if (label) return label.split(/[-_]/).filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join(" ");
+  } catch { /* Keep a useful type-based name while the URL is incomplete. */ }
+  return type === "claude" ? "Anthropic" : type === "openai-responses" ? "OpenAI Responses" : "OpenAI Compatible";
+}
+
 const createProfileId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-const emptyProfile = (): LlmProfile => ({ id: createProfileId(), name: "", type: "openai-responses", token: "", baseUrl: defaults["openai-responses"] });
+const emptyProfile = (): LlmProfile => ({ id: createProfileId(), name: "OpenAI", type: "openai-responses", token: "", baseUrl: defaults["openai-responses"] });
 const emptyModel = (): LlmModel => ({ id: createProfileId(), name: "", modelId: "", providerId: "" });
 
 export default function LlmApiProfiles() {
@@ -44,9 +61,11 @@ export default function LlmApiProfiles() {
   const [directory, setDirectory] = useState<"providers" | "models">("providers");
   const [loaded, setLoaded] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState("");
+  const [modelDirectories, setModelDirectories] = useState<Record<string, ModelDirectory>>({});
 
   const snapshot = JSON.stringify({ profiles, models });
   const isDirty = loaded && snapshot !== savedSnapshot;
+  const hasInvalidModels = models.some((model) => !model.providerId || !model.modelId.trim());
   useUnsavedChanges(isDirty, copy.unsaved);
 
   useEffect(() => {
@@ -70,7 +89,17 @@ export default function LlmApiProfiles() {
   }, [isDirty]);
 
   const update = (id: string, patch: Partial<LlmProfile>) => setProfiles((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
-  const changeType = (profile: LlmProfile, type: ApiType) => update(profile.id, { type, baseUrl: !profile.baseUrl || Object.values(defaults).includes(profile.baseUrl) ? defaults[type] : profile.baseUrl });
+  const changeType = (profile: LlmProfile, type: ApiType) => {
+    const baseUrl = !profile.baseUrl || Object.values(defaults).includes(profile.baseUrl) ? defaults[type] : profile.baseUrl;
+    const nameWasAutomatic = !profile.name || profile.name === suggestedProfileName(profile.baseUrl, profile.type);
+    update(profile.id, { type, baseUrl, ...(nameWasAutomatic ? { name: suggestedProfileName(baseUrl, type) } : {}) });
+  };
+  const changeBaseUrl = (profile: LlmProfile, baseUrl: string) => {
+    const nameWasAutomatic = !profile.name || profile.name === suggestedProfileName(profile.baseUrl, profile.type);
+    const matchingPreset = endpointPresets.find((preset) => preset.url === baseUrl);
+    const type = matchingPreset?.type || profile.type;
+    update(profile.id, { baseUrl, type, ...(nameWasAutomatic ? { name: suggestedProfileName(baseUrl, type) } : {}) });
+  };
   const save = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
     localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(models));
@@ -78,6 +107,28 @@ export default function LlmApiProfiles() {
     setSaved(true);
   };
   const updateModel = (id: string, patch: Partial<LlmModel>) => setModels((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  const loadModels = async (provider: LlmProfile) => {
+    const signature = `${provider.type}:${provider.baseUrl}:${provider.token}`;
+    const cached = modelDirectories[provider.id];
+    if (cached?.loading || (cached?.signature === signature && cached.options.length > 0)) return;
+    setModelDirectories((current) => ({ ...current, [provider.id]: { signature, options: [], loading: true, error: "" } }));
+    try {
+      const endpoint = resolveLlmEndpoint(provider.type, provider.baseUrl).replace(/\/(?:chat\/completions|responses|messages)$/i, "/models");
+      const headers: Record<string, string> = provider.type === "claude"
+        ? { ...(provider.token ? { "x-api-key": provider.token } : {}), "anthropic-version": "2023-06-01" }
+        : provider.token ? { Authorization: `Bearer ${provider.token}` } : {};
+      const response = await fetch(endpoint, { headers });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
+      const payload = await response.json() as { data?: Array<{ id?: unknown }>; models?: Array<{ id?: unknown } | string> };
+      const entries = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.models) ? payload.models : [];
+      const options = [...new Set(entries.map((item) => typeof item === "string" ? item : typeof item?.id === "string" ? item.id : "").filter(Boolean))].sort();
+      if (options.length === 0) throw new Error(copy.noModelsReturned);
+      setModelDirectories((current) => ({ ...current, [provider.id]: { signature, options, loading: false, error: "" } }));
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setModelDirectories((current) => ({ ...current, [provider.id]: { signature, options: [], loading: false, error: copy.modelLoadFailed.replace("{error}", detail) } }));
+    }
+  };
 
   return <Stack spacing={2}>
     <Alert severity="info" icon={<LockRoundedIcon />}>{copy.privacy}</Alert>
@@ -88,7 +139,7 @@ export default function LlmApiProfiles() {
     {directory === "providers" && <>
     {profiles.length === 0 && <Box sx={{ py: 3, textAlign: "center", color: "text.secondary" }}><Typography>{copy.empty}</Typography></Box>}
     {profiles.map((profile, index) => <Accordion key={profile.id} disableGutters sx={{ border: 1, borderColor: "divider", borderRadius: "12px !important", overflow: "hidden", boxShadow: "none", "&:before": { display: "none" } }}>
-      <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 2.25, minHeight: 64, "& .MuiAccordionSummary-content": { minWidth: 0 } }}>
+      <AccordionSummary component="div" expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 2.25, minHeight: 64, "& .MuiAccordionSummary-content": { minWidth: 0 } }}>
       <Box sx={{ width: "100%", display: "flex", alignItems: "center", minWidth: 0 }}>
         {editingId === profile.id ? <TextField
           variant="standard"
@@ -97,16 +148,14 @@ export default function LlmApiProfiles() {
           placeholder={`${copy.profile} ${index + 1}`}
           onChange={(e) => update(profile.id, { name: e.target.value })}
           onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onBlur={() => setEditingId(null)}
-          onKeyDown={(e) => { if (e.key === "Enter") setEditingId(null); if (e.key === "Escape") setEditingId(null); }}
+          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }}
           slotProps={{ htmlInput: { "aria-label": copy.name } }}
           sx={{ minWidth: 0, maxWidth: 320, flex: 1, "& .MuiInputBase-input": { fontWeight: 700 } }}
-        /> : <Typography
-          title={copy.renameHint}
-          onDoubleClick={() => setEditingId(profile.id)}
-          sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 4, fontWeight: 700 }}
-        >{profile.name || `${copy.profile} ${index + 1}`}</Typography>}
-        <IconButton size="small" color="error" aria-label={copy.delete} onClick={(e) => { e.stopPropagation(); setProfiles((items) => items.filter((item) => item.id !== profile.id)); }} onFocus={(e) => e.stopPropagation()} sx={{ ml: "auto", mr: 1, flexShrink: 0 }}><DeleteOutlineRoundedIcon /></IconButton>
+        /> : <Typography sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>{profile.name || suggestedProfileName(profile.baseUrl, profile.type)}</Typography>}
+        {editingId !== profile.id && <IconButton size="small" aria-label={copy.renameHint} title={copy.renameHint} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setEditingId(profile.id); }} sx={{ ml: "auto", width: 40, height: 40, flexShrink: 0 }}><EditRoundedIcon fontSize="small" /></IconButton>}
+        <IconButton size="small" color="error" aria-label={copy.delete} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setProfiles((items) => items.filter((item) => item.id !== profile.id)); }} sx={{ ml: editingId === profile.id ? "auto" : .5, mr: 1, width: 40, height: 40, flexShrink: 0 }}><DeleteOutlineRoundedIcon /></IconButton>
       </Box>
       </AccordionSummary>
       <AccordionDetails sx={{ px: 2.25, pb: 2.25, pt: 1 }}>
@@ -120,8 +169,8 @@ export default function LlmApiProfiles() {
           isOptionEqualToValue={(option, value) => option.url === (typeof value === "string" ? value : value.url)}
           value={profile.baseUrl}
           inputValue={profile.baseUrl}
-          onInputChange={(_event, value) => update(profile.id, { baseUrl: value })}
-          onChange={(_event, value) => update(profile.id, { baseUrl: typeof value === "string" ? value : value?.url || "" })}
+          onInputChange={(_event, value) => changeBaseUrl(profile, value)}
+          onChange={(_event, value) => changeBaseUrl(profile, typeof value === "string" ? value : value?.url || "")}
           renderOption={(props, option) => <Box component="li" {...props} key={option.url} sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start !important" }}><Typography variant="body2" sx={{ fontWeight: 700 }}>{option.label}</Typography><Typography variant="caption" color="text.secondary">{option.url}</Typography></Box>}
           renderInput={(params) => <TextField {...params} fullWidth label={copy.url} placeholder={defaults[profile.type]} helperText={profile.baseUrl ? `${copy.actualEndpoint}: ${resolveLlmEndpoint(profile.type, profile.baseUrl)}` : copy.urlHelp} />}
         />
@@ -133,22 +182,38 @@ export default function LlmApiProfiles() {
     {directory === "models" && <>
       {models.length === 0 && <Box sx={{ py: 3, textAlign: "center", color: "text.secondary" }}><Typography>{copy.emptyModels}</Typography></Box>}
       {models.map((model, index) => <Accordion key={model.id} disableGutters sx={{ border: 1, borderColor: "divider", borderRadius: "12px !important", overflow: "hidden", boxShadow: "none", "&:before": { display: "none" } }}>
-        <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 2.25, minHeight: 64, "& .MuiAccordionSummary-content": { minWidth: 0 } }}>
+        <AccordionSummary component="div" expandIcon={<ExpandMoreRoundedIcon />} sx={{ px: 2.25, minHeight: 64, "& .MuiAccordionSummary-content": { minWidth: 0 } }}>
         <Box sx={{ display: "flex", alignItems: "center", width: "100%", minWidth: 0 }}>
-          {editingId === model.id ? <TextField variant="standard" value={model.name} autoFocus placeholder={`${copy.model} ${index + 1}`} onClick={(e) => e.stopPropagation()} onChange={(e) => updateModel(model.id, { name: e.target.value })} onBlur={() => setEditingId(null)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }} sx={{ minWidth: 0, maxWidth: 320, flex: 1, "& .MuiInputBase-input": { fontWeight: 700 } }} /> : <Typography title={copy.renameHint} onDoubleClick={() => setEditingId(model.id)} sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "text", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 4, fontWeight: 700 }}>{model.name || `${copy.model} ${index + 1}`}</Typography>}
-          <IconButton size="small" color="error" aria-label={copy.deleteModel} onClick={(e) => { e.stopPropagation(); setModels((items) => items.filter((item) => item.id !== model.id)); }} sx={{ ml: "auto", mr: 1 }}><DeleteOutlineRoundedIcon /></IconButton>
+          {editingId === model.id ? <TextField variant="standard" value={model.name} autoFocus placeholder={`${copy.model} ${index + 1}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onChange={(e) => updateModel(model.id, { name: e.target.value })} onBlur={() => setEditingId(null)} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" || e.key === "Escape") setEditingId(null); }} sx={{ minWidth: 0, maxWidth: 320, flex: 1, "& .MuiInputBase-input": { fontWeight: 700 } }} /> : <Typography sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 700 }}>{model.name || `${copy.model} ${index + 1}`}</Typography>}
+          {editingId !== model.id && <IconButton size="small" aria-label={copy.renameHint} title={copy.renameHint} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setEditingId(model.id); }} sx={{ ml: "auto", width: 40, height: 40, flexShrink: 0 }}><EditRoundedIcon fontSize="small" /></IconButton>}
+          <IconButton size="small" color="error" aria-label={copy.deleteModel} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setModels((items) => items.filter((item) => item.id !== model.id)); }} sx={{ ml: editingId === model.id ? "auto" : .5, mr: 1, width: 40, height: 40, flexShrink: 0 }}><DeleteOutlineRoundedIcon /></IconButton>
         </Box>
         </AccordionSummary>
         <AccordionDetails sx={{ px: 2.25, pb: 2.25, pt: 1 }}>
         <Stack spacing={2}>
-          <FormControl fullWidth><InputLabel>{copy.provider}</InputLabel><Select label={copy.provider} value={model.providerId} onChange={(e) => updateModel(model.id, { providerId: e.target.value })}>{profiles.map((provider, providerIndex) => <MenuItem key={provider.id} value={provider.id}>{provider.name || `${copy.profile} ${providerIndex + 1}`}</MenuItem>)}</Select></FormControl>
-          <TextField fullWidth label={copy.modelId} value={model.modelId} onChange={(e) => updateModel(model.id, { modelId: e.target.value })} placeholder="gpt-5 / claude-sonnet-4-6" />
+          <FormControl fullWidth><InputLabel>{copy.provider}</InputLabel><Select label={copy.provider} value={model.providerId} onChange={(e) => updateModel(model.id, { providerId: e.target.value })}>{profiles.map((provider) => <MenuItem key={provider.id} value={provider.id}>{provider.name || suggestedProfileName(provider.baseUrl, provider.type)}</MenuItem>)}</Select></FormControl>
+          {(() => {
+            const provider = profiles.find((item) => item.id === model.providerId);
+            const directory = provider ? modelDirectories[provider.id] : undefined;
+            return <Autocomplete
+              freeSolo
+              options={directory?.options || []}
+              value={model.modelId || null}
+              inputValue={model.modelId}
+              loading={directory?.loading || false}
+              onOpen={() => { if (provider?.baseUrl) void loadModels(provider); }}
+              onInputChange={(_event, value, reason) => { if (reason === "input" || reason === "clear") updateModel(model.id, { modelId: value }); }}
+              onChange={(_event, value) => updateModel(model.id, { modelId: typeof value === "string" ? value : "" })}
+              renderInput={(params) => <TextField {...params} fullWidth label={copy.modelId} placeholder="gpt-5 / claude-sonnet-4-6" helperText={directory?.loading ? copy.loadingModels : directory?.error || copy.modelAutoCompleteHelp} />}
+            />;
+          })()}
         </Stack>
         </AccordionDetails>
       </Accordion>)}
       <Button variant="outlined" startIcon={<AddRoundedIcon />} disabled={profiles.length === 0} onClick={() => { const model = emptyModel(); model.providerId = profiles[0]?.id || ""; setModels((items) => [...items, model]); setSaved(false); }}>{copy.addModel}</Button>
       {profiles.length === 0 && <Alert severity="warning">{copy.providerRequired}</Alert>}
     </>}
+    {directory === "models" && hasInvalidModels && <Alert severity="warning">{copy.incompleteModel}</Alert>}
     <Button variant="contained" onClick={save}>{copy.save}</Button>
     {saved && <Alert severity="success" onClose={() => setSaved(false)}>{copy.saved}</Alert>}
   </Stack>;

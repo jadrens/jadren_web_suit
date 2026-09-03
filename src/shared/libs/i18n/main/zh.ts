@@ -2,15 +2,16 @@ import { TranslationKeys } from "./en";
 
 export const zh: TranslationKeys = {
   nav: {
-    start: "起始",
+    start: "首页",
+    about: "关于",
     blog: "博客",
     tools: "工具",
     settings: "设置",
     account: "用户中心",
   },
   home: {
-    title: "jadren - 起始",
-    description: "小龙小窝",
+    title: "jadren",
+    description: "Jadren 的博客、工具与项目",
   },
   blogPortal: {
     title: "小龙小窝",
@@ -36,10 +37,10 @@ export const zh: TranslationKeys = {
     saved: "位置已保存，并已计算今天的日出与日落。", invalid: "请输入有效的经纬度。", locationFailed: "无法获取位置，请检查本站位置权限。", ipFailed: "无法通过当前 IP 获取经纬度。",
     solar: "今天：日出 {sunrise}，日落 {sunset}。明天将重新计算。",
     llm: {
-      title: "LLM API", subtitle: "本地 API 配置", profile: "配置", name: "名称", renameHint: "双击修改名称", type: "API 类型", token: "API Token", url: "接入 URL", urlHelp: "可填写服务根地址或完整 API 地址", actualEndpoint: "实际请求地址", add: "添加 Profile", save: "保存配置", delete: "删除配置", empty: "还没有 API Profile。", saved: "Profile 已保存到本地。",
+      title: "LLM API", subtitle: "本地 API 配置", profile: "配置", name: "名称", renameHint: "重命名", type: "API 类型", token: "API Token", url: "接入 URL", urlHelp: "可填写服务根地址或完整 API 地址", actualEndpoint: "实际请求地址", add: "添加 Profile", save: "保存配置", delete: "删除配置", empty: "还没有 API Profile。", saved: "Profile 已保存到本地。",
       privacy: "凭证只会保存在当前浏览器的 localStorage 中。本项目完全开源，不会上传或窃取你的凭证。",
       unsaved: "设置尚未保存，确定要离开此页面吗？",
-      providerList: "Provider List", modelList: "Model List", provider: "绑定 Provider", model: "模型", modelId: "Model ID", addModel: "添加模型", deleteModel: "删除模型", emptyModels: "还没有模型。", providerRequired: "请先添加一个 Provider，再创建模型。",
+      providerList: "Provider List", modelList: "Model List", provider: "绑定 Provider", model: "模型", modelId: "Model ID", addModel: "添加模型", deleteModel: "删除模型", emptyModels: "还没有模型。", providerRequired: "请先添加一个 Provider，再创建模型。", incompleteModel: "未填写完整的模型不会出现在工具中，请选择 Provider 并填写 Model ID。", modelAutoCompleteHelp: "打开输入框即可从所选 Provider 加载模型，也可以手动填写 ID。", loadingModels: "正在加载模型…", modelLoadFailed: "无法加载模型：{error}。你仍然可以手动填写 ID。", noModelsReturned: "Provider 没有返回模型",
     },
   },
   stylizedName: {

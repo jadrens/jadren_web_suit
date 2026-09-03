@@ -15,7 +15,6 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
-  useMediaQuery,
   useTheme,
   TextField,
   InputAdornment,
@@ -30,6 +29,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import HomeIcon from "@mui/icons-material/Home";
 import ArticleIcon from "@mui/icons-material/Article";
 import PersonIcon from "@mui/icons-material/Person";
+import BuildIcon from "@mui/icons-material/Build";
 import ThemeToggle from "../navigation/ThemeToggle";
 import LocaleSwitcher from "../navigation/LocaleSwitcher";
 import { useI18n } from "@shared/libs/i18n/blog";
@@ -37,6 +37,7 @@ import { useSiteUrl } from "@shared/site-url";
 import { alpha } from "@mui/material";
 import React from "react";
 import NavbarAccountMenu from "@shared/components/NavbarAccountMenu";
+import { useResponsiveNav } from "@shared/hooks/useResponsiveNav";
 
 interface SearchResult {
   slug: string;
@@ -52,6 +53,8 @@ interface SearchResponse {
 
 export default function Navbar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const navContentRef = useRef<HTMLDivElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -64,14 +67,15 @@ export default function Navbar() {
   
   const router = useRouter();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const { t, locale } = useI18n();
+  const collapsed = useResponsiveNav(toolbarRef, navContentRef);
   const accountUrl = useSiteUrl("tool", "/user-status");
   const settingsUrl = useSiteUrl("main", "/settings");
 
   const navItems = [
     { key: "home", href: "/" },
     { key: "posts", href: `/blog/${locale}` },
+    { key: "tools", href: "/tools" },
     { key: "about", href: "/about" },
   ] as const;
 
@@ -187,11 +191,11 @@ export default function Navbar() {
           backgroundColor: alpha(theme.palette.background.default, 0.5),
         }}
       >
-        <Toolbar sx={{ px: { xs: 2, sm: 4 }, display: "flex", flexDirection: "row", alignItems: "center", gap: 1 }}>
+        <Toolbar ref={toolbarRef} sx={{ px: { xs: 2, sm: 4 }, display: "flex", flexDirection: "row", alignItems: "center", gap: 1 }}>
           <NavbarAccountMenu homeHref="/" settingsHref={settingsUrl} accountHref={accountUrl} homeLabel={t.nav.home} settingsLabel={t.nav.settings} accountLabel={t.nav.account} />
 
           {/* 移动端布局 */}
-          {isMobile ? (
+          {collapsed ? (
             <Box sx={{ display: "flex", alignItems: "center", flexDirection: "row-reverse", flexGrow: 1, gap: 1 }}>
               <ThemeToggle />
               <LocaleSwitcher />
@@ -204,7 +208,7 @@ export default function Navbar() {
             </Box>
           ) : (
             /* 桌面端布局 */
-            <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexDirection: "row-reverse", flexGrow: 1 }}>
+            <Box ref={navContentRef} sx={{ display: "flex", gap: 1, alignItems: "center", flexDirection: "row-reverse", flexGrow: 1, whiteSpace: "nowrap" }}>
               {navItems.map((item) => (
                 <Button
                   key={item.href}
@@ -360,7 +364,7 @@ export default function Navbar() {
           {/* 导航项 */}
           <MuiList sx={{ px: 2, flex: 1 }}>
             {navItems.map((item, index) => {
-              const icons = [<HomeIcon key="home" />, <ArticleIcon key="posts" />, <PersonIcon key="about" />];
+              const icons = [<HomeIcon key="home" />, <ArticleIcon key="posts" />, <BuildIcon key="tools" />, <PersonIcon key="about" />];
               return (
                 <ListItem key={item.href} disablePadding sx={{ mb: 0.5 }}>
                   <ListItemButton

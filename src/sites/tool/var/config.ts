@@ -1,7 +1,7 @@
 import { GITHUB_REPO_BRANCH, GITHUB_REPO_URL } from "@shared/github";
 
 const SITE_CONFIG = {
-  baseUrl: "https://tool.jadren.me",
+  baseUrl: "https://jadren.me",
   siteName: "jadren tools",
   description: "Useful online tools",
   githubRepo: GITHUB_REPO_URL,

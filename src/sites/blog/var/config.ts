@@ -1,7 +1,7 @@
 import { GITHUB_REPO_URL } from "@shared/github";
 
 export const SITE_CONFIG = {
-  baseUrl: "https://blog.jadren.me",
+  baseUrl: "https://jadren.me",
   siteName: "jadren blog",
   description: "A blog with markdown and LaTeX support",
   githubRepo: GITHUB_REPO_URL,

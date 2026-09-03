@@ -5,6 +5,7 @@ export const zh: TranslationKeys = {
   nav: {
     home: "首页",
     posts: "文章",
+    tools: "工具",
     about: "关于",
     menu: "菜单",
     search: "搜索",

@@ -5,6 +5,8 @@ export const zh: TranslationKeys = {
     home: "首页",
     posts: "文章",
     tools: "工具列表",
+    blog: "博客",
+    about: "关于",
     menu: "菜单",
     search: "搜索",
     register: "注册",

@@ -4,6 +4,7 @@ export const en = {
   nav: {
     home: "Home",
     posts: "Posts",
+    tools: "Tools",
     about: "About",
     menu: "Menu",
     search: "Search",
