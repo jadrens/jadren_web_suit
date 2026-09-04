@@ -39,7 +39,9 @@ export const zh: TranslationKeys = {
     solar: "今天：日出 {sunrise}，日落 {sunset}。明天将重新计算。",
     llm: {
       title: "LLM API", subtitle: "本地 API 配置", profile: "配置", name: "名称", renameHint: "重命名", type: "API 类型", token: "API Token", url: "接入 URL", urlHelp: "可填写服务根地址或完整 API 地址", actualEndpoint: "实际请求地址", add: "添加 Profile", save: "保存配置", delete: "删除配置", empty: "还没有 API Profile。", saved: "Profile 已保存到本地。",
-      privacy: "凭证只会保存在当前浏览器的 localStorage 中。本项目完全开源，不会上传或窃取你的凭证。",
+      privacy: "默认情况下，凭证只保存在当前浏览器的 localStorage 中。云端备份为可选功能，不推荐用于保存 API Key。",
+      cloudWarning: "不推荐：云端备份包含你的 API 凭证。数据会在浏览器中加密后上传，但任何系统都无法完全保证安全。服务器不会收到备份密码；密码丢失后备份将无法恢复。",
+      cloudUpload: "上传加密备份", cloudDownload: "下载加密备份", cloudTitleUpload: "上传 LLM 设置", cloudTitleDownload: "下载 LLM 设置", cloudPassphrase: "备份密码", cloudPassphraseHelp: "至少 12 个字符。它不是账号密码，并且不会上传到服务器。", cloudUploadConfirm: "加密并上传", cloudDownloadConfirm: "下载并替换本地设置", cloudLoginRequired: "请登录已验证账号后使用云端备份。", cloudUploaded: "加密备份已上传。", cloudDownloaded: "备份已解密并保存到本地。", cloudFailed: "云端备份失败：{error}", cloudWrongPassphrase: "无法解密备份，请检查备份密码。", cloudReplaceWarning: "此操作会替换当前浏览器中保存的 LLM 设置。", cancel: "取消",
       unsaved: "设置尚未保存，确定要离开此页面吗？",
       providerList: "Provider List", modelList: "Model List", provider: "绑定 Provider", model: "模型", modelId: "Model ID", addModel: "添加模型", deleteModel: "删除模型", emptyModels: "还没有模型。", providerRequired: "请先添加一个 Provider，再创建模型。", incompleteModel: "未填写完整的模型不会出现在工具中，请选择 Provider 并填写 Model ID。", modelAutoCompleteHelp: "打开输入框即可从所选 Provider 加载模型，也可以手动填写 ID。", loadingModels: "正在加载模型…", modelLoadFailed: "无法加载模型：{error}。你仍然可以手动填写 ID。", noModelsReturned: "Provider 没有返回模型",
     },

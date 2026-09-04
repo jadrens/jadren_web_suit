@@ -32,6 +32,7 @@ const nextConfig: NextConfig = {
         { source: "/api/vocabulary-practice/:path*", destination: "/sites/tool/api/vocabulary-practice/:path*" },
         { source: "/api/vocabulary-drill/:path*", destination: "/sites/tool/api/ncee-vocabulary/:path*" },
         { source: "/api/auth/:path*", destination: "/sites/main/api/auth/:path*" },
+        { source: "/api/llm-settings", destination: "/sites/main/api/llm-settings" },
         { source: "/settings/:path*", destination: "/sites/main/settings/:path*" },
         { source: "/login", destination: "/sites/main/login" },
         { source: "/register", destination: "/sites/main/register" },

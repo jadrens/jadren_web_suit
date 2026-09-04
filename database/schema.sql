@@ -9,6 +9,20 @@ CREATE TABLE IF NOT EXISTS user_main (
   is_admin BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+CREATE TABLE IF NOT EXISTS user_llm_settings_backup (
+  user_id UUID PRIMARY KEY
+    REFERENCES user_main(user_id) ON UPDATE CASCADE ON DELETE CASCADE,
+  version SMALLINT NOT NULL CHECK (version = 1),
+  salt VARCHAR(64) NOT NULL,
+  iv VARCHAR(64) NOT NULL,
+  ciphertext TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT user_llm_settings_backup_size CHECK (octet_length(ciphertext) <= 262144)
+);
+
+COMMENT ON TABLE user_llm_settings_backup IS
+  'Client-side encrypted LLM settings. The server never receives the decryption passphrase.';
+
 ALTER TABLE user_main
   ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
 

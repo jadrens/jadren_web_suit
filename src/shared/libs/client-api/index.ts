@@ -82,5 +82,11 @@ export const vocabularyPracticeApi = {
     apiClient.post<import("./types").CreateVocabularyAttemptResponse, import("./types").CreateVocabularyAttemptRequest>("/api/vocabulary-practice/attempts", input),
 };
 
+export const llmSettingsApi = {
+  download: () => apiClient.get<import("./types").LlmSettingsBackupResponse>("/api/llm-settings"),
+  upload: (backup: import("./types").EncryptedLlmSettingsBackup) =>
+    apiClient.put<import("./types").LlmSettingsBackupResponse, import("./types").EncryptedLlmSettingsBackup>("/api/llm-settings", backup),
+};
+
 export * from "./http";
 export * from "./types";

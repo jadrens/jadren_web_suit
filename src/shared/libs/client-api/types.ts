@@ -203,6 +203,18 @@ export interface CreateVocabularyAttemptResponse {
   last8CorrectRate: string;
 }
 
+export interface EncryptedLlmSettingsBackup {
+  version: 1;
+  salt: string;
+  iv: string;
+  ciphertext: string;
+  updatedAt?: string;
+}
+
+export interface LlmSettingsBackupResponse {
+  backup: EncryptedLlmSettingsBackup;
+}
+
 export type AuthStatus =
   | "uninitialized"
   | "anonymous"
