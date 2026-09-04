@@ -10,6 +10,7 @@ export const en = {
     search: "Search",
     settings: "Settings",
     account: "User center",
+    userData: "User Data",
   },
   blog: {
     views: "views",

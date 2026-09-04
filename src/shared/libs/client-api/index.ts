@@ -72,5 +72,15 @@ export const remindersApi = {
     ),
 };
 
+export const vocabularyPracticeApi = {
+  list: () => apiClient.get<import("./types").VocabularyUsageListResponse>("/api/vocabulary-practice"),
+  createUsage: (input: import("./types").CreateVocabularyUsageRequest) =>
+    apiClient.post<import("./types").VocabularyUsageResponse, import("./types").CreateVocabularyUsageRequest>("/api/vocabulary-practice", input),
+  deleteUsage: (usageId: string) =>
+    apiClient.delete<void>(`/api/vocabulary-practice/${encodeURIComponent(usageId)}`),
+  recordAttempt: (input: import("./types").CreateVocabularyAttemptRequest) =>
+    apiClient.post<import("./types").CreateVocabularyAttemptResponse, import("./types").CreateVocabularyAttemptRequest>("/api/vocabulary-practice/attempts", input),
+};
+
 export * from "./http";
 export * from "./types";

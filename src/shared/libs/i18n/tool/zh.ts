@@ -12,6 +12,7 @@ export const zh: TranslationKeys = {
     register: "注册",
     settings: "设置",
     account: "用户中心",
+    userData: "用户数据",
   },
   blog: {
     views: "浏览",
@@ -198,9 +199,12 @@ export const zh: TranslationKeys = {
       title: "For English Learners", cardDescription: "帮助英语学习者改进写作的 AI 工具。", description: "选择一个英语学习工具。", requiresLlm: "可能需要配置 LLM",
       grammar: {
         title: "English Grammar Checker", cardDescription: "检查语法、搭配、拼写、标点和表达自然度。", input: "英文文本", placeholder: "输入需要检查的英文内容…", check: "检查语法", checking: "检查中…", polish: "一键润色", polishing: "润色中…", polishedVersions: "润色版本", polishFailed: "润色失败", result: "检查结果", explanations: "错误解释", reconstructed: "重写后的句子", reason: "原因", noResult: "标注后的结果会显示在这里。",
-        strict: "严格模式", strictHelp: "标出搭配、语法、不自然表达、拼写和标点等所有问题。", normal: "普通模式", normalHelp: "标出搭配、语法、拼写和常规用法错误。", lenient: "宽松模式", lenientHelp: "标出语法、搭配和拼写错误，但容忍 ain't、bro、lib 等非正式缩略表达。",
-        model: "模型", noModel: "没有可用模型，请先在设置中添加 Provider 和 Model。", openSettings: "打开设置", thinking: "思考", thinkingSettings: "思考设置", enableThinking: "启用思考", reasoningEffort: "思考强度", thinkingBudget: "Thinking Budget", close: "完成", stop: "强制停止", stopped: "生成已停止", history: "历史记录", noHistory: "还没有保存的检查结果。", ok: "没有发现问题，这个句子是正确的。", invalidInput: "输入内容不符合要求", elapsed: "已用时间", tokens: "输出 Token", progress: "当前进度", waitingMark: "等待模型返回结果", okProgress: "句子检查通过", invalidProgress: "输入已被拒绝", marked: "已完成 mark_error", explaining: "desp_error {done}/{total}", reconstructedProgress: "已调用 recon_sen", failed: "语法检查失败", invalidMarkup: "模型返回了非法或不连续的引用标注。",
+        strict: "严格模式", strictHelp: "标出搭配、语法、不自然表达、拼写和标点等所有问题。", normal: "普通模式", normalHelp: "标出搭配、语法、拼写和常规用法错误。", lenient: "宽松模式", lenientHelp: "标出妨碍理解的明显错拼或乱码；忽略风格、标点、大小写、缩写和非正式表达。",
+        model: "模型", noModel: "没有可用模型，请先在设置中添加 Provider 和 Model。", openSettings: "打开设置", thinking: "思考", thinkingSettings: "思考设置", enableThinking: "启用思考", reasoningEffort: "思考强度", thinkingBudget: "Thinking Budget", close: "完成", stop: "强制停止", stopped: "生成已停止", history: "历史记录", noHistory: "还没有保存的检查结果。", copyCorrected: "复制纠正文本", copiedCorrected: "已复制", details: "AI 详情", aiResponse: "AI 回复", noAiResponse: "没有文本回复", toolCalls: "工具调用", noToolCalls: "没有工具调用", arguments: "参数", ok: "没有发现问题，这个句子是正确的。", invalidInput: "输入内容不符合要求", elapsed: "已用时间", tokens: "输出 Token", progress: "当前进度", waitingMark: "等待模型返回结果", okProgress: "句子检查通过", invalidProgress: "输入已被拒绝", marked: "已完成 mark_error", explaining: "desp_error {done}/{total}", reconstructedProgress: "已调用 recon_sen", failed: "语法检查失败", invalidMarkup: "模型返回了非法或不连续的引用标注。",
       },
+      sentencePractice: { title: "单词造句练习", cardDescription: "按不同词义进行自适应 AI 造句训练。" },
+      aiCenter: { title: "AI 中心", cardDescription: "与 AI 词汇助手对话并添加新的造句练习单词。" },
+      vocabularyDrill: { title: "词汇练习", cardDescription: "选择词汇数据库，练习音标、拼写和词义。" },
     },
     base64: {
       title: "Base64 编码 / 解码",

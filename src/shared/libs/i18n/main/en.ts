@@ -6,6 +6,7 @@ export const en = {
     tools: "TOOLS",
     settings: "SETTINGS",
     account: "User center",
+    userData: "User Data",
   },
   home: {
     title: "rayoumeu - Start",

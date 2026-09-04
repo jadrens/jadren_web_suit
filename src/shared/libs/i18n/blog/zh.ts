@@ -11,6 +11,7 @@ export const zh: TranslationKeys = {
     search: "搜索",
     settings: "设置",
     account: "用户中心",
+    userData: "用户数据",
   },
   blog: {
     views: "浏览",

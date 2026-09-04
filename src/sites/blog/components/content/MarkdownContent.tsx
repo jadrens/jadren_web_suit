@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 import { Box, Paper } from "@mui/material";
 import CodeBlock from "./CodeBlock";
 import { useEffect, useRef, useCallback } from "react";
@@ -13,6 +14,7 @@ import TagIcon from "@mui/icons-material/Tag";
 import { extractHeadings, useReadingProgress, slugify } from "../reading/ReadingProgressContext";
 import React from "react";
 import { tocDesktopWidth } from "@blog/var/toc";
+import { blogMarkdownSchema } from "./markdown-sanitize";
 
 interface MarkdownContentProps {
   content: string;
@@ -226,14 +228,19 @@ export default function MarkdownContent({ content }: MarkdownContentProps) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkMath, remarkGfm]}
-        rehypePlugins={[rehypeKatex, rehypeHighlight, rehypeRaw]}
+        rehypePlugins={[
+          rehypeRaw,
+          [rehypeSanitize, blogMarkdownSchema],
+          rehypeKatex,
+          rehypeHighlight,
+        ]}
         components={{
           pre: ({ children}) => {
             let className = '';
   
             React.Children.forEach(children, (child) => {
               if (React.isValidElement(child) && child.type === 'code') {
-                className = (child.props as any).className || '';
+                className = (child.props as { className?: string }).className || '';
               }
             });
             return <CodeBlock className={className}>{children}</CodeBlock>;

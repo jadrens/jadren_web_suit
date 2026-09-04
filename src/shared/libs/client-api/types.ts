@@ -162,6 +162,47 @@ export interface EmailAuditListResponse {
   audits: EmailAudit[];
 }
 
+export interface VocabularyAttempt {
+  attemptId: string;
+  question: string;
+  exampleSentence: string;
+  answer: string;
+  isCorrect: boolean;
+  feedback: string;
+  correctedSentence: string | null;
+  createdAt: string;
+}
+
+export interface VocabularyUsage {
+  usageId: string;
+  word: string;
+  prompt: string;
+  lastLearnTime: string | null;
+  correct: number;
+  wrong: number;
+  last8CorrectRate: string;
+  createdAt: string;
+  updatedAt: string;
+  attempts: VocabularyAttempt[];
+}
+
+export interface VocabularyUsageListResponse { usages: VocabularyUsage[] }
+export interface VocabularyUsageResponse { usage: VocabularyUsage }
+export interface CreateVocabularyUsageRequest { word: string; prompt: string }
+export interface CreateVocabularyAttemptRequest {
+  usageId: string;
+  question: string;
+  exampleSentence: string;
+  answer: string;
+  isCorrect: boolean;
+  feedback: string;
+  correctedSentence: string | null;
+}
+export interface CreateVocabularyAttemptResponse {
+  attempt: VocabularyAttempt;
+  last8CorrectRate: string;
+}
+
 export type AuthStatus =
   | "uninitialized"
   | "anonymous"

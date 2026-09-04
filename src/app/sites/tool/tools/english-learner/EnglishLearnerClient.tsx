@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { alpha, Box, Card, CardActionArea, Typography, useTheme } from "@mui/material";
 import SpellcheckRoundedIcon from "@mui/icons-material/SpellcheckRounded";
+import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
+import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
+import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import Footer from "@tool/components/layout/Footer";
 import { useI18n } from "@shared/libs/i18n/tool";
 import { useDocumentTitle } from "@tool/hooks/useDocumentTitle";
@@ -16,6 +19,18 @@ export default function EnglishLearnerClient() {
       <Card variant="outlined" sx={{ borderRadius: 2, "&:hover": { borderColor: "primary.main", transform: "translateY(-2px)", boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, .12)}` }, transition: "all .2s" }}><CardActionArea component={Link} href="/tools/english-learner/grammar-checker" sx={{ p: 3, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
         <Box sx={{ width: 56, height: 56, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, .1), color: "primary.main" }}><SpellcheckRoundedIcon sx={{ fontSize: 32 }} /></Box>
         <Box><Typography variant="h6" sx={{ fontWeight: 600 }}>{copy.grammar.title}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{copy.grammar.cardDescription}</Typography></Box>
+      </CardActionArea></Card>
+      <Card variant="outlined" sx={{ borderRadius: 2, "&:hover": { borderColor: "primary.main", transform: "translateY(-2px)", boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, .12)}` }, transition: "all .2s" }}><CardActionArea component={Link} href="/tools/english-learner/sentence-practice" sx={{ p: 3, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+        <Box sx={{ width: 56, height: 56, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, .1), color: "primary.main" }}><SchoolRoundedIcon sx={{ fontSize: 32 }} /></Box>
+        <Box><Typography variant="h6" sx={{ fontWeight: 600 }}>{copy.sentencePractice.title}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{copy.sentencePractice.cardDescription}</Typography></Box>
+      </CardActionArea></Card>
+      <Card variant="outlined" sx={{ borderRadius: 2, "&:hover": { borderColor: "primary.main", transform: "translateY(-2px)", boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, .12)}` }, transition: "all .2s" }}><CardActionArea component={Link} href="/tools/english-learner/ai-center" sx={{ p: 3, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+        <Box sx={{ width: 56, height: 56, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, .1), color: "primary.main" }}><AutoAwesomeRoundedIcon sx={{ fontSize: 32 }} /></Box>
+        <Box><Typography variant="h6" sx={{ fontWeight: 600 }}>{copy.aiCenter.title}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{copy.aiCenter.cardDescription}</Typography></Box>
+      </CardActionArea></Card>
+      <Card variant="outlined" sx={{ borderRadius: 2, "&:hover": { borderColor: "primary.main", transform: "translateY(-2px)", boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, .12)}` }, transition: "all .2s" }}><CardActionArea component={Link} href="/tools/english-learner/vocabulary-practice" sx={{ p: 3, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+        <Box sx={{ width: 56, height: 56, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, .1), color: "primary.main" }}><QuizRoundedIcon sx={{ fontSize: 32 }} /></Box>
+        <Box><Typography variant="h6" sx={{ fontWeight: 600 }}>{copy.vocabularyDrill.title}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{copy.vocabularyDrill.cardDescription}</Typography></Box>
       </CardActionArea></Card>
     </Box>
   </Box></Box><Footer /></div>;

@@ -44,6 +44,7 @@ export type LlmStreamEvent =
   | { type: "tool_call"; toolCall: LlmToolCall }
   | { type: "tool_execution_start"; toolCall: LlmToolCall }
   | { type: "tool_execution_result"; toolCall: LlmToolCall; result: unknown }
+  | { type: "round_done"; round: number; response: LlmResponse }
   | { type: "done"; response: LlmResponse };
 
 export function getLlmProfiles(): LlmProfile[] {
@@ -238,11 +239,17 @@ export interface LlmRunOptions extends Omit<LlmRequest, "profile" | "tools" | "m
   model?: string;
   tools?: LlmFunction[];
   maxToolRounds?: number;
+  isComplete?: () => boolean;
+  incompletePrompt?: string;
+  maxIncompleteRetries?: number;
 }
 export interface LlmRunStreamOptions extends Omit<LlmStreamRequest, "profile" | "tools" | "stream" | "model"> {
   model?: string;
   tools?: LlmFunction[];
   maxToolRounds?: number;
+  isComplete?: () => boolean;
+  incompletePrompt?: string;
+  maxIncompleteRetries?: number;
 }
 
 function stringifyToolResult(value: unknown) {
@@ -272,9 +279,21 @@ export class LlmClient {
     const functions = options.tools || [];
     const messages = [...options.messages];
     const maxRounds = options.maxToolRounds ?? this.config.maxToolRounds ?? 8;
+    const maxIncompleteRetries = options.maxIncompleteRetries ?? 0;
+    let incompleteRetries = 0;
+    let requireTools = false;
     for (let round = 0; round <= maxRounds; round++) {
-      const response = await callLlm({ ...options, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(({ execute: _execute, ...tool }) => tool) });
-      if (!response.toolCalls.length) return response;
+      const response = await callLlm({ ...options, toolChoice: requireTools ? "required" : options.toolChoice, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(({ execute: _execute, ...tool }) => tool) });
+      requireTools = false;
+      if (!response.toolCalls.length) {
+        if (!options.isComplete || options.isComplete()) return response;
+        if (incompleteRetries >= maxIncompleteRetries) return response;
+        incompleteRetries++;
+        messages.push({ role: "assistant", content: response.text });
+        messages.push({ role: "user", content: options.incompletePrompt || "Please use the tools to continue and complete the task." });
+        requireTools = true;
+        continue;
+      }
       if (round === maxRounds) throw new Error(`Maximum tool rounds exceeded (${maxRounds})`);
       messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls, providerData: response.raw });
       for (const toolCall of response.toolCalls) {
@@ -291,10 +310,14 @@ export class LlmClient {
     const functions = options.tools || [];
     const messages = [...options.messages];
     const maxRounds = options.maxToolRounds ?? this.config.maxToolRounds ?? 8;
+    const maxIncompleteRetries = options.maxIncompleteRetries ?? 0;
+    let incompleteRetries = 0;
+    let requireTools = false;
     const aggregateUsage: LlmUsage = {};
     for (let round = 0; round <= maxRounds; round++) {
       let completed: LlmResponse | null = null;
-      const events = callLlm({ ...options, stream: true, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(({ execute: _execute, ...tool }) => tool) });
+      const events = callLlm({ ...options, stream: true, toolChoice: requireTools ? "required" : options.toolChoice, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(({ execute: _execute, ...tool }) => tool) });
+      requireTools = false;
       for await (const event of events) {
         if (event.type === "done") {
           completed = event.response;
@@ -303,7 +326,19 @@ export class LlmClient {
         else yield event;
       }
       if (!completed) throw new Error("LLM stream ended without a final response");
-      if (!completed.toolCalls.length) { completed.usage = aggregateUsage; yield { type: "done", response: completed }; return; }
+      yield { type: "round_done", round: round + 1, response: completed };
+      if (!completed.toolCalls.length) {
+        if (options.isComplete?.() === false && incompleteRetries < maxIncompleteRetries) {
+          incompleteRetries++;
+          messages.push({ role: "assistant", content: completed.text });
+          messages.push({ role: "user", content: options.incompletePrompt || "Please use the tools to continue and complete the task." });
+          requireTools = true;
+          continue;
+        }
+        completed.usage = aggregateUsage;
+        yield { type: "done", response: completed };
+        return;
+      }
       if (round === maxRounds) throw new Error(`Maximum tool rounds exceeded (${maxRounds})`);
       messages.push({ role: "assistant", content: completed.text, toolCalls: completed.toolCalls, providerData: completed.raw });
       for (const toolCall of completed.toolCalls) {

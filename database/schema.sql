@@ -64,6 +64,53 @@ CREATE INDEX IF NOT EXISTS quick_link_user_created_at_idx
 CREATE INDEX IF NOT EXISTS quick_link_expire_at_idx
   ON quick_link (expire_at);
 
+CREATE TABLE IF NOT EXISTS vocabulary_usage (
+  usage_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL
+    REFERENCES user_main(user_id) ON UPDATE CASCADE ON DELETE CASCADE,
+  word VARCHAR(100) NOT NULL,
+  usage_prompt VARCHAR(500) NOT NULL,
+  last_learn_time TIMESTAMPTZ DEFAULT NULL,
+  correct_count INTEGER NOT NULL DEFAULT 0 CHECK (correct_count >= 0),
+  wrong_count INTEGER NOT NULL DEFAULT 0 CHECK (wrong_count >= 0),
+  recent_results BOOLEAN[] NOT NULL DEFAULT ARRAY[]::BOOLEAN[],
+  last_8_correct_rate VARCHAR(8) NOT NULL DEFAULT '0/0',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT vocabulary_usage_word_length CHECK (char_length(btrim(word)) BETWEEN 1 AND 100),
+  CONSTRAINT vocabulary_usage_prompt_length CHECK (char_length(btrim(usage_prompt)) BETWEEN 1 AND 500),
+  CONSTRAINT vocabulary_usage_recent_results CHECK (cardinality(recent_results) <= 8),
+  UNIQUE (user_id, word, usage_prompt)
+);
+
+CREATE INDEX IF NOT EXISTS vocabulary_usage_user_learning_idx
+  ON vocabulary_usage (user_id, last_learn_time ASC NULLS FIRST, created_at ASC);
+
+CREATE TABLE IF NOT EXISTS vocabulary_practice_attempt (
+  attempt_id UUID PRIMARY KEY,
+  usage_id UUID NOT NULL
+    REFERENCES vocabulary_usage(usage_id) ON UPDATE CASCADE ON DELETE CASCADE,
+  user_id UUID NOT NULL
+    REFERENCES user_main(user_id) ON UPDATE CASCADE ON DELETE CASCADE,
+  question TEXT NOT NULL,
+  example_sentence TEXT NOT NULL,
+  answer TEXT NOT NULL,
+  is_correct BOOLEAN NOT NULL,
+  feedback TEXT NOT NULL,
+  corrected_sentence TEXT DEFAULT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS vocabulary_attempt_usage_created_idx
+  ON vocabulary_practice_attempt (usage_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS vocabulary_attempt_user_created_idx
+  ON vocabulary_practice_attempt (user_id, created_at DESC);
+
+COMMENT ON TABLE vocabulary_usage IS
+  'User-owned vocabulary meanings/usages and spaced-practice statistics.';
+COMMENT ON TABLE vocabulary_practice_attempt IS
+  'The five most recent sentence-practice attempts retained for each vocabulary usage.';
+
 COMMENT ON TABLE quick_link IS
   'User-managed short-link metadata. Redirect handling is implemented by another service.';
 COMMENT ON COLUMN quick_link.target_url IS

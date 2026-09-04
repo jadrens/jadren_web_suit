@@ -66,7 +66,7 @@ export default function Navbar() {
         }}
       >
         <Toolbar ref={toolbarRef} sx={{ px: { xs: 2, sm: 4 }, display: "flex", flexDirection: "row", alignItems: "center", gap: 1 }}>
-          <NavbarAccountMenu homeHref="/" settingsHref={settingsUrl} accountHref="/user-status" homeLabel={t.nav.home} settingsLabel={t.nav.settings} accountLabel={t.nav.account} />
+          <NavbarAccountMenu homeHref="/" settingsHref={settingsUrl} accountHref="/user-status" userDataHref="/user-data" homeLabel={t.nav.home} settingsLabel={t.nav.settings} accountLabel={t.nav.account} userDataLabel={t.nav.userData} />
 
           {/* Mobile layout */}
           {collapsed ? (

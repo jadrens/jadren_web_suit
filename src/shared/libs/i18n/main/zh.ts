@@ -8,6 +8,7 @@ export const zh: TranslationKeys = {
     tools: "工具",
     settings: "设置",
     account: "用户中心",
+    userData: "用户数据",
   },
   home: {
     title: "jadren",
