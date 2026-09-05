@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
-import { closeDb, withTransaction } from "../src/shared/libs/auth/db";
+import { closeDb, withTransaction } from "../src/lib/auth/db";
 
 const locales = ["en", "zh"] as const;
 let imported = 0;

@@ -145,14 +145,16 @@ main/
 ├── database/                 # PostgreSQL schema 与初始化脚本
 ├── deploy/                   # systemd 和 Nginx 示例
 ├── docs/                     # 架构、博客与 API 文档
-├── public/shared/            # 公共字体、图标、头像和背景
+├── public/            # 公共字体、图标、头像和背景
 ├── scripts/                  # 导入、数据构建、提醒和部署任务
 └── src/
-    ├── app/sites/blog/       # 博客、编辑器、后台和 API
-    ├── app/sites/main/       # 门户、账号、设置和 SEO 路由
-    ├── app/sites/tool/       # 在线工具、英语学习和 API
-    ├── shared/               # 认证、数据库、邮件、i18n 和共享组件
-    └── sites/                # 各站点组件、配置、样式和 hooks
+    ├── app/                  # 与公开 URL 一一对应的页面和 API
+    ├── components/           # 页面组件
+    ├── config/               # 博客与工具配置
+    ├── hooks/                # 页面 hooks
+    ├── lib/                  # 认证、数据库、邮件、i18n 与客户端 API
+    ├── styles/               # 功能样式
+    └── theme/                # 全局主题
 ```
 
 详细设计见 [`docs/blog/architecture.md`](docs/blog/architecture.md)，接口说明见 [`docs/tool/auth-api.md`](docs/tool/auth-api.md) 和 [`docs/tool/client-api.md`](docs/tool/client-api.md)。
@@ -311,14 +313,16 @@ main/
 ├── database/                 # PostgreSQL schema and setup
 ├── deploy/                   # systemd and Nginx examples
 ├── docs/                     # Architecture, blog, and API documentation
-├── public/shared/            # Shared fonts, icons, avatar, and backgrounds
+├── public/            # Fonts, icons, avatar, and backgrounds
 ├── scripts/                  # Import, data, reminder, and deployment jobs
 └── src/
-    ├── app/sites/blog/       # Blog, editor, admin UI, and APIs
-    ├── app/sites/main/       # Portal, accounts, settings, and SEO routes
-    ├── app/sites/tool/       # Utilities, English learning, and APIs
-    ├── shared/               # Auth, database, email, i18n, and shared UI
-    └── sites/                # Per-site components, config, styles, and hooks
+    ├── app/                  # Pages and APIs mapped directly to public URLs
+    ├── components/           # Page components
+    ├── config/               # Blog and tool configuration
+    ├── hooks/                # Page hooks
+    ├── lib/                  # Auth, database, email, i18n, and client APIs
+    ├── styles/               # Feature styles
+    └── theme/                # Global theme
 ```
 
 See [`docs/blog/architecture.md`](docs/blog/architecture.md) for design details and [`docs/tool/auth-api.md`](docs/tool/auth-api.md) / [`docs/tool/client-api.md`](docs/tool/client-api.md) for API documentation.

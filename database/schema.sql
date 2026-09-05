@@ -125,6 +125,35 @@ COMMENT ON TABLE vocabulary_usage IS
 COMMENT ON TABLE vocabulary_practice_attempt IS
   'The five most recent sentence-practice attempts retained for each vocabulary usage.';
 
+CREATE TABLE IF NOT EXISTS vocabulary_collection (
+  collection_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES user_main(user_id) ON DELETE CASCADE,
+  name VARCHAR(80) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS vocabulary_collection_item (
+  collection_id UUID NOT NULL REFERENCES vocabulary_collection(collection_id) ON DELETE CASCADE,
+  dataset VARCHAR(40) NOT NULL,
+  source_word_id INTEGER NOT NULL,
+  word VARCHAR(100) NOT NULL,
+  phonetic VARCHAR(160) NOT NULL DEFAULT '',
+  meanings JSONB NOT NULL DEFAULT '[]'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (collection_id, dataset, source_word_id)
+);
+
+CREATE TABLE IF NOT EXISTS vocabulary_drill_progress (
+  user_id UUID NOT NULL REFERENCES user_main(user_id) ON DELETE CASCADE,
+  dataset VARCHAR(40) NOT NULL,
+  mode VARCHAR(20) NOT NULL,
+  word_order INTEGER[] NOT NULL,
+  current_index INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, dataset, mode)
+);
+
 COMMENT ON TABLE quick_link IS
   'User-managed short-link metadata. Redirect handling is implemented by another service.';
 COMMENT ON COLUMN quick_link.target_url IS

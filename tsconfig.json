@@ -16,10 +16,12 @@
     "incremental": true,
     "plugins": [{ "name": "next" }],
     "paths": {
-      "@main/*": ["./src/sites/main/*"],
-      "@blog/*": ["./src/sites/blog/*"],
-      "@tool/*": ["./src/sites/tool/*"],
-      "@shared/*": ["./src/shared/*"]
+      "@components/*": ["./src/components/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@config/*": ["./src/config/*"],
+      "@styles/*": ["./src/styles/*"],
+      "@lib/*": ["./src/lib/*"],
+      "@theme/*": ["./src/theme/*"]
     }
   },
   "include": [

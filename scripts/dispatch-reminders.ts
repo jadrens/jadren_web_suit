@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { closeDb, db, firstRow, withTransaction } from "../src/shared/libs/auth/db";
-import { sendReminderEmail } from "../src/shared/libs/auth/mailer";
+import { closeDb, db, firstRow, withTransaction } from "../src/lib/auth/db";
+import { sendReminderEmail } from "../src/lib/auth/mailer";
 import {
   nextOccurrenceAfter,
   REMINDER_EMAILS_PER_UTC_HOUR,
   utcHourWindow,
-} from "../src/shared/libs/reminder/validation";
+} from "../src/lib/reminder/validation";
 
 interface CandidateRow {
   reminder_id: string;
