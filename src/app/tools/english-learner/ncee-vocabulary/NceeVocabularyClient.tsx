@@ -275,6 +275,17 @@ export default function NceeVocabularyClient() {
     catch { setToast(locale === "zh" ? "删除失败" : "Unable to remove word"); } finally { setDeleting(false); }
   }
 
+  useEffect(() => {
+    const handleDeleteShortcut = (event: KeyboardEvent) => {
+      if (event.key.toLocaleLowerCase() !== "d" || !event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.repeat) return;
+      if (!dataset.startsWith("collection:") || !exercise || loading || deleting || searchOpen || syncOpen || favoriteOpen || customWordOpen || collectionDialogOpen) return;
+      event.preventDefault();
+      void deleteFromCollection();
+    };
+    window.addEventListener("keydown", handleDeleteShortcut);
+    return () => window.removeEventListener("keydown", handleDeleteShortcut);
+  });
+
   async function uploadProgress() {
     const progress = progressRef.current; if (!progress) return; setSyncBusy(true); setSyncError("");
     try { await vocabularyDrillApi.saveProgress({ dataset, mode, order: progress.order, index: progress.index }); setSyncOpen(false); setToast(copy.cloudSaved); }
@@ -299,7 +310,7 @@ export default function NceeVocabularyClient() {
       {mode === "word" && (!selected || !provider) && <Alert severity="info" action={<Button component={Link} href={settingsUrl}>{copy.settings}</Button>}>{copy.llmNeeded}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       {loading && !exercise ? <Box sx={{ display: "grid", placeItems: "center", py: 7 }}><CircularProgress /></Box> : exercise && <>
-        <Box sx={{ minHeight: 120, display: "grid", placeItems: "center", textAlign: "center", py: 2, position: "relative" }}><Stack direction="row" sx={{ position: "absolute", right: 0, top: 0 }}>{dataset.startsWith("collection:") && <IconButton color="error" title={locale === "zh" ? "从收藏夹删除" : "Remove from collection"} disabled={deleting} onClick={() => void deleteFromCollection()}>{deleting ? <CircularProgress size={20} /> : <DeleteOutlineRoundedIcon />}</IconButton>}<IconButton title={copy.favorite} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setFavoriteOpen(true)}><BookmarkAddRoundedIcon /></IconButton></Stack>
+        <Box sx={{ minHeight: 120, display: "grid", placeItems: "center", textAlign: "center", py: 2, position: "relative" }}><Stack direction="row" sx={{ position: "absolute", right: 0, top: 0 }}>{dataset.startsWith("collection:") && <IconButton color="error" title={locale === "zh" ? "从收藏夹删除（Ctrl + D）" : "Remove from collection (Ctrl + D)"} disabled={deleting} onClick={() => void deleteFromCollection()}>{deleting ? <CircularProgress size={20} /> : <DeleteOutlineRoundedIcon />}</IconButton>}<IconButton title={copy.favorite} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setFavoriteOpen(true)}><BookmarkAddRoundedIcon /></IconButton></Stack>
           {mode === "phonetic" && <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" sx={{ fontFamily: "serif" }}>{exercise.phonetic}</Typography><IconButton aria-label={copy.listen} title={copy.listen} onClick={() => speak(exercise.english)}><CampaignRoundedIcon /></IconButton></Stack>}
           {mode === "meaning" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h5" sx={{ fontWeight: 650 }}>{exercise.chinese}</Typography>{exercise.duplicateCount > 1 && <Chip variant="outlined" label={`${copy.ambiguous} (${exercise.duplicateCount})`} />}{phoneticRevealed && <Typography variant="h6" color="primary" sx={{ fontFamily: "serif" }}>{exercise.phonetic}</Typography>}<Button size="small" variant="outlined" startIcon={<CampaignRoundedIcon />} onClick={() => { setPhoneticRevealed(true); speak(exercise.english); }}>{locale === "zh" ? "显示音标并朗读" : "Show pronunciation and speak"}</Button></Stack>}
           {mode === "word" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" color={wrongFlash ? "error" : "primary"} sx={{ fontWeight: 750, animation: wrongFlash ? "wrongPulse .22s ease-in-out 3" : "none", "@keyframes wrongPulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: .2 } } }}>{exercise.english}</Typography><Stack direction="row" spacing={.5}>{(exercise.meanings || []).map((meaning, index) => <Chip key={index} size="small" label={meaning.partOfSpeech} />)}</Stack></Stack>}

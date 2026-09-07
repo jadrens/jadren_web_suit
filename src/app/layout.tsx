@@ -18,6 +18,7 @@ import AuthLifecycle from "@components/ui/auth/AuthLifecycle";
 import LoadingBar from "@components/ui/layout/LoadingBar";
 import Navbar from "@components/ui/layout/Navbar";
 import { NavbarLoginStatusProvider } from "@components/ui/layout/NavbarLoginStatus";
+import { SHARED_SITE_ICONS } from "@lib/site-icons";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "600", "700"] });
 const nunito = Nunito({ variable: "--font-nunito", subsets: ["latin"], weight: ["600", "700"] });
@@ -25,6 +26,7 @@ const nunito = Nunito({ variable: "--font-nunito", subsets: ["latin"], weight: [
 export const metadata: Metadata = {
   title: "Dragonren",
   description: "Dragonren web application",
+  icons: SHARED_SITE_ICONS,
 };
 
 export const viewport = {
