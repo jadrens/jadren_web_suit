@@ -14,7 +14,6 @@ import {
   Card,
   CardContent,
   Alert,
-  Snackbar,
   CircularProgress,
   IconButton,
   Checkbox,
@@ -27,6 +26,7 @@ import {
   useTheme,
   Pagination,
 } from "@mui/material";
+import { Snackbar } from "@components/ui/feedback/toast";
 import SearchIcon from "@mui/icons-material/Search";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";

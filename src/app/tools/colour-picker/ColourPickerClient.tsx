@@ -9,7 +9,6 @@ import {
   CardContent,
   IconButton,
   Slider,
-  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -20,6 +19,7 @@ import ColorLensIcon from "@mui/icons-material/ColorLens";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import Footer from "@components/ui/layout/Footer";
+import { Snackbar } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 

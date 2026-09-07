@@ -19,8 +19,8 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Snackbar,
 } from "@mui/material";
+import { Snackbar } from "@components/ui/feedback/toast";
 import DnsIcon from "@mui/icons-material/Dns";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";

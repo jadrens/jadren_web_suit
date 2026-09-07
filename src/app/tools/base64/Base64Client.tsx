@@ -8,12 +8,12 @@ import {
   Button,
   ToggleButtonGroup,
   ToggleButton,
-  Snackbar,
   Alert,
   useTheme,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import Footer from "@components/ui/layout/Footer";
+import { Snackbar } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import { alpha } from "@mui/material";

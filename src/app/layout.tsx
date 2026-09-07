@@ -8,6 +8,7 @@ import "@styles/content/misans.css";
 import "@styles/app/misans.css";
 import "vditor/dist/index.css";
 import { ThemeProvider } from "@theme/ThemeProvider";
+import { ToastProvider } from "@components/ui/feedback/toast";
 import ThemeRegistry from "@components/portal/ThemeRegistry";
 import { I18nProvider as PortalI18nProvider } from "@lib/i18n/portal";
 import { I18nProvider as ContentI18nProvider } from "@lib/i18n/content";
@@ -42,7 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       style={{ maxWidth: "100vw", overflowX: "hidden", hyphens: "auto", overflowWrap: "break-word" }}
     >
       <body className="min-h-screen antialiased" suppressHydrationWarning>
-        <ThemeProvider><ThemeRegistry><PortalI18nProvider><ContentI18nProvider><AppI18nProvider><AuthLifecycle><NavbarLoginStatusProvider><LocaleHtml /><LoadingBar /><Navbar />{children}</NavbarLoginStatusProvider></AuthLifecycle></AppI18nProvider></ContentI18nProvider></PortalI18nProvider></ThemeRegistry></ThemeProvider>
+        <ThemeProvider><ThemeRegistry><ToastProvider /><PortalI18nProvider><ContentI18nProvider><AppI18nProvider><AuthLifecycle><NavbarLoginStatusProvider><LocaleHtml /><LoadingBar /><Navbar />{children}</NavbarLoginStatusProvider></AuthLifecycle></AppI18nProvider></ContentI18nProvider></PortalI18nProvider></ThemeRegistry></ThemeProvider>
       </body>
     </html>
   );

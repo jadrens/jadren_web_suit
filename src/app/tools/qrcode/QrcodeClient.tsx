@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   CardContent,
-  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -18,6 +17,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import { alpha } from "@mui/material";
 import Footer from "@components/ui/layout/Footer";
+import { Snackbar } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import QRCode from "qrcode";

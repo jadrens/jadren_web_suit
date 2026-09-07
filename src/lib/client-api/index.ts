@@ -85,8 +85,8 @@ export const vocabularyPracticeApi = {
 export const vocabularyDrillApi = {
   userData: () => apiClient.get<import("./types").VocabularyDrillUserDataResponse>("/api/vocabulary-drill/user-data"),
   createCollection: (name: string) => apiClient.post<{ collection: import("./types").VocabularyCollection }, { action: string; name: string }>("/api/vocabulary-drill/user-data", { action: "create_collection", name }),
-  addItem: (input: { collectionId: string; dataset: string; sourceWordId: number; word: string; phonetic: string; meanings: import("./types").DrillMeaning[] }) => apiClient.post<{ saved: boolean }, typeof input & { action: string }>("/api/vocabulary-drill/user-data", { action: "add_item", ...input }),
-  deleteItem: (collectionId: string, sourceWordId: number) => apiClient.delete<void>(`/api/vocabulary-drill/user-data?collectionId=${encodeURIComponent(collectionId)}&sourceWordId=${encodeURIComponent(sourceWordId)}`),
+  addItem: (input: { collectionId: string; dataset: string; sourceWordId?: number; word: string; phonetic: string; phonetics?: import("./types").VocabularyPhonetic[]; meanings: import("./types").DrillMeaning[]; pluralForms?: string; pastForms?: string; example?: string; definition?: string }) => apiClient.post<{ saved: boolean; item?: import("./types").VocabularyCollectionItem }, typeof input & { action: string }>("/api/vocabulary-drill/user-data", { action: "add_item", ...input }),
+  deleteItem: (collectionId: string, sourceWordId: number, dataset?: string) => apiClient.delete<void>(`/api/vocabulary-drill/user-data?collectionId=${encodeURIComponent(collectionId)}&sourceWordId=${encodeURIComponent(sourceWordId)}${dataset ? `&dataset=${encodeURIComponent(dataset)}` : ""}`),
   saveProgress: (input: { dataset: string; mode: string; order: number[]; index: number }) => apiClient.put<{ saved: boolean }, typeof input>("/api/vocabulary-drill/user-data", input),
 };
 

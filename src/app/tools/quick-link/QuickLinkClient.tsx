@@ -18,7 +18,6 @@ import {
   Link as MuiLink,
   Menu,
   MenuItem,
-  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -30,6 +29,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import { Snackbar } from "@components/ui/feedback/toast";
 import AddLinkRoundedIcon from "@mui/icons-material/AddLinkRounded";
 import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";

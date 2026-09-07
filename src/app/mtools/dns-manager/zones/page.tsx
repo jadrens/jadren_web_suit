@@ -19,7 +19,6 @@ import {
   DialogActions,
   TextField,
   Alert,
-  Snackbar,
   CircularProgress,
   Chip,
   Tooltip,
@@ -32,6 +31,7 @@ import {
   InputAdornment,
   useTheme,
 } from "@mui/material";
+import { Snackbar } from "@components/ui/feedback/toast";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";

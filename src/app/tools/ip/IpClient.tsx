@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   Button,
-  Snackbar,
   Alert,
   CircularProgress,
   useTheme,
@@ -17,6 +16,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import LanguageIcon from "@mui/icons-material/Language";
 import Footer from "@components/ui/layout/Footer";
+import { Snackbar } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import { alpha } from "@mui/material";

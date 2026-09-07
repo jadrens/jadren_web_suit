@@ -135,24 +135,38 @@ CREATE TABLE IF NOT EXISTS vocabulary_collection (
 
 CREATE TABLE IF NOT EXISTS vocabulary_collection_item (
   collection_id UUID NOT NULL REFERENCES vocabulary_collection(collection_id) ON DELETE CASCADE,
-  dataset VARCHAR(40) NOT NULL,
+  dataset VARCHAR(120) NOT NULL,
   source_word_id INTEGER NOT NULL,
   word VARCHAR(100) NOT NULL,
   phonetic VARCHAR(160) NOT NULL DEFAULT '',
+  phonetics JSONB NOT NULL DEFAULT '[]'::JSONB,
   meanings JSONB NOT NULL DEFAULT '[]'::JSONB,
+  plural_forms VARCHAR(240) NOT NULL DEFAULT '',
+  past_forms VARCHAR(240) NOT NULL DEFAULT '',
+  example TEXT NOT NULL DEFAULT '',
+  definition TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (collection_id, dataset, source_word_id)
 );
 
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS phonetics JSONB NOT NULL DEFAULT '[]'::JSONB;
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS plural_forms VARCHAR(240) NOT NULL DEFAULT '';
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS past_forms VARCHAR(240) NOT NULL DEFAULT '';
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS example TEXT NOT NULL DEFAULT '';
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS definition TEXT NOT NULL DEFAULT '';
+ALTER TABLE vocabulary_collection_item ALTER COLUMN dataset TYPE VARCHAR(120);
+
 CREATE TABLE IF NOT EXISTS vocabulary_drill_progress (
   user_id UUID NOT NULL REFERENCES user_main(user_id) ON DELETE CASCADE,
-  dataset VARCHAR(40) NOT NULL,
+  dataset VARCHAR(120) NOT NULL,
   mode VARCHAR(20) NOT NULL,
   word_order INTEGER[] NOT NULL,
   current_index INTEGER NOT NULL DEFAULT 0,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, dataset, mode)
 );
+
+ALTER TABLE vocabulary_drill_progress ALTER COLUMN dataset TYPE VARCHAR(120);
 
 COMMENT ON TABLE quick_link IS
   'User-managed short-link metadata. Redirect handling is implemented by another service.';

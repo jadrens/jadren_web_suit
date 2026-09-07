@@ -203,8 +203,10 @@ export interface CreateVocabularyAttemptResponse {
   last8CorrectRate: string;
 }
 
-export interface DrillMeaning { text: string; partOfSpeech: "v" | "adj" | "adv" | "n" | "prep" | "conj" | "pron" | "other" }
-export interface VocabularyCollectionItem { dataset: string; sourceWordId: number; word: string; phonetic: string; meanings: DrillMeaning[] }
+export type DrillPartOfSpeech = "vt" | "vi" | "v" | "adj" | "adv" | "n" | "prep" | "conj" | "pron" | "int" | "num" | "art" | "other";
+export interface DrillMeaning { text: string; partOfSpeech: DrillPartOfSpeech }
+export interface VocabularyPhonetic { accent: "uk" | "us" | "other"; text: string; audio?: string }
+export interface VocabularyCollectionItem { dataset: string; sourceWordId: number; word: string; phonetic: string; phonetics?: VocabularyPhonetic[]; meanings: DrillMeaning[]; pluralForms?: string; pastForms?: string; example?: string; definition?: string }
 export interface VocabularyCollection { collectionId: string; name: string; items: VocabularyCollectionItem[] }
 export interface VocabularyDrillUserDataResponse { collections: VocabularyCollection[]; progress: Array<{ dataset: string; mode: string; order: number[]; index: number }> }
 
