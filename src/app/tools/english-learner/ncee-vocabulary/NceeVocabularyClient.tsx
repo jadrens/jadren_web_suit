@@ -159,18 +159,25 @@ export default function NceeVocabularyClient() {
   }, [exercise, favoriteOpen, forgotten, grade, loading, mode, searchOpen, syncOpen, wrongFlash]);
 
   const previousQuestion = useCallback(async () => { const progress = progressRef.current; if (!progress || progress.index <= 0 || loadingRef.current) return; progress.index--; localStorage.setItem(`${PROGRESS_PREFIX}${dataset}:${mode}`, JSON.stringify(progress)); await loadMode(dataset, mode); }, [dataset, loadMode, mode]);
+  const revealPronunciation = useCallback(() => {
+    if (mode !== "meaning" || !exercise || loading) return;
+    setPhoneticRevealed(true);
+    speak(exercise.english);
+  }, [exercise, loading, mode, speak]);
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.repeat) return;
       const key = event.key.toLocaleLowerCase();
-      if (key !== "f" && key !== "j") return;
+      if (key !== "f" && key !== "j" && key !== "p") return;
+      if (key === "p" && (mode !== "meaning" || !exercise || loading || searchOpen || syncOpen || favoriteOpen || customWordOpen || collectionDialogOpen)) return;
       event.preventDefault();
       if (key === "f" && position > 1 && !loading) void previousQuestion();
       if (key === "j" && position < total && !loading) void nextQuestion();
+      if (key === "p") revealPronunciation();
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [loading, nextQuestion, position, previousQuestion, total]);
+  }, [collectionDialogOpen, customWordOpen, exercise, favoriteOpen, loading, mode, nextQuestion, position, previousQuestion, revealPronunciation, searchOpen, syncOpen, total]);
   useEffect(() => {
     const handlePracticeKeyboard = (event: KeyboardEvent) => {
       if (mode === "word" || !exercise || loading || searchOpen || syncOpen || favoriteOpen || event.ctrlKey || event.altKey || event.metaKey) return;
@@ -312,7 +319,7 @@ export default function NceeVocabularyClient() {
       {loading && !exercise ? <Box sx={{ display: "grid", placeItems: "center", py: 7 }}><CircularProgress /></Box> : exercise && <>
         <Box sx={{ minHeight: 120, display: "grid", placeItems: "center", textAlign: "center", py: 2, position: "relative" }}><Stack direction="row" sx={{ position: "absolute", right: 0, top: 0 }}>{dataset.startsWith("collection:") && <IconButton color="error" title={locale === "zh" ? "从收藏夹删除（Ctrl + D）" : "Remove from collection (Ctrl + D)"} disabled={deleting} onClick={() => void deleteFromCollection()}>{deleting ? <CircularProgress size={20} /> : <DeleteOutlineRoundedIcon />}</IconButton>}<IconButton title={copy.favorite} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setFavoriteOpen(true)}><BookmarkAddRoundedIcon /></IconButton></Stack>
           {mode === "phonetic" && <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" sx={{ fontFamily: "serif" }}>{exercise.phonetic}</Typography><IconButton aria-label={copy.listen} title={copy.listen} onClick={() => speak(exercise.english)}><CampaignRoundedIcon /></IconButton></Stack>}
-          {mode === "meaning" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h5" sx={{ fontWeight: 650 }}>{exercise.chinese}</Typography>{exercise.duplicateCount > 1 && <Chip variant="outlined" label={`${copy.ambiguous} (${exercise.duplicateCount})`} />}{phoneticRevealed && <Typography variant="h6" color="primary" sx={{ fontFamily: "serif" }}>{exercise.phonetic}</Typography>}<Button size="small" variant="outlined" startIcon={<CampaignRoundedIcon />} onClick={() => { setPhoneticRevealed(true); speak(exercise.english); }}>{locale === "zh" ? "显示音标并朗读" : "Show pronunciation and speak"}</Button></Stack>}
+          {mode === "meaning" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h5" sx={{ fontWeight: 650 }}>{exercise.chinese}</Typography>{exercise.duplicateCount > 1 && <Chip variant="outlined" label={`${copy.ambiguous} (${exercise.duplicateCount})`} />}{phoneticRevealed && <Typography variant="h6" color="primary" sx={{ fontFamily: "serif" }}>{exercise.phonetic}</Typography>}<Button size="small" variant="outlined" startIcon={<CampaignRoundedIcon />} onClick={revealPronunciation}>{locale === "zh" ? "显示音标并朗读（Ctrl + P）" : "Show pronunciation and speak (Ctrl + P)"}</Button></Stack>}
           {mode === "word" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" color={wrongFlash ? "error" : "primary"} sx={{ fontWeight: 750, animation: wrongFlash ? "wrongPulse .22s ease-in-out 3" : "none", "@keyframes wrongPulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: .2 } } }}>{exercise.english}</Typography><Stack direction="row" spacing={.5}>{(exercise.meanings || []).map((meaning, index) => <Chip key={index} size="small" label={meaning.partOfSpeech} />)}</Stack></Stack>}
         </Box>
         {mode === "meaning" ? <SpellingSlots inputRef={answerInputRef} word={exercise.english} hintIndexes={exercise.hintIndexes} value={answer} label={copy.answerWord} wrongFlash={wrongFlash} correct={answerCorrect} autoFilled={forgotten} onChange={setAnswer} onSubmit={() => void checkAnswer()} onForget={() => void forgetAnswer()} /> : mode === "word" ? <Stack spacing={1}>{(exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]).map((meaning, index) => <TextField key={index} inputRef={index === 0 ? answerInputRef : undefined} autoFocus={index === 0} multiline minRows={2} label={`${meaning.partOfSpeech} · ${copy.answerMeaning} ${index + 1}`} value={meaningAnswers[index] || ""} onChange={event => setMeaningAnswers(values => { const next = [...values]; next[index] = event.target.value; return next; })} onKeyDown={event => { if (event.key === ";") { event.preventDefault(); void forgetAnswer(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />)}</Stack> : <TextField inputRef={answerInputRef} autoFocus label={copy.answerWord} value={answer} error={wrongFlash} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === ";") { event.preventDefault(); void forgetAnswer(); } else if (event.key === "Enter") { event.preventDefault(); void checkAnswer(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />}
