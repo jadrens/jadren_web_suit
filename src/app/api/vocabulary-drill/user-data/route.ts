@@ -106,8 +106,10 @@ export async function PUT(request: Request) {
   try {
     const { user, error } = await authenticated(request); if (error) return error;
     const body = await request.json().catch(() => null); if (!body || !["phonetic","meaning","word"].includes(body.mode) || !Array.isArray(body.order) || !Number.isInteger(body.index)) return apiError("Invalid progress", 400, "invalid_progress");
-    await db.query(`INSERT INTO vocabulary_drill_progress(user_id,dataset,mode,word_order,current_index) VALUES($1,$2,$3,$4,$5)
-      ON CONFLICT(user_id,dataset,mode) DO UPDATE SET word_order=EXCLUDED.word_order,current_index=EXCLUDED.current_index,updated_at=NOW()`, [user!.sub, String(body.dataset || "ncee"), body.mode, body.order, body.index]);
+    const order = body.order.map(Number); if (!order.every((value: number) => Number.isInteger(value))) return apiError("Invalid progress", 400, "invalid_progress");
+    const postgresOrder = `{${order.join(",")}}`;
+    await db.query(`INSERT INTO vocabulary_drill_progress(user_id,dataset,mode,word_order,current_index) VALUES($1,$2,$3,$4::integer[],$5)
+      ON CONFLICT(user_id,dataset,mode) DO UPDATE SET word_order=EXCLUDED.word_order,current_index=EXCLUDED.current_index,updated_at=NOW()`, [user!.sub, String(body.dataset || "ncee"), body.mode, postgresOrder, body.index]);
     return NextResponse.json({ saved: true });
   } catch (cause) { return vocabularyAuthFailure(cause) ?? internalError(cause); }
 }
