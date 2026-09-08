@@ -145,6 +145,12 @@ CREATE TABLE IF NOT EXISTS vocabulary_collection_item (
   past_forms VARCHAR(240) NOT NULL DEFAULT '',
   example TEXT NOT NULL DEFAULT '',
   definition TEXT NOT NULL DEFAULT '',
+  transfer_origin_collection_id UUID REFERENCES vocabulary_collection(collection_id) ON DELETE SET NULL,
+  transfer_origin_dataset VARCHAR(120),
+  transfer_origin_source_word_id INTEGER,
+  appearance_count INTEGER NOT NULL DEFAULT 0 CHECK (appearance_count >= 0),
+  correct_count INTEGER NOT NULL DEFAULT 0 CHECK (correct_count >= 0),
+  wrong_count INTEGER NOT NULL DEFAULT 0 CHECK (wrong_count >= 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (collection_id, dataset, source_word_id)
 );
@@ -154,6 +160,12 @@ ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS plural_forms VAR
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS past_forms VARCHAR(240) NOT NULL DEFAULT '';
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS example TEXT NOT NULL DEFAULT '';
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS definition TEXT NOT NULL DEFAULT '';
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS transfer_origin_collection_id UUID REFERENCES vocabulary_collection(collection_id) ON DELETE SET NULL;
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS transfer_origin_dataset VARCHAR(120);
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS transfer_origin_source_word_id INTEGER;
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS appearance_count INTEGER NOT NULL DEFAULT 0 CHECK (appearance_count >= 0);
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS correct_count INTEGER NOT NULL DEFAULT 0 CHECK (correct_count >= 0);
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS wrong_count INTEGER NOT NULL DEFAULT 0 CHECK (wrong_count >= 0);
 ALTER TABLE vocabulary_collection_item ALTER COLUMN dataset TYPE VARCHAR(120);
 
 CREATE TABLE IF NOT EXISTS vocabulary_drill_progress (

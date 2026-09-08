@@ -11,6 +11,7 @@ import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import DriveFileMoveRoundedIcon from "@mui/icons-material/DriveFileMoveRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import NavigateNextRoundedIcon from "@mui/icons-material/NavigateNextRounded";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
@@ -35,6 +36,7 @@ const PROGRESS_PREFIX = "vocabulary-practice-progress-v2:";
 const AUTO_SPEAK_KEY = "vocabulary-practice-auto-speak";
 const FIRST_LETTER_HINT_KEY = "vocabulary-practice-first-letter-hint";
 const PAUSE_AFTER_CORRECT_KEY = "vocabulary-practice-pause-after-correct";
+const STAT_DELTAS_PREFIX = "vocabulary-practice-stat-deltas-v1:";
 const DEFAULT_BUCKET_SIZE = 20;
 const DEFAULT_REFILL_THRESHOLD = 6;
 const WORD_INITIAL_BUCKET_SIZE = 5;
@@ -43,6 +45,7 @@ const WORD_REFILL_THRESHOLD = 3;
 const WORD_WORKERS = 3;
 const builtInDatasets = [{ id: "ncee", name: "NCEE · 全国高考词汇（3,796）" }];
 const modes: Mode[] = ["phonetic", "meaning", "word"];
+interface StatDelta { collectionId: string; dataset: string; sourceWordId: number; appearances: number; correct: number; wrong: number }
 
 const labels = {
   en: { title: "Vocabulary Practice", subtitle: "Practice vocabulary from selectable learning databases.", dataset: "Vocabulary database", phonetic: "Sound → word", meaning: "Meaning → word", word: "Word → meaning", autoSpeak: "Read each new word automatically", listen: "Listen again", answerWord: "Type the English word", answerRest: "Type the remaining letters", answerMeaning: "Meaning", check: "Check", checking: "Checking…", next: "Next question", reveal: "Show answer", reset: "Regenerate", progress: "Progress", correct: "Correct", wrong: "Incorrect", answer: "Answer", ambiguous: "This definition matches multiple entries", loadFailed: "Unable to load questions.", gradeFailed: "The AI did not complete the meaning check.", llmNeeded: "Configure an LLM provider and model in Settings to grade meanings.", settings: "Open Settings", model: "Model", source: "NCEE data: gaokao-vocab · MIT License · © 2025 Jimmy Xu", favorite: "Add to collection", chooseCollection: "Choose a collection", newCollection: "+ New…", collectionName: "Collection name", saved: "Saved to collection", cloudSaved: "Progress uploaded", sync: "Sync", syncTitle: "Manual progress sync", uploadProgress: "Upload local progress", downloadProgress: "Download cloud progress", syncHint: "Only the current database and practice mode are affected. Download replaces local progress.", noCloudProgress: "No cloud progress exists for this database and mode.", syncFailed: "Unable to sync progress." },
@@ -54,6 +57,7 @@ function lettersOnly(value: string) { return value.toLocaleLowerCase().replace(/
 function wordInputOnly(value: string) { return value.toLocaleLowerCase().replace(/[^a-z -]/g, ""); }
 function modeFromHash(hash: string): Mode | null { const value = hash.replace(/^#/, "").toLocaleLowerCase(); return modes.includes(value as Mode) ? value as Mode : null; }
 function shuffled<T>(items: T[]) { const result = [...items]; for (let index = result.length - 1; index > 0; index--) { const swap = Math.floor(Math.random() * (index + 1)); [result[index], result[swap]] = [result[swap], result[index]]; } return result; }
+function adaptiveCollectionOrder(items: VocabularyCollection["items"]) { return items.map(item => ({ item, priority: (item.appearanceCount || 0) - (item.wrongCount || 0) * 2 + Math.random() * 1.5 })).sort((a, b) => a.priority - b.priority).map(entry => Number(entry.item.sourceWordId)); }
 function isSameCatalog(order: number[], ids: number[]) { if (order.length !== ids.length) return false; const available = new Set(ids); return order.every(id => available.has(id)); }
 function isCatalogOrder(order: number[], ids: number[]) { return order.length === ids.length && order.every((id, index) => id === ids[index]); }
 function randomHintIndexes(word: string, firstMustBeInitial = false) { const count = lettersOnly(word).length; if (count <= 1) return []; const hintCount = count <= 6 ? 1 : 2; const indexes = Array.from({ length: count }, (_, index) => index).filter(index => !firstMustBeInitial || index !== 0); for (let index = indexes.length - 1; index > 0; index--) { const swap = Math.floor(Math.random() * (index + 1)); [indexes[index], indexes[swap]] = [indexes[swap], indexes[index]]; } return [...(firstMustBeInitial ? [0] : []), ...indexes.slice(0, hintCount - (firstMustBeInitial ? 1 : 0))].sort((a, b) => a - b); }
@@ -75,7 +79,7 @@ export default function NceeVocabularyClient() {
   const [syncOpen, setSyncOpen] = useState(false); const [syncBusy, setSyncBusy] = useState(false); const [syncError, setSyncError] = useState("");
   const [searchWord, setSearchWord] = useState("");
   const [searchOpen, setSearchOpen] = useState(false); const [searchBusy, setSearchBusy] = useState(false); const [searchResults, setSearchResults] = useState<Exercise[]>([]);
-  const [deleting, setDeleting] = useState(false);
+  const [deleting, setDeleting] = useState(false); const [transferring, setTransferring] = useState(false);
   const [grade, setGrade] = useState<Grade | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [autoSpeak, setAutoSpeak] = useState(true);
   const [firstLetterHint, setFirstLetterHint] = useState(false);
   const [pauseAfterCorrect, setPauseAfterCorrect] = useState(false); const [answerCorrect, setAnswerCorrect] = useState(false);
@@ -83,6 +87,7 @@ export default function NceeVocabularyClient() {
   const [wrongFlash, setWrongFlash] = useState(false); const [forgotten, setForgotten] = useState(false);
   const [position, setPosition] = useState(0); const [total, setTotal] = useState(0); const [bucketRemaining, setBucketRemaining] = useState(0); const [tokenUsage, setTokenUsage] = useState(0);
   const bucketRef = useRef<Exercise[]>([]); const pendingBucketRef = useRef<Promise<Exercise[]> | null>(null); const refillInFlightRef = useRef(false); const progressRef = useRef<LocalProgress | null>(null); const loadingRef = useRef(false); const loadSequenceRef = useRef(0); const collectionsRef = useRef<VocabularyCollection[]>([]);
+  const shownQuestionRef = useRef(""); const outcomeRecordedRef = useRef(false); const statsFlushRef = useRef<Promise<void> | null>(null);
   const answerInputRef = useRef<HTMLInputElement>(null);
   const [models, setModels] = useState<LlmModelProfile[]>([]); const [providers, setProviders] = useState<LlmProfile[]>([]); const [modelId, setModelId] = useState("");
   const selected = models.find((item) => item.id === modelId); const provider = providers.find((item) => item.id === selected?.providerId);
@@ -113,8 +118,26 @@ export default function NceeVocabularyClient() {
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => { collectionsRef.current = collections; }, [collections]);
-  useEffect(() => { if (status === "authenticated" && user?.status === 1) void vocabularyDrillApi.userData().then(data => { const normalized = data.collections.map(collection => ({ ...collection, items: collection.items.map(item => ({ ...item, sourceWordId: Number(item.sourceWordId), meanings: normalizeMeanings(item.meanings) })) })); setCollections(normalized); setCollectionId(normalized[0]?.collectionId || ""); }).catch(() => undefined); }, [status, user?.status, user?.userId]);
   const speak = useCallback((word: string) => { if (!("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(word); utterance.lang = "en-US"; utterance.rate = .85; window.speechSynthesis.speak(utterance); }, []);
+  const flushStats = useCallback(async () => {
+    if (status !== "authenticated" || user?.status !== 1 || !user.userId) return;
+    if (statsFlushRef.current) return statsFlushRef.current;
+    const task = (async () => {
+      const key = `${STAT_DELTAS_PREFIX}${user.userId}`; const snapshot = localStorage.getItem(key); if (!snapshot) return;
+      let deltas: StatDelta[]; try { deltas = JSON.parse(snapshot); } catch { localStorage.removeItem(key); return; }
+      if (!Array.isArray(deltas) || !deltas.length) { localStorage.removeItem(key); return; }
+      await vocabularyDrillApi.saveStatDeltas(deltas);
+      const currentRaw = localStorage.getItem(key); if (!currentRaw) return;
+      try {
+        const current = JSON.parse(currentRaw) as StatDelta[]; const sent = new Map(deltas.map(item => [`${item.collectionId}\u0000${item.dataset}\u0000${item.sourceWordId}`, item]));
+        const remaining = current.flatMap(item => { const prior = sent.get(`${item.collectionId}\u0000${item.dataset}\u0000${item.sourceWordId}`); if (!prior) return [item]; const next = { ...item, appearances: Math.max(0, item.appearances - prior.appearances), correct: Math.max(0, item.correct - prior.correct), wrong: Math.max(0, item.wrong - prior.wrong) }; return next.appearances || next.correct || next.wrong ? [next] : []; });
+        if (remaining.length) localStorage.setItem(key, JSON.stringify(remaining)); else localStorage.removeItem(key);
+      } catch { /* keep newer local deltas for a later retry */ }
+    })();
+    statsFlushRef.current = task;
+    try { await task; } finally { if (statsFlushRef.current === task) statsFlushRef.current = null; }
+  }, [status, user?.status, user?.userId]);
+  useEffect(() => { if (status !== "authenticated" || user?.status !== 1) return; const timer = window.setTimeout(() => { void (async () => { try { await flushStats(); const data = await vocabularyDrillApi.userData(); const normalized = data.collections.map(collection => ({ ...collection, items: collection.items.map(item => ({ ...item, sourceWordId: Number(item.sourceWordId), meanings: normalizeMeanings(item.meanings) })) })); collectionsRef.current = normalized; setCollections(normalized); setCollectionId(normalized[0]?.collectionId || ""); } catch { /* retry when the next practice sequence is loaded */ } })(); }, 0); return () => window.clearTimeout(timer); }, [flushStats, status, user?.status, user?.userId]);
   const fetchWords = useCallback(async (targetDataset: string, targetMode: Mode, ids: number[]) => { if (!ids.length) return []; if (targetDataset.startsWith("collection:")) { const collection = collectionsRef.current.find(item => targetDataset === `collection:${item.collectionId}`); if (!collection) throw new Error("collection_not_found"); const byId = new Map(collection.items.map(item => [Number(item.sourceWordId), item])); return ids.flatMap(rawId => { const id = Number(rawId); const item = byId.get(id); if (!item) return []; return [{ id, english: item.word, phonetic: item.phonetic, chinese: item.meanings.map(m => m.text).join("；"), hintIndexes: randomHintIndexes(item.word, firstLetterHint), duplicateCount: 1, meanings: item.meanings, sourceDataset: item.dataset }]; }); } const response = await fetch(`/api/vocabulary-drill?dataset=${targetDataset}&mode=${targetMode}&ids=${ids.join(",")}`, { cache: "no-store" }); if (!response.ok) throw new Error(); const words = (await response.json()).words as Exercise[]; return firstLetterHint ? words.map(word => ({ ...word, hintIndexes: randomHintIndexes(word.english, true) })) : words; }, [firstLetterHint]);
   const enrichWord = useCallback(async (word: Exercise) => {
     if (!selected || !provider) return { ...word, meanings: [{ text: word.chinese, partOfSpeech: "other" as const }] };
@@ -127,21 +150,21 @@ export default function NceeVocabularyClient() {
     })) { if (event.type === "done") { const usage = event.response.usage; setTokenUsage(value => value + (usage?.totalTokens ?? (usage?.inputTokens || 0) + (usage?.outputTokens || 0))); break; } } } catch { /* dictionary fallback keeps practice available */ }
     return { ...word, meanings: byId.get(word.id) || [{ text: word.chinese, partOfSpeech: "other" as const }] };
   }, [provider, selected]);
-  const loadMode = useCallback(async (targetDataset: string, targetMode: Mode, reset = false) => { const sequence = ++loadSequenceRef.current; loadingRef.current = true; pendingBucketRef.current = null; refillInFlightRef.current = false; setLoading(true); setExercise(null); setPosition(0); setTotal(0); setBucketRemaining(0); setError(""); setGrade(null); setPhoneticRevealed(false); setForgotten(false); setWrongFlash(false); setAnswerCorrect(false); setAnswer(""); setMeaningAnswers([]); try {
+  const loadMode = useCallback(async (targetDataset: string, targetMode: Mode, reset = false) => { void flushStats().catch(() => undefined); const sequence = ++loadSequenceRef.current; loadingRef.current = true; pendingBucketRef.current = null; refillInFlightRef.current = false; setLoading(true); setExercise(null); setPosition(0); setTotal(0); setBucketRemaining(0); setError(""); setGrade(null); setPhoneticRevealed(false); setForgotten(false); setWrongFlash(false); setAnswerCorrect(false); setAnswer(""); setMeaningAnswers([]); try {
     const key = `${PROGRESS_PREFIX}${targetDataset}:${targetMode}`; let progress: LocalProgress | null = null;
     if (!reset) { try { const stored = JSON.parse(localStorage.getItem(key) || "null"); if (Array.isArray(stored?.order) && stored.order.length && Number.isInteger(stored.index)) progress = stored; } catch { /* ignore corrupt local progress */ } }
-    let ids: number[]; if (targetDataset.startsWith("collection:")) { const collection = collectionsRef.current.find(item => targetDataset === `collection:${item.collectionId}`); if (!collection) throw new Error("collection_not_found"); ids = collection.items.map(item => Number(item.sourceWordId)); } else { const catalogResponse = await fetch(`/api/vocabulary-drill?dataset=${targetDataset}&mode=${targetMode}&catalog=1`, { cache: "no-store" }); if (!catalogResponse.ok) throw new Error(); ids = (await catalogResponse.json()).ids.map(Number); }
+    let ids: number[]; if (targetDataset.startsWith("collection:")) { const collection = collectionsRef.current.find(item => targetDataset === `collection:${item.collectionId}`); if (!collection) throw new Error("collection_not_found"); ids = adaptiveCollectionOrder(collection.items); } else { const catalogResponse = await fetch(`/api/vocabulary-drill?dataset=${targetDataset}&mode=${targetMode}&catalog=1`, { cache: "no-store" }); if (!catalogResponse.ok) throw new Error(); ids = (await catalogResponse.json()).ids.map(Number); }
     if (!ids.length) throw new Error("empty_dataset");
     const savedProgress = !reset && progress && isSameCatalog(progress.order, ids) ? progress : null;
     const savedIndex = savedProgress ? Math.min(Math.max(savedProgress.index, 0), ids.length - 1) : 0;
     progress = savedProgress
       ? { order: isCatalogOrder(savedProgress.order, ids) ? [...ids.slice(0, savedIndex), ...shuffled(ids.slice(savedIndex))] : savedProgress.order, index: savedIndex }
-      : { order: shuffled(ids), index: 0 };
+      : { order: targetDataset.startsWith("collection:") ? ids : shuffled(ids), index: 0 };
     localStorage.setItem(key, JSON.stringify(progress));
     progressRef.current = progress; setPosition(progress.index + 1); setTotal(progress.order.length); const initialSize = targetMode === "word" ? WORD_INITIAL_BUCKET_SIZE : DEFAULT_BUCKET_SIZE; const fetched = await fetchWords(targetDataset, targetMode, progress.order.slice(progress.index, progress.index + initialSize)); if (!fetched.length) throw new Error("words_not_found"); if (sequence !== loadSequenceRef.current) return;
     if (targetMode === "word") { let shown = false; const queue = concurrentOrderedMap(fetched, WORD_WORKERS, enrichWord, ready => { if (sequence !== loadSequenceRef.current) return; bucketRef.current = ready; setBucketRemaining(ready.length); if (!shown) { shown = true; setExercise(ready[0]); setMeaningAnswers(Array(ready[0]?.meanings?.length || 1).fill("")); setLoading(false); loadingRef.current = false; } }); pendingBucketRef.current = queue.done; await queue.first; void queue.done.then(words => { if (sequence === loadSequenceRef.current) { bucketRef.current = words; pendingBucketRef.current = null; setBucketRemaining(words.length); } }); }
     else { bucketRef.current = fetched; setExercise(fetched[0] || null); setMeaningAnswers(Array(fetched[0]?.meanings?.length || 1).fill("")); setBucketRemaining(fetched.length); }
-  } catch { if (sequence === loadSequenceRef.current) { bucketRef.current = []; progressRef.current = null; setExercise(null); setError(copy.loadFailed); } } finally { if (sequence === loadSequenceRef.current) { loadingRef.current = false; setLoading(false); } } }, [copy.loadFailed, enrichWord, fetchWords]);
+  } catch { if (sequence === loadSequenceRef.current) { bucketRef.current = []; progressRef.current = null; setExercise(null); setError(copy.loadFailed); } } finally { if (sequence === loadSequenceRef.current) { loadingRef.current = false; setLoading(false); } } }, [copy.loadFailed, enrichWord, fetchWords, flushStats]);
   const nextQuestion = useCallback(async () => { const progress = progressRef.current; if (!progress || loadingRef.current) return; if (pendingBucketRef.current) { setExercise(null); setLoading(true); bucketRef.current = await pendingBucketRef.current; pendingBucketRef.current = null; setLoading(false); } setGrade(null); setPhoneticRevealed(false); setForgotten(false); setWrongFlash(false); setAnswerCorrect(false); setAnswer(""); progress.index++;
     if (progress.index >= progress.order.length) { await loadMode(dataset, mode, true); return; }
     localStorage.setItem(`${PROGRESS_PREFIX}${dataset}:${mode}`, JSON.stringify(progress)); const remaining = bucketRef.current.slice(1); bucketRef.current = remaining; setBucketRemaining(remaining.length); setExercise(remaining[0] || null); setMeaningAnswers(Array(remaining[0]?.meanings?.length || 1).fill("")); setPosition(progress.index + 1);
@@ -211,6 +234,23 @@ export default function NceeVocabularyClient() {
     return () => window.removeEventListener("keydown", handlePracticeKeyboard);
   });
 
+  function queueCollectionStat(kind: "appearances" | "correct" | "wrong") {
+    if (!exercise || !dataset.startsWith("collection:") || !user?.userId) return;
+    const collectionId = dataset.slice(11); const sourceDataset = exercise.sourceDataset || "custom"; const storageKey = `${STAT_DELTAS_PREFIX}${user.userId}`;
+    let deltas: StatDelta[] = []; try { const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]"); if (Array.isArray(parsed)) deltas = parsed; } catch { /* replace corrupt pending stats */ }
+    const existing = deltas.find(item => item.collectionId === collectionId && item.dataset === sourceDataset && item.sourceWordId === exercise.id);
+    if (existing) existing[kind]++; else deltas.push({ collectionId, dataset: sourceDataset, sourceWordId: exercise.id, appearances: kind === "appearances" ? 1 : 0, correct: kind === "correct" ? 1 : 0, wrong: kind === "wrong" ? 1 : 0 });
+    localStorage.setItem(storageKey, JSON.stringify(deltas));
+    setCollections(current => current.map(collection => collection.collectionId !== collectionId ? collection : { ...collection, items: collection.items.map(item => item.dataset !== sourceDataset || Number(item.sourceWordId) !== exercise.id ? item : { ...item, appearanceCount: (item.appearanceCount || 0) + (kind === "appearances" ? 1 : 0), correctCount: (item.correctCount || 0) + (kind === "correct" ? 1 : 0), wrongCount: (item.wrongCount || 0) + (kind === "wrong" ? 1 : 0) }) }));
+  }
+  function recordCorrect() { if (outcomeRecordedRef.current) return; outcomeRecordedRef.current = true; queueCollectionStat("correct"); }
+  useEffect(() => {
+    if (!exercise || loading || !dataset.startsWith("collection:")) return;
+    const questionKey = `${dataset}:${mode}:${position}:${exercise.sourceDataset || "custom"}:${exercise.id}`;
+    if (shownQuestionRef.current === questionKey) return;
+    shownQuestionRef.current = questionKey; outcomeRecordedRef.current = false; queueCollectionStat("appearances");
+  });
+
   async function findWord() {
     const query = searchWord.trim().toLocaleLowerCase(); if (!query) return; setSearchOpen(true); setSearchBusy(true); setSearchResults([]);
     try {
@@ -231,7 +271,7 @@ export default function NceeVocabularyClient() {
     if (answerCorrect) { await nextQuestion(); return; }
     const submittedMeanings = meaningAnswers.map(value => value.trim()).filter(Boolean);
     if (!exercise || (mode === "word" ? !submittedMeanings.length : !answer.trim())) return;
-    if (mode !== "word") { const isCorrect = mode === "meaning" ? lettersOnly(answer) === lettersOnly(exercise.english) : normalize(answer) === normalize(exercise.english); if (isCorrect) { if (mode === "meaning" && pauseAfterCorrect) setAnswerCorrect(true); else await nextQuestion(); } else { setWrongFlash(false); window.requestAnimationFrame(() => { setWrongFlash(true); window.setTimeout(() => setWrongFlash(false), 650); }); } return; }
+    if (mode !== "word") { const isCorrect = mode === "meaning" ? lettersOnly(answer) === lettersOnly(exercise.english) : normalize(answer) === normalize(exercise.english); if (isCorrect) { recordCorrect(); if (mode === "meaning" && pauseAfterCorrect) setAnswerCorrect(true); else await nextQuestion(); } else { setWrongFlash(false); window.requestAnimationFrame(() => { setWrongFlash(true); window.setTimeout(() => setWrongFlash(false), 650); }); } return; }
     if (!selected || !provider) { setError(copy.llmNeeded); return; }
     setLoading(true); setError(""); let result: Grade | null = null;
     try {
@@ -244,7 +284,7 @@ export default function NceeVocabularyClient() {
       })) { if (event.type === "done") { const usage = event.response.usage; setTokenUsage(value => value + (usage?.totalTokens ?? (usage?.inputTokens || 0) + (usage?.outputTokens || 0))); break; } }
       if (!result) throw new Error("Incomplete grading workflow");
       const completed = result as Grade;
-      if (completed.isCorrect) { setLoading(false); await nextQuestion(); } else { setGrade(null); setWrongFlash(false); window.requestAnimationFrame(() => { setWrongFlash(true); window.setTimeout(() => setWrongFlash(false), 650); }); }
+      if (completed.isCorrect) { recordCorrect(); setLoading(false); await nextQuestion(); } else { setGrade(null); setWrongFlash(false); window.requestAnimationFrame(() => { setWrongFlash(true); window.setTimeout(() => setWrongFlash(false), 650); }); }
     } catch { setError(copy.gradeFailed); } finally { setLoading(false); }
   }
 
@@ -256,16 +296,17 @@ export default function NceeVocabularyClient() {
   }
 
   async function forgetAnswer() {
-    if (!exercise || loading) return; setForgotten(true); setGrade(null); if (mode === "word") setMeaningAnswers((exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]).map(meaning => meaning.text)); else setAnswer(exercise.english);
+    if (!exercise || loading) return; if (!outcomeRecordedRef.current) { outcomeRecordedRef.current = true; queueCollectionStat("wrong"); } setForgotten(true); setGrade(null); if (mode === "word") setMeaningAnswers((exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]).map(meaning => meaning.text)); else setAnswer(exercise.english);
     if (status !== "authenticated" || user?.status !== 1) return;
     try { let target = collections.find(item => item.name.toLocaleLowerCase() === "default"); if (!target) { const created = await vocabularyDrillApi.createCollection("default"); target = created.collection; setCollections(current => [...current, created.collection]); }
-      const meanings = exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]; const sourceDataset = exercise.sourceDataset || dataset; await vocabularyDrillApi.addItem({ collectionId: target.collectionId, dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, meanings }); setCollections(current => current.map(collection => collection.collectionId !== target.collectionId || collection.items.some(item => Number(item.sourceWordId) === exercise.id && item.dataset === sourceDataset) ? collection : { ...collection, items: [...collection.items, { dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, meanings }] })); setToast(locale === "zh" ? "答案已显示，并已收藏到 default" : "Answer shown and saved to default");
+      const meanings = exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]; const sourceDataset = exercise.sourceDataset || dataset; await vocabularyDrillApi.addItem({ collectionId: target.collectionId, dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, meanings }); setCollections(current => current.map(collection => collection.collectionId !== target.collectionId || collection.items.some(item => Number(item.sourceWordId) === exercise.id && item.dataset === sourceDataset) ? collection : { ...collection, items: [...collection.items, { dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, meanings, appearanceCount: 0, correctCount: 0, wrongCount: 0 }] })); setToast(locale === "zh" ? "答案已显示，并已收藏到 default" : "Answer shown and saved to default");
     } catch { setToast(locale === "zh" ? "答案已显示，但收藏失败" : "Answer shown, but it could not be saved"); }
   }
 
   async function deleteFromCollection() {
     if (!exercise || !dataset.startsWith("collection:") || deleting) return; const collection = collections.find(item => dataset === `collection:${item.collectionId}`); if (!collection) return; setDeleting(true);
     try {
+      await flushStats();
       await vocabularyDrillApi.deleteItem(collection.collectionId, exercise.id, exercise.sourceDataset);
       const remainingItems = collection.items.filter(word => Number(word.sourceWordId) !== exercise.id || (exercise.sourceDataset && word.dataset !== exercise.sourceDataset));
       const updatedCollections = collections.map(item => item.collectionId === collection.collectionId ? { ...item, items: remainingItems } : item); collectionsRef.current = updatedCollections; setCollections(updatedCollections); setToast(locale === "zh" ? "已从收藏夹删除" : "Removed from collection");
@@ -282,6 +323,23 @@ export default function NceeVocabularyClient() {
     catch { setToast(locale === "zh" ? "删除失败" : "Unable to remove word"); } finally { setDeleting(false); }
   }
 
+  async function transferCollectionItem() {
+    if (!exercise || !dataset.startsWith("collection:") || transferring) return;
+    const sourceCollection = collections.find(item => dataset === `collection:${item.collectionId}`); if (!sourceCollection) return;
+    setTransferring(true);
+    try {
+      await flushStats();
+      const result = await vocabularyDrillApi.transferItem({ collectionId: sourceCollection.collectionId, dataset: exercise.sourceDataset || "custom", sourceWordId: exercise.id });
+      const data = await vocabularyDrillApi.userData();
+      const normalized = data.collections.map(collection => ({ ...collection, items: collection.items.map(item => ({ ...item, sourceWordId: Number(item.sourceWordId), meanings: normalizeMeanings(item.meanings) })) }));
+      collectionsRef.current = normalized; setCollections(normalized);
+      const remaining = normalized.find(item => item.collectionId === sourceCollection.collectionId)?.items || [];
+      setToast(result.restored ? (locale === "zh" ? "已恢复到原收藏夹" : "Restored to the original collection") : (locale === "zh" ? "已转移到 transferred" : "Moved to transferred"));
+      if (!remaining.length) setDataset(`collection:${result.destinationCollectionId}`); else await loadMode(dataset, mode);
+    } catch { setToast(locale === "zh" ? "转移失败；目标中可能已有这个词，或原收藏夹已不存在" : "Unable to move; the destination may already contain this word, or the original collection no longer exists"); }
+    finally { setTransferring(false); }
+  }
+
   useEffect(() => {
     const handleDeleteShortcut = (event: KeyboardEvent) => {
       if (event.key.toLocaleLowerCase() !== "d" || !event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.repeat) return;
@@ -291,6 +349,16 @@ export default function NceeVocabularyClient() {
     };
     window.addEventListener("keydown", handleDeleteShortcut);
     return () => window.removeEventListener("keydown", handleDeleteShortcut);
+  });
+  useEffect(() => {
+    const handleTransferShortcut = (event: KeyboardEvent) => {
+      if (event.key.toLocaleLowerCase() !== "i" || !event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.repeat) return;
+      if (!dataset.startsWith("collection:") || !exercise || loading || deleting || transferring || searchOpen || syncOpen || favoriteOpen || customWordOpen || collectionDialogOpen) return;
+      event.preventDefault();
+      void transferCollectionItem();
+    };
+    window.addEventListener("keydown", handleTransferShortcut);
+    return () => window.removeEventListener("keydown", handleTransferShortcut);
   });
 
   async function uploadProgress() {
@@ -317,7 +385,7 @@ export default function NceeVocabularyClient() {
       {mode === "word" && (!selected || !provider) && <Alert severity="info" action={<Button component={Link} href={settingsUrl}>{copy.settings}</Button>}>{copy.llmNeeded}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       {loading && !exercise ? <Box sx={{ display: "grid", placeItems: "center", py: 7 }}><CircularProgress /></Box> : exercise && <>
-        <Box sx={{ minHeight: 120, display: "grid", placeItems: "center", textAlign: "center", py: 2, position: "relative" }}><Stack direction="row" sx={{ position: "absolute", right: 0, top: 0 }}>{dataset.startsWith("collection:") && <IconButton color="error" title={locale === "zh" ? "从收藏夹删除（Ctrl + D）" : "Remove from collection (Ctrl + D)"} disabled={deleting} onClick={() => void deleteFromCollection()}>{deleting ? <CircularProgress size={20} /> : <DeleteOutlineRoundedIcon />}</IconButton>}<IconButton title={copy.favorite} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setFavoriteOpen(true)}><BookmarkAddRoundedIcon /></IconButton></Stack>
+        <Box sx={{ minHeight: 120, display: "grid", placeItems: "center", textAlign: "center", py: 2, position: "relative" }}><Stack direction="row" sx={{ position: "absolute", right: 0, top: 0 }}>{dataset.startsWith("collection:") && <><IconButton color="primary" title={(collections.find(item => dataset === `collection:${item.collectionId}`)?.name.toLocaleLowerCase() === "transferred" ? (locale === "zh" ? "恢复到原收藏夹" : "Restore to original collection") : (locale === "zh" ? "转移到 transferred" : "Move to transferred")) + " (Ctrl + I)"} disabled={transferring || deleting} onClick={() => void transferCollectionItem()}>{transferring ? <CircularProgress size={20} /> : <DriveFileMoveRoundedIcon />}</IconButton><IconButton color="error" title={locale === "zh" ? "从收藏夹删除（Ctrl + D）" : "Remove from collection (Ctrl + D)"} disabled={deleting || transferring} onClick={() => void deleteFromCollection()}>{deleting ? <CircularProgress size={20} /> : <DeleteOutlineRoundedIcon />}</IconButton></>}<IconButton title={copy.favorite} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setFavoriteOpen(true)}><BookmarkAddRoundedIcon /></IconButton></Stack>
           {mode === "phonetic" && <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" sx={{ fontFamily: "serif" }}>{exercise.phonetic}</Typography><IconButton aria-label={copy.listen} title={copy.listen} onClick={() => speak(exercise.english)}><CampaignRoundedIcon /></IconButton></Stack>}
           {mode === "meaning" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h5" sx={{ fontWeight: 650 }}>{exercise.chinese}</Typography>{exercise.duplicateCount > 1 && <Chip variant="outlined" label={`${copy.ambiguous} (${exercise.duplicateCount})`} />}{phoneticRevealed && <Typography variant="h6" color="primary" sx={{ fontFamily: "serif" }}>{exercise.phonetic}</Typography>}<Button size="small" variant="outlined" startIcon={<CampaignRoundedIcon />} onClick={revealPronunciation}>{locale === "zh" ? "显示音标并朗读（Ctrl + P）" : "Show pronunciation and speak (Ctrl + P)"}</Button></Stack>}
           {mode === "word" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" color={wrongFlash ? "error" : "primary"} sx={{ fontWeight: 750, animation: wrongFlash ? "wrongPulse .22s ease-in-out 3" : "none", "@keyframes wrongPulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: .2 } } }}>{exercise.english}</Typography><Stack direction="row" spacing={.5}>{(exercise.meanings || []).map((meaning, index) => <Chip key={index} size="small" label={meaning.partOfSpeech} />)}</Stack></Stack>}

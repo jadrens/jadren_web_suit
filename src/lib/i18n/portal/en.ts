@@ -13,7 +13,7 @@ export const en = {
     description: "Jadren's blog, tools, and projects",
   },
   blogPortal: {
-    title: "My Blog",
+    title: "Little Dragon’s Nook",
     description:
       "A personal blog built with Next.js, featuring Markdown & LaTeX support, code syntax highlighting, and bilingual content.",
     features: [
@@ -45,8 +45,8 @@ export const en = {
     },
   },
   stylizedName: {
-    part1: "Jadren ",
-    part2: "Rayne",
+    part1: "Little Dragon’s ",
+    part2: "Nook",
   },
   toolPortal: {
     title: "Online Tools",

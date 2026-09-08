@@ -26,10 +26,10 @@ export async function GET(request: Request) {
     const { user, error } = await authenticated(request); if (error) return error;
     const [collections, items, progress] = await Promise.all([
       db.query<{ collection_id: string; name: string }>("SELECT collection_id, name FROM vocabulary_collection WHERE user_id=$1 ORDER BY created_at", [user!.sub]),
-      db.query<{ collection_id: string; dataset: string; source_word_id: number; word: string; phonetic: string; phonetics: unknown; meanings: unknown; plural_forms: string; past_forms: string; example: string; definition: string }>("SELECT i.collection_id,i.dataset,i.source_word_id,i.word,i.phonetic,i.phonetics,i.meanings,i.plural_forms,i.past_forms,i.example,i.definition FROM vocabulary_collection_item i JOIN vocabulary_collection c USING(collection_id) WHERE c.user_id=$1 ORDER BY i.created_at ASC", [user!.sub]),
+      db.query<{ collection_id: string; dataset: string; source_word_id: number; word: string; phonetic: string; phonetics: unknown; meanings: unknown; plural_forms: string; past_forms: string; example: string; definition: string; appearance_count: number; correct_count: number; wrong_count: number }>("SELECT i.collection_id,i.dataset,i.source_word_id,i.word,i.phonetic,i.phonetics,i.meanings,i.plural_forms,i.past_forms,i.example,i.definition,i.appearance_count,i.correct_count,i.wrong_count FROM vocabulary_collection_item i JOIN vocabulary_collection c USING(collection_id) WHERE c.user_id=$1 ORDER BY i.created_at ASC", [user!.sub]),
       db.query<{ dataset: string; mode: string; word_order: number[]; current_index: number }>("SELECT dataset,mode,word_order,current_index FROM vocabulary_drill_progress WHERE user_id=$1", [user!.sub]),
     ]);
-    return NextResponse.json({ collections: collections.rows.map(c => ({ collectionId: c.collection_id, name: c.name, items: items.rows.filter(i => i.collection_id === c.collection_id).map(i => ({ dataset: i.dataset, sourceWordId: Number(i.source_word_id), word: i.word, phonetic: i.phonetic, phonetics: arrayFromDatabase(i.phonetics), meanings: meaningsFromDatabase(i.meanings), pluralForms: i.plural_forms, pastForms: i.past_forms, example: i.example, definition: i.definition })) })), progress: progress.rows.map(p => ({ dataset: p.dataset, mode: p.mode, order: p.word_order.map(Number), index: p.current_index })) });
+    return NextResponse.json({ collections: collections.rows.map(c => ({ collectionId: c.collection_id, name: c.name, items: items.rows.filter(i => i.collection_id === c.collection_id).map(i => ({ dataset: i.dataset, sourceWordId: Number(i.source_word_id), word: i.word, phonetic: i.phonetic, phonetics: arrayFromDatabase(i.phonetics), meanings: meaningsFromDatabase(i.meanings), pluralForms: i.plural_forms, pastForms: i.past_forms, example: i.example, definition: i.definition, appearanceCount: Number(i.appearance_count), correctCount: Number(i.correct_count), wrongCount: Number(i.wrong_count) })) })), progress: progress.rows.map(p => ({ dataset: p.dataset, mode: p.mode, order: p.word_order.map(Number), index: p.current_index })) });
   } catch (cause) { return vocabularyAuthFailure(cause) ?? internalError(cause); }
 }
 
@@ -53,10 +53,50 @@ export async function POST(request: Request) {
         const phonetics = Array.isArray(body.phonetics) ? body.phonetics : [];
         const values = [collectionId, dataset, sourceWordId, word, String(body.phonetic || "").slice(0, 160), JSON.stringify(phonetics), JSON.stringify(meanings), String(body.pluralForms || "").slice(0, 240), String(body.pastForms || "").slice(0, 240), String(body.example || "").slice(0, 4000), String(body.definition || "").slice(0, 4000)];
         await client.query("INSERT INTO vocabulary_collection_item(collection_id,dataset,source_word_id,word,phonetic,phonetics,meanings,plural_forms,past_forms,example,definition) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10,$11) ON CONFLICT DO NOTHING", values);
-        return { dataset, sourceWordId, word, phonetic: values[4], phonetics, meanings, pluralForms: values[7], pastForms: values[8], example: values[9], definition: values[10] };
+        return { dataset, sourceWordId, word, phonetic: values[4], phonetics, meanings, pluralForms: values[7], pastForms: values[8], example: values[9], definition: values[10], appearanceCount: 0, correctCount: 0, wrongCount: 0 };
       });
       if (!item) return apiError("Collection not found", 404, "not_found");
       return NextResponse.json({ saved: true, item });
+    }
+    if (body.action === "transfer_item") {
+      const collectionId = String(body.collectionId || ""); const dataset = String(body.dataset || ""); const sourceWordId = Number(body.sourceWordId);
+      if (!collectionId || !dataset || !Number.isInteger(sourceWordId)) return apiError("Invalid item", 400, "invalid_item");
+      const result = await withTransaction(async client => {
+        const source = await client.query<{ name: string; transfer_origin_collection_id: string | null; transfer_origin_dataset: string | null; transfer_origin_source_word_id: number | null }>(`SELECT c.name,i.transfer_origin_collection_id,i.transfer_origin_dataset,i.transfer_origin_source_word_id FROM vocabulary_collection_item i JOIN vocabulary_collection c USING(collection_id)
+          WHERE c.user_id=$1 AND i.collection_id=$2 AND i.dataset=$3 AND i.source_word_id=$4 FOR UPDATE`, [user!.sub, collectionId, dataset, sourceWordId]);
+        if (!source.rows.length) return null;
+        const isRestore = source.rows[0].name.toLocaleLowerCase() === "transferred";
+        let destinationCollectionId: string; let destinationDataset = dataset; let destinationSourceWordId = sourceWordId;
+        if (isRestore) {
+          destinationCollectionId = source.rows[0].transfer_origin_collection_id || "";
+          destinationDataset = source.rows[0].transfer_origin_dataset || ""; destinationSourceWordId = Number(source.rows[0].transfer_origin_source_word_id);
+          if (!destinationCollectionId || !destinationDataset || !Number.isInteger(destinationSourceWordId)) throw new Error("transfer_origin_missing");
+          const owned = await client.query("SELECT 1 FROM vocabulary_collection WHERE collection_id=$1 AND user_id=$2 FOR UPDATE", [destinationCollectionId, user!.sub]);
+          if (!owned.rows.length) throw new Error("transfer_origin_missing");
+        } else {
+          const existing = await client.query<{ collection_id: string }>("SELECT collection_id FROM vocabulary_collection WHERE user_id=$1 AND LOWER(name)='transferred' ORDER BY created_at LIMIT 1 FOR UPDATE", [user!.sub]);
+          if (existing.rows.length) destinationCollectionId = existing.rows[0].collection_id;
+          else { destinationCollectionId = randomUUID(); await client.query("INSERT INTO vocabulary_collection(collection_id,user_id,name) VALUES($1,$2,'transferred')", [destinationCollectionId, user!.sub]); }
+          const collision = await client.query("SELECT 1 FROM vocabulary_collection_item WHERE collection_id=$1 AND dataset=$2 AND source_word_id=$3", [destinationCollectionId, destinationDataset, destinationSourceWordId]);
+          if (collision.rows.length) { const next = await client.query<{ source_word_id: number }>("SELECT COALESCE(MIN(source_word_id),0)-1 AS source_word_id FROM vocabulary_collection_item WHERE collection_id=$1 AND dataset=$2", [destinationCollectionId, destinationDataset]); destinationSourceWordId = Number(next.rows[0].source_word_id); }
+        }
+        const inserted = await client.query<{ source_word_id: number }>(`INSERT INTO vocabulary_collection_item(collection_id,dataset,source_word_id,word,phonetic,phonetics,meanings,plural_forms,past_forms,example,definition,transfer_origin_collection_id,transfer_origin_dataset,transfer_origin_source_word_id,appearance_count,correct_count,wrong_count)
+          SELECT $4,$5,$6,word,phonetic,phonetics,meanings,plural_forms,past_forms,example,definition,$7,$8,$9,appearance_count,correct_count,wrong_count FROM vocabulary_collection_item
+          WHERE collection_id=$1 AND dataset=$2 AND source_word_id=$3 ON CONFLICT DO NOTHING RETURNING source_word_id`, [collectionId, dataset, sourceWordId, destinationCollectionId, destinationDataset, destinationSourceWordId, isRestore ? null : collectionId, isRestore ? null : dataset, isRestore ? null : sourceWordId]);
+        if (!inserted.rows.length) throw new Error("transfer_destination_duplicate");
+        await client.query("DELETE FROM vocabulary_collection_item WHERE collection_id=$1 AND dataset=$2 AND source_word_id=$3", [collectionId, dataset, sourceWordId]);
+        return { restored: isRestore, destinationCollectionId };
+      });
+      if (!result) return apiError("Collection item not found", 404, "not_found");
+      return NextResponse.json(result);
+    }
+    if (body.action === "save_stat_deltas") {
+      if (!Array.isArray(body.deltas) || body.deltas.length > 500) return apiError("Invalid stat deltas", 400, "invalid_stat_deltas");
+      const deltas: Array<{ collectionId: string; dataset: string; sourceWordId: number; appearances: number; correct: number; wrong: number }> = body.deltas.map((raw: unknown) => { const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {}; return { collectionId: String(item.collectionId || ""), dataset: String(item.dataset || ""), sourceWordId: Number(item.sourceWordId), appearances: Number(item.appearances), correct: Number(item.correct), wrong: Number(item.wrong) }; });
+      if (deltas.some(item => !item.collectionId || !item.dataset || !Number.isInteger(item.sourceWordId) || ![item.appearances, item.correct, item.wrong].every(value => Number.isInteger(value) && value >= 0 && value <= 10000))) return apiError("Invalid stat deltas", 400, "invalid_stat_deltas");
+      await withTransaction(async client => { for (const item of deltas) await client.query(`UPDATE vocabulary_collection_item i SET appearance_count=appearance_count+$5,correct_count=correct_count+$6,wrong_count=wrong_count+$7 FROM vocabulary_collection c
+        WHERE i.collection_id=c.collection_id AND c.user_id=$1 AND i.collection_id=$2 AND i.dataset=$3 AND i.source_word_id=$4`, [user!.sub, item.collectionId, item.dataset, item.sourceWordId, item.appearances, item.correct, item.wrong]); });
+      return NextResponse.json({ saved: true });
     }
     return apiError("Invalid action", 400, "invalid_action");
   } catch (cause) { if (isUniqueViolation(cause)) return apiError("Collection already exists", 409, "collection_exists"); return vocabularyAuthFailure(cause) ?? internalError(cause); }
