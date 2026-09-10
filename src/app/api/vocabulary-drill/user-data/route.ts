@@ -117,7 +117,18 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { user, error } = await authenticated(request); if (error) return error;
-    const url = new URL(request.url); const collectionId = url.searchParams.get("collectionId") || ""; const sourceWordId = Number(url.searchParams.get("sourceWordId")); const dataset = url.searchParams.get("dataset");
+    const url = new URL(request.url); const collectionId = url.searchParams.get("collectionId") || ""; const sourceWordIdParam = url.searchParams.get("sourceWordId"); const dataset = url.searchParams.get("dataset");
+    if (collectionId && sourceWordIdParam === null) {
+      const deleted = await withTransaction(async client => {
+        const result = await client.query<{ collection_id: string }>("DELETE FROM vocabulary_collection WHERE collection_id=$1 AND user_id=$2 RETURNING collection_id", [collectionId, user!.sub]);
+        if (!result.rows.length) return false;
+        await client.query("DELETE FROM vocabulary_drill_progress WHERE user_id=$1 AND dataset=$2", [user!.sub, `collection:${collectionId}`]);
+        return true;
+      });
+      if (!deleted) return apiError("Collection not found", 404, "not_found");
+      return new Response(null, { status: 204 });
+    }
+    const sourceWordId = Number(sourceWordIdParam);
     if (!collectionId || !Number.isInteger(sourceWordId)) return apiError("Invalid item", 400, "invalid_item");
     const result = await db.query<{ source_word_id: number }>(`DELETE FROM vocabulary_collection_item i USING vocabulary_collection c
       WHERE i.collection_id=c.collection_id AND c.user_id=$1 AND i.collection_id=$2 AND i.source_word_id=$3 AND ($4::text IS NULL OR i.dataset=$4) RETURNING i.source_word_id`, [user!.sub, collectionId, sourceWordId, dataset]);

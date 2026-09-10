@@ -17,6 +17,7 @@ import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsAct
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 
 interface ToolItem {
   key: string;
@@ -34,6 +35,13 @@ export default function ToolsClient() {
   useDocumentTitle(t.tools.title);
 
   const tools: ToolItem[] = [
+    {
+      key: "dictionary",
+      title: t.tools.dictionary.title,
+      description: t.tools.dictionary.cardDescription,
+      href: "/tools/dictionary",
+      icon: <MenuBookRoundedIcon sx={{ fontSize: 32 }} />,
+    },
     {
       key: "englishLearner",
       title: t.tools.englishLearner.title,

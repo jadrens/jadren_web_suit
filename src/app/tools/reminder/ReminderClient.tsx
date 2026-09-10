@@ -32,7 +32,6 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import EditNotificationsRoundedIcon from "@mui/icons-material/EditNotificationsRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
-import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsActiveRounded";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import Footer from "@components/ui/layout/Footer";
@@ -382,12 +381,6 @@ export default function ReminderClient() {
     <div className="page-below-navbar flex flex-col">
       <ShowNavbarLoginStatus />
       <Box component="main" sx={{ flex: 1, width: "100%", maxWidth: 920, mx: "auto", px: 2, py: 6 }}>
-        <Stack spacing={0.5} sx={{ mb: 3, alignItems: "center", textAlign: "center" }}>
-          <NotificationsActiveRoundedIcon color="primary" sx={{ fontSize: 38 }} />
-          <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: "var(--font-inter)" }}>{copy.title}</Typography>
-          <Typography variant="body2" color="text.secondary">{copy.description}</Typography>
-        </Stack>
-
         {authLoading ? (
           <Stack spacing={2} sx={{ py: 8, alignItems: "center" }}><CircularProgress /><Typography color="text.secondary">{copy.loading}</Typography></Stack>
         ) : !isAuthenticated ? (

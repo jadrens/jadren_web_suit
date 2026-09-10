@@ -10,7 +10,7 @@
     "lint": "eslint",
     "db:setup": "bun database/setup.ts",
     "blog:import": "bun scripts/import-blog-posts.ts",
-    "ncee:build": "bun scripts/build-ncee-db.ts",
+    "ncee:build": "python3 scripts/build_ncee_db.py",
     "deploy:run": "bun scripts/run-deploy.ts",
     "reminder:dispatch": "bun scripts/dispatch-reminders.ts"
   },
@@ -60,6 +60,7 @@
     "eslint-config-next": "16.2.4",
     "postcss": "^8",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.130.0"
   }
 }

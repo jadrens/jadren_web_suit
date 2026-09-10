@@ -36,7 +36,6 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
-import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import Footer from "@components/ui/layout/Footer";
 import { ShowNavbarLoginStatus } from "@components/ui/layout/NavbarLoginStatus";
@@ -324,16 +323,6 @@ export default function QuickLinkClient() {
         component="main"
         sx={{ flex: 1, width: "100%", maxWidth: 920, mx: "auto", px: 2, py: 6 }}
       >
-        <Stack spacing={0.5} sx={{ mb: 3, alignItems: "center", textAlign: "center" }}>
-          <LinkRoundedIcon color="primary" sx={{ fontSize: 34 }} />
-          <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: "var(--font-inter)" }}>
-            {copy.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {copy.description}
-          </Typography>
-        </Stack>
-
         {authIsLoading ? (
           <Stack spacing={2} sx={{ py: 8, alignItems: "center" }}>
             <CircularProgress />

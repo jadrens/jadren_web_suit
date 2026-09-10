@@ -15,7 +15,6 @@ import {
   alpha as muiAlpha,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import ColorLensIcon from "@mui/icons-material/ColorLens";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import Footer from "@components/ui/layout/Footer";
@@ -318,12 +317,6 @@ export default function ColourPickerClient() {
     <div className="page-below-navbar flex flex-col">
       <Box component="main" sx={{ flex: 1, px: { xs: 2, sm: 3 }, py: { xs: 5, md: 8 } }}>
         <Box sx={{ width: "100%", maxWidth: 1040, mx: "auto" }}>
-          <Stack direction="row" spacing={1.2} sx={{ mb: 1, justifyContent: "center", alignItems: "center" }}>
-            <ColorLensIcon color="primary" sx={{ fontSize: 34 }} />
-            <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: "var(--font-inter)" }}>{t.tools.colourPicker.title}</Typography>
-          </Stack>
-          <Typography color="text.secondary" sx={{ mb: 5, textAlign: "center" }}>{t.tools.colourPicker.description}</Typography>
-
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.08fr) minmax(340px, .92fr)" }, gap: 3, alignItems: "start" }}>
             <Card elevation={0} sx={{ border: 1, borderColor: "divider", borderRadius: 3 }}>
               <CardContent sx={{ p: { xs: 2.5, sm: 3.5 } }}>

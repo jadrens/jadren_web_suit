@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, InputLabel, LinearProgress, MenuItem, Select, Stack, Switch, TextField, Typography } from "@mui/material";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import PsychologyRoundedIcon from "@mui/icons-material/PsychologyRounded";
-import SpellcheckRoundedIcon from "@mui/icons-material/SpellcheckRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import AutoFixHighRoundedIcon from "@mui/icons-material/AutoFixHighRounded";
@@ -140,7 +139,6 @@ export default function GrammarCheckerClient() {
 
   const renderedMarkup = useMemo(() => marked ? parseGrammarMarkup(marked) : [], [marked]);
   return <div className="page-below-navbar flex flex-col"><Box component="main" sx={{ flex: 1, px: { xs: 2, sm: 3 }, py: { xs: 3, sm: 5 } }}><Box sx={{ maxWidth: 1080, mx: "auto" }}>
-    <Stack direction="row" spacing={1.5} sx={{ mb: 3, alignItems: "center" }}><SpellcheckRoundedIcon color="primary" sx={{ fontSize: 34 }} /><Box><Typography variant="h4" sx={{ fontWeight: 700 }}>{copy.title}</Typography><Typography color="text.secondary">{copy.cardDescription}</Typography></Box></Stack>
     {models.length === 0 && <Alert severity="warning" action={<Button component={Link} href={settingsUrl} startIcon={<SettingsRoundedIcon />}>{copy.openSettings}</Button>} sx={{ mb: 2 }}>{copy.noModel}</Alert>}
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
       <Card variant="outlined" sx={{ borderRadius: 3 }}><CardContent sx={{ p: 2.5 }}><Stack spacing={2}>

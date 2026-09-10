@@ -18,6 +18,12 @@
 /.data/
 .env*
 
+# Databases distributed from Cloudflare R2
+/database/oxford-10-en2cn.sqlite3
+/database/oxford-10-en2cn.sqlite3-shm
+/database/oxford-10-en2cn.sqlite3-wal
+/database/NCEE.db
+
 # logs and local tooling
 .DS_Store
 *.pem
@@ -32,3 +38,4 @@ next-env.d.ts
 .build
 
 AGENTS.md
+.venv

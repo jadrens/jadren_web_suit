@@ -135,18 +135,6 @@ export default function Base64Client() {
         }}
       >
         <Box sx={{ width: "100%", maxWidth: 720 }}>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              textAlign: "center",
-              mb: 4,
-              fontFamily: "var(--font-inter)",
-            }}
-          >
-            {t.tools.base64.title}
-          </Typography>
-
           {/* Mode toggle */}
           <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
             <ToggleButtonGroup

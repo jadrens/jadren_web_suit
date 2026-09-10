@@ -390,19 +390,6 @@ export default function DnsLeakClient() {
           mx: "auto",
         }}
       >
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Typography
-            variant="h5"
-            sx={{ fontWeight: 700, fontFamily: "var(--font-inter)" }}
-          >
-            🛡️ {t.tools.dnsLeak.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {t.tools.dnsLeak.description}
-          </Typography>
-        </Box>
-
         {/* Test card */}
         <Card
           elevation={0}

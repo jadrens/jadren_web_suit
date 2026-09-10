@@ -169,29 +169,6 @@ export default function IpClient() {
         }}
       >
         <Box sx={{ width: "100%", maxWidth: 960 }}>
-          {/* 标题 */}
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              textAlign: "center",
-              mb: 1,
-              fontFamily: "var(--font-inter)",
-            }}
-          >
-            {t.tools.ip.title}
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{
-              textAlign: "center",
-              color: "text.secondary",
-              mb: 6,
-            }}
-          >
-            {t.tools.ip.description}
-          </Typography>
-
           {/* IP 显示卡片 */}
           <Card
             elevation={0}

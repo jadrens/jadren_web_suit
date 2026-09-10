@@ -111,28 +111,6 @@ export default function QrcodeClient() {
         }}
       >
         <Box sx={{ width: "100%", maxWidth: 960 }}>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              textAlign: "center",
-              mb: 1,
-              fontFamily: "var(--font-inter)",
-            }}
-          >
-            {t.tools.qrcode.title}
-          </Typography>
-          <Typography
-            variant="body1"
-            sx={{
-              textAlign: "center",
-              color: "text.secondary",
-              mb: 5,
-            }}
-          >
-            {t.tools.qrcode.description}
-          </Typography>
-
           <Box
             sx={{
               display: "grid",

@@ -438,28 +438,6 @@ export default function DnsClient() {
         }}
       >
         <Box sx={{ width: "100%", maxWidth: 860 }}>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              textAlign: "center",
-              mb: 1,
-              fontFamily: "var(--font-inter)",
-            }}
-          >
-            {t.tools.dns.title}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              textAlign: "center",
-              color: "text.secondary",
-              mb: 4,
-            }}
-          >
-            {t.tools.dns.description}
-          </Typography>
-
           {/* Input Row */}
           <Box
             sx={{
