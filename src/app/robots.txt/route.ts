@@ -1,8 +1,10 @@
+import SITE_CONFIG from "@config/app/config";
+
 const ROBOTS = `User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://jadren.me/sitemap.xml
+Sitemap: ${SITE_CONFIG.baseUrl}/sitemap.xml
 `;
 
 export function GET() {

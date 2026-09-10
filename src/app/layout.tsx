@@ -19,13 +19,15 @@ import LoadingBar from "@components/ui/layout/LoadingBar";
 import Navbar from "@components/ui/layout/Navbar";
 import { NavbarLoginStatusProvider } from "@components/ui/layout/NavbarLoginStatus";
 import { SHARED_SITE_ICONS } from "@lib/site-icons";
+import SITE_CONFIG from "@config/app/config";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["400", "600", "700"] });
 const nunito = Nunito({ variable: "--font-nunito", subsets: ["latin"], weight: ["600", "700"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_CONFIG.baseUrl),
   title: "Dragonren",
-  description: "Dragonren web application",
+  description: SITE_CONFIG.description,
   icons: SHARED_SITE_ICONS,
 };
 
