@@ -39,3 +39,8 @@ next-env.d.ts
 
 AGENTS.md
 .venv
+
+__pycache__
+
+
+dicts
