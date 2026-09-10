@@ -1,7 +1,6 @@
 import { Database } from "bun:sqlite";
 import { resolve } from "node:path";
-
-const DEFAULT_DATABASE_PATH = "database/oxford-10-en2cn.sqlite3";
+import { oxfordDictionaryDatabasePath } from "../database/paths";
 
 export interface DictionaryEntry {
   word: string;
@@ -55,8 +54,7 @@ export function normalizeDictionaryKey(value: string): string {
 }
 
 function databasePath(): string {
-  const configured = process.env.OXFORD_DICTIONARY_DB?.trim();
-  return resolve(process.cwd(), configured || DEFAULT_DATABASE_PATH);
+  return resolve(process.cwd(), oxfordDictionaryDatabasePath());
 }
 
 function getDatabase(): Database {

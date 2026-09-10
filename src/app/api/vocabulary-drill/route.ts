@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import { resolve } from "node:path";
 import { NextResponse } from "next/server";
+import { nceeDatabasePath } from "@lib/database/paths";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 type Mode = "phonetic" | "meaning" | "word";
 interface WordRow { id: number; english: string; phonetic: string; chinese: string; phonetic_br: string; phonetic_us: string; meanings_json: string; examples_json: string }
 const datasets = {
-  ncee: process.env.NCEE_DATABASE_DB?.trim() || "database/NCEE.db",
+  ncee: nceeDatabasePath(),
 } as const;
 type Dataset = keyof typeof datasets;
 

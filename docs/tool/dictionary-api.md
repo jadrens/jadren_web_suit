@@ -3,7 +3,7 @@
 The API reads the bundled SQLite database in read-only/query-only mode. It is
 public and does not require authentication.
 
-By default the server opens `database/oxford-10-en2cn.sqlite3`, relative to the
+By default the server opens `.data/database/oxford-10-en2cn.sqlite3`, relative to the
 application working directory. Set `OXFORD_DICTIONARY_DB` to an absolute path
 or another application-relative path when deploying the database elsewhere.
 

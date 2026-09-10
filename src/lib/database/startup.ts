@@ -5,6 +5,7 @@ import { mkdir, open, rename, stat, unlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { nceeDatabasePath, oxfordDictionaryDatabasePath } from "./paths";
 
 const ASSET_BASE_URL = "https://assets.jadren.dev/database";
 const LOCK_STALE_AFTER_MS = 10 * 60 * 1000;
@@ -25,7 +26,7 @@ function databaseAssets(): DatabaseAsset[] {
   return [
     {
       name: "Oxford dictionary",
-      path: process.env.OXFORD_DICTIONARY_DB?.trim() || "database/oxford-10-en2cn.sqlite3",
+      path: oxfordDictionaryDatabasePath(),
       objectName: "oxford-10-en2cn.sqlite3",
       size: 124_293_120,
       sha256: "f2b27e3f940ab09b390d758c496ec13cedfb9c6e6725703ca17856492a3b2acc",
@@ -35,7 +36,7 @@ function databaseAssets(): DatabaseAsset[] {
     },
     {
       name: "NCEE vocabulary",
-      path: process.env.NCEE_DATABASE_DB?.trim() || "database/NCEE.db",
+      path: nceeDatabasePath(),
       objectName: "NCEE.db",
       size: 7_516_160,
       sha256: "a543167cd9dbc209541d515ee8623ab5f1b164e61952027a3402a161ccb36f65",
