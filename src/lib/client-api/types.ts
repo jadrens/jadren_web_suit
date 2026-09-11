@@ -175,6 +175,7 @@ export interface VocabularyAttempt {
 
 export interface VocabularyUsage {
   usageId: string;
+  collectionId: string;
   word: string;
   prompt: string;
   lastLearnTime: string | null;
@@ -186,9 +187,10 @@ export interface VocabularyUsage {
   attempts: VocabularyAttempt[];
 }
 
-export interface VocabularyUsageListResponse { usages: VocabularyUsage[] }
+export interface VocabularyCollectionSummary { collectionId: string; name: string }
+export interface VocabularyUsageListResponse { collections: VocabularyCollectionSummary[]; usages: VocabularyUsage[] }
 export interface VocabularyUsageResponse { usage: VocabularyUsage }
-export interface CreateVocabularyUsageRequest { word: string; prompt: string }
+export interface CreateVocabularyUsageRequest { collectionId: string; word: string; prompt: string }
 export interface CreateVocabularyAttemptRequest {
   usageId: string;
   question: string;
@@ -206,9 +208,15 @@ export interface CreateVocabularyAttemptResponse {
 export type DrillPartOfSpeech = "vt" | "vi" | "v" | "adj" | "adv" | "n" | "prep" | "conj" | "pron" | "int" | "num" | "art" | "other";
 export interface DrillMeaning { text: string; partOfSpeech: DrillPartOfSpeech }
 export interface VocabularyPhonetic { accent: "uk" | "us" | "other"; text: string; audio?: string }
-export interface VocabularyCollectionItem { dataset: string; sourceWordId: number; word: string; phonetic: string; phonetics?: VocabularyPhonetic[]; meanings: DrillMeaning[]; pluralForms?: string; pastForms?: string; example?: string; definition?: string; appearanceCount: number; correctCount: number; wrongCount: number }
-export interface VocabularyCollection { collectionId: string; name: string; items: VocabularyCollectionItem[] }
-export interface VocabularyDrillUserDataResponse { collections: VocabularyCollection[]; progress: Array<{ dataset: string; mode: string; order: number[]; index: number }> }
+export interface VocabularyReviewSummary {
+  addedAt: string | null; lastReviewedAt: string | null; dueAt: string | null;
+  status: "new" | "due" | "scheduled"; estimated: boolean;
+  recallProbability: number | null; stabilityDays: number | null; difficulty: number | null;
+  lapses: number | null; calculatedAt: string;
+}
+export interface VocabularyCollectionItem { review?: VocabularyReviewSummary; dataset: string; sourceWordId: number; word: string; phonetic: string; phonetics?: VocabularyPhonetic[]; meanings: DrillMeaning[]; pluralForms?: string; pastForms?: string; example?: string; definition?: string; appearanceCount: number; correctCount: number; wrongCount: number }
+export interface VocabularyCollection { orderGeneratedAt?: string; practiceOrder?: string[]; collectionId: string; name: string; items: VocabularyCollectionItem[] }
+export interface VocabularyDrillUserDataResponse { collections: VocabularyCollection[]; progress: Array<{ dataset: string; mode: string; orderGeneratedAt?: string; order: number[]; index: number }> }
 
 export interface EncryptedLlmSettingsBackup {
   version: 1;

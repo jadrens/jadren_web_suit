@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress,
@@ -44,10 +45,6 @@ function cleanDisplayWord(value: string) {
   return value.replace(/[ˈˌ·]/g, "");
 }
 
-function ApiCode({ children }: { children: string }) {
-  return <Box component="pre" sx={{ m: 0, p: 1.5, borderRadius: 1.5, bgcolor: "action.hover", overflowX: "auto", fontFamily: "var(--font-jetbrains-mono), monospace", fontSize: ".82rem", lineHeight: 1.6, whiteSpace: "pre" }}><code>{children}</code></Box>;
-}
-
 function SenseView({ sense, labels }: { sense: Sense; labels: { examples: string; reference: string } }) {
   const meta = [...(sense.grammar || []), ...(sense.patterns || []), ...(sense.registers || [])];
   return <Box sx={{ display: "grid", gridTemplateColumns: "minmax(22px, auto) 1fr", gap: 1.25, py: 1.5 }}>
@@ -73,29 +70,6 @@ function SenseView({ sense, labels }: { sense: Sense; labels: { examples: string
 export function DictionaryLookup({ initialWord = "", embedded = false }: { initialWord?: string; embedded?: boolean }) {
   const { t, locale } = useI18n();
   const copy = t.tools.dictionary;
-  const apiCopy = locale === "zh" ? {
-    params: "请求参数", required: "必填", optional: "可选", exactResponse: "精确查询响应", suggestionResponse: "前缀建议响应",
-    fields: "主要字段", errors: "错误响应", caching: "缓存策略",
-    wordParam: "word：需要查询的单词或短语；1–120 个可打印字符，不区分大小写，多余空格会自动合并。",
-    queryParam: "q：单词或短语前缀；1–120 个可打印字符。",
-    limitParam: "limit：返回数量，整数 1–50，默认 20。",
-    exactFields: "query 是原始输入；lookupKey 是规范化查询键；resolvedKey 是别名解析后的词条键；isAlias 表示是否经过别名跳转；entry 是完整词条。",
-    entryFields: "entry 包含 word、display_word、英美音标 pronunciation、词形 forms、顶层义项 senses、短语/习语 phrases 和解析警告 warnings。",
-    searchFields: "results 中的 word 用于展示，lookupKey 用于后续精确查询；isAlias 为 true 时，target 是它指向的正式词条。",
-    errorFields: "错误统一返回 { code, error }。400 表示参数无效，404 表示词条不存在，503 表示词典数据库不可用。",
-    cacheText: "精确查询：浏览器 5 分钟、共享缓存 1 天。前缀建议：浏览器 1 分钟、共享缓存 1 小时。接口公开，无需登录。",
-  } : {
-    params: "Request parameters", required: "required", optional: "optional", exactResponse: "Exact lookup response", suggestionResponse: "Suggestion response",
-    fields: "Key fields", errors: "Error responses", caching: "Caching",
-    wordParam: "word: word or phrase to look up; 1–120 printable characters. Matching is case-insensitive and repeated spaces are collapsed.",
-    queryParam: "q: word or phrase prefix; 1–120 printable characters.",
-    limitParam: "limit: number of results, an integer from 1–50; defaults to 20.",
-    exactFields: "query is the original input; lookupKey is its normalized key; resolvedKey is the entry key after alias resolution; isAlias indicates a redirect; entry is the complete dictionary entry.",
-    entryFields: "entry contains word, display_word, UK/US pronunciation, forms, top-level senses, phrases/idioms, and parser warnings.",
-    searchFields: "Use result.word for display and result.lookupKey for an exact lookup. When isAlias is true, target is the canonical entry.",
-    errorFields: "Errors always return { code, error }. Status 400 means invalid parameters, 404 means no entry, and 503 means the dictionary database is unavailable.",
-    cacheText: "Exact lookups: 5 minutes in browsers and 1 day in shared caches. Suggestions: 1 minute in browsers and 1 hour in shared caches. No authentication is required.",
-  };
   const [input, setInput] = useState(initialWord);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [result, setResult] = useState<LookupResult | null>(null);
@@ -231,44 +205,7 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
           </CardContent></Card>}
         </Stack>}
 
-        {!embedded && <Card variant="outlined" sx={{ borderRadius: 3, mt: 4 }}><CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>{copy.apiGuide}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{copy.apiDescription}</Typography>
-          <Stack spacing={2.5}>
-            <Box><Typography variant="subtitle2" sx={{ mb: .75 }}>{copy.exactEndpoint}</Typography><ApiCode>GET /api/dictionary/oxford10c?word=apple</ApiCode><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1, mb: .5 }}>{apiCopy.params}</Typography><Typography variant="body2"><strong>word ({apiCopy.required})</strong> — {apiCopy.wordParam.replace(/^word:\s*/, "")}</Typography></Box>
-            <Box><Typography variant="subtitle2" sx={{ mb: .75 }}>{apiCopy.exactResponse} · 200</Typography><ApiCode>{`{
-  "query": "apples",
-  "lookupKey": "apples",
-  "resolvedKey": "apple",
-  "isAlias": true,
-  "entry": {
-    "word": "apple",
-    "display_word": "apple",
-    "pronunciation": { "br": "/ˈæpl/", "us": "/ˈæpl/" },
-    "labels": { "cefr": "A1" },
-    "forms": [],
-    "sense_groups": [...],
-    "senses": [...],
-    "phrases": [...],
-    "warnings": []
-  }
-}`}</ApiCode></Box>
-            <Box><Typography variant="subtitle2" sx={{ mb: .75 }}>{apiCopy.fields}</Typography><Stack spacing={.75}><Typography variant="body2">{apiCopy.exactFields}</Typography><Typography variant="body2">{apiCopy.entryFields}</Typography></Stack></Box>
-            <Divider />
-            <Box><Typography variant="subtitle2" sx={{ mb: .75 }}>{copy.searchEndpoint}</Typography><ApiCode>GET /api/dictionary/oxford10c/search?q=exper&amp;limit=10</ApiCode><Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1, mb: .5 }}>{apiCopy.params}</Typography><Stack spacing={.5}><Typography variant="body2"><strong>q ({apiCopy.required})</strong> — {apiCopy.queryParam.replace(/^q:\s*/, "")}</Typography><Typography variant="body2"><strong>limit ({apiCopy.optional})</strong> — {apiCopy.limitParam.replace(/^limit:\s*/, "")}</Typography></Stack></Box>
-            <Box><Typography variant="subtitle2" sx={{ mb: .75 }}>{apiCopy.suggestionResponse} · 200</Typography><ApiCode>{`{
-  "query": "exper",
-  "count": 2,
-  "results": [
-    { "word": "ex·peri·ence", "lookupKey": "experience", "isAlias": false, "target": null },
-    { "word": "experienced", "lookupKey": "experienced", "isAlias": true, "target": "experience" }
-  ]
-}`}</ApiCode><Typography variant="body2" sx={{ mt: 1 }}>{apiCopy.searchFields}</Typography></Box>
-            <Divider />
-            <Box><Typography variant="subtitle2" sx={{ mb: .75 }}>{apiCopy.errors}</Typography><ApiCode>{`{ "code": "word_not_found", "error": "Dictionary entry not found" }`}</ApiCode><Typography variant="body2" sx={{ mt: 1 }}>{apiCopy.errorFields}</Typography></Box>
-            <Box><Typography variant="subtitle2" sx={{ mb: .5 }}>{apiCopy.caching}</Typography><Typography variant="body2">{apiCopy.cacheText}</Typography></Box>
-          </Stack>
-        </CardContent></Card>}
+        {!embedded && <Box sx={{ mt: 3, textAlign: "right" }}><Button component={Link} href="/docs/dictionary" size="small">{locale === "zh" ? "查看词典 API 文档 →" : "Dictionary API documentation →"}</Button></Box>}
       </Box>
     </Box>
     {!embedded && <Footer />}

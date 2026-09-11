@@ -133,6 +133,47 @@ CREATE TABLE IF NOT EXISTS vocabulary_collection (
   UNIQUE (user_id, name)
 );
 
+ALTER TABLE vocabulary_collection ADD COLUMN IF NOT EXISTS practice_order JSONB NOT NULL DEFAULT '[]'::JSONB;
+ALTER TABLE vocabulary_collection ADD COLUMN IF NOT EXISTS order_generated_at TIMESTAMPTZ;
+
+-- Sentence-practice usages and vocabulary-drill words share the same folders.
+-- Existing sentence-practice data is placed in a per-user default folder.
+ALTER TABLE vocabulary_usage ADD COLUMN IF NOT EXISTS collection_id UUID;
+
+INSERT INTO vocabulary_collection (collection_id, user_id, name)
+SELECT md5(legacy.user_id::text || ':sentence-practice-default')::UUID, legacy.user_id, 'default'
+FROM (SELECT DISTINCT user_id FROM vocabulary_usage WHERE collection_id IS NULL) AS legacy
+WHERE NOT EXISTS (
+  SELECT 1 FROM vocabulary_collection existing
+  WHERE existing.user_id = legacy.user_id AND LOWER(existing.name) = 'default'
+)
+ON CONFLICT DO NOTHING;
+
+UPDATE vocabulary_usage legacy_usage
+SET collection_id = (
+  SELECT target_collection.collection_id
+  FROM vocabulary_collection target_collection
+  WHERE target_collection.user_id = legacy_usage.user_id
+  ORDER BY CASE WHEN LOWER(target_collection.name) = 'default' THEN 0 ELSE 1 END, target_collection.created_at
+  LIMIT 1
+)
+WHERE legacy_usage.collection_id IS NULL;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'vocabulary_usage_collection_id_fkey') THEN
+    ALTER TABLE vocabulary_usage
+      ADD CONSTRAINT vocabulary_usage_collection_id_fkey
+      FOREIGN KEY (collection_id) REFERENCES vocabulary_collection(collection_id) ON DELETE CASCADE;
+  END IF;
+END $$;
+
+ALTER TABLE vocabulary_usage ALTER COLUMN collection_id SET NOT NULL;
+ALTER TABLE vocabulary_usage DROP CONSTRAINT IF EXISTS vocabulary_usage_user_id_word_usage_prompt_key;
+CREATE UNIQUE INDEX IF NOT EXISTS vocabulary_usage_collection_word_prompt_idx
+  ON vocabulary_usage (collection_id, word, usage_prompt);
+CREATE INDEX IF NOT EXISTS vocabulary_usage_collection_idx
+  ON vocabulary_usage (collection_id, created_at);
+
 CREATE TABLE IF NOT EXISTS vocabulary_collection_item (
   collection_id UUID NOT NULL REFERENCES vocabulary_collection(collection_id) ON DELETE CASCADE,
   dataset VARCHAR(120) NOT NULL,
@@ -155,6 +196,10 @@ CREATE TABLE IF NOT EXISTS vocabulary_collection_item (
   PRIMARY KEY (collection_id, dataset, source_word_id)
 );
 
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS memory_card JSONB;
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS review_seed JSONB;
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS review_history JSONB NOT NULL DEFAULT '[]'::JSONB;
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS last_reviewed_at TIMESTAMPTZ;
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS phonetics JSONB NOT NULL DEFAULT '[]'::JSONB;
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS plural_forms VARCHAR(240) NOT NULL DEFAULT '';
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS past_forms VARCHAR(240) NOT NULL DEFAULT '';
@@ -177,6 +222,8 @@ CREATE TABLE IF NOT EXISTS vocabulary_drill_progress (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, dataset, mode)
 );
+
+ALTER TABLE vocabulary_drill_progress ADD COLUMN IF NOT EXISTS order_generated_at TIMESTAMPTZ;
 
 ALTER TABLE vocabulary_drill_progress ALTER COLUMN dataset TYPE VARCHAR(120);
 

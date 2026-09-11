@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import {
   Box,
@@ -10,19 +11,13 @@ import {
   Alert,
   CircularProgress,
   useTheme,
-  Divider,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import LanguageIcon from "@mui/icons-material/Language";
 import Footer from "@components/ui/layout/Footer";
 import { Snackbar } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
-import { alpha } from "@mui/material";
-import SITE_CONFIG  from "@config/app/config"
-
-const API_BASE = SITE_CONFIG.baseUrl;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,7 +90,7 @@ function GeoRow({
 }
 
 export default function IpClient() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const theme = useTheme();
   useDocumentTitle(t.tools.ip.title);
   const [ip, setIp] = useState<string | null>(null);
@@ -131,7 +126,8 @@ export default function IpClient() {
   }, []);
 
   useEffect(() => {
-    fetchIp();
+    const timer = window.setTimeout(() => void fetchIp(), 0);
+    return () => window.clearTimeout(timer);
   }, [fetchIp]);
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -144,16 +140,6 @@ export default function IpClient() {
       setSnackbarOpen(true);
     }
   };
-
-  const curlExample = `curl -s ${API_BASE}/api/ip`;
-  const curlJsonExample = `curl -s ${API_BASE}/api/ip | jq .`;
-  const responseExample = `{
-  "ip": "${ip || "1.2.3.4"}",
-  "headers": {
-    "x-forwarded-for": "${ip || "1.2.3.4"}",
-    "x-real-ip": "${ip || "1.2.3.4"}"
-  }
-}`;
 
   return (
     <div className="page-below-navbar flex flex-col">
@@ -323,235 +309,11 @@ export default function IpClient() {
             </CardContent>
           </Card>
 
-          {/* API 调用指南 */}
-          <Typography
-            variant="h5"
-            sx={{
-              fontWeight: 700,
-              mb: 3,
-              fontFamily: "var(--font-inter)",
-            }}
-          >
-            {t.tools.ip.apiGuide}
-          </Typography>
-
-          {/* API 端点 */}
-          <Card
-            elevation={0}
-            sx={{
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 2,
-              mb: 3,
-            }}
-          >
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-                {t.tools.ip.endpoint}
-              </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  p: 1.5,
-                  borderRadius: 1,
-                  bgcolor: alpha(theme.palette.primary.main, 0.06),
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  fontSize: "0.875rem",
-                  wordBreak: "break-all",
-                }}
-              >
-                <LanguageIcon sx={{ fontSize: 18, color: "primary.main", flexShrink: 0 }} />
-                <Typography
-                  component="code"
-                  sx={{
-                    fontFamily: "inherit",
-                    fontSize: "inherit",
-                    flex: 1,
-                  }}
-                >
-                  GET {API_BASE}/api/ip
-                </Typography>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<ContentCopyIcon />}
-                  onClick={() => copyToClipboard(`${API_BASE}/api/ip`, t.tools.ip.copied)}
-                  sx={{ flexShrink: 0 }}
-                >
-                  {t.tools.ip.copy}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-
-          {/* Curl 示例 */}
-          <Card
-            elevation={0}
-            sx={{
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 2,
-              mb: 3,
-            }}
-          >
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                {t.tools.ip.curlExample}
-              </Typography>
-
-              {/* 基础请求 */}
-              <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
-                {t.tools.ip.basicRequest}
-              </Typography>
-              <Box
-                sx={{
-                  position: "relative",
-                  p: 2,
-                  borderRadius: 1,
-                  bgcolor: alpha(theme.palette.primary.main, 0.06),
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  fontSize: "0.8125rem",
-                  mb: 2,
-                }}
-              >
-                <Box
-                  component="pre"
-                  sx={{
-                    m: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-all",
-                    fontFamily: "inherit",
-                    fontSize: "inherit",
-                  }}
-                >
-                  {curlExample}
-                </Box>
-                <Button
-                  variant="text"
-                  size="small"
-                  startIcon={<ContentCopyIcon />}
-                  onClick={() => copyToClipboard(curlExample, t.tools.ip.copied)}
-                  sx={{ mt: 1 }}
-                >
-                  {t.tools.ip.copy}
-                </Button>
-              </Box>
-
-              {/* JSON 格式化 */}
-              <Typography variant="body2" sx={{ mb: 1, color: "text.secondary" }}>
-                {t.tools.ip.jsonPretty}
-              </Typography>
-              <Box
-                sx={{
-                  position: "relative",
-                  p: 2,
-                  borderRadius: 1,
-                  bgcolor: alpha(theme.palette.primary.main, 0.06),
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  fontSize: "0.8125rem",
-                }}
-              >
-                <Box
-                  component="pre"
-                  sx={{
-                    m: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-all",
-                    fontFamily: "inherit",
-                    fontSize: "inherit",
-                  }}
-                >
-                  {curlJsonExample}
-                </Box>
-                <Button
-                  variant="text"
-                  size="small"
-                  startIcon={<ContentCopyIcon />}
-                  onClick={() => copyToClipboard(curlJsonExample, t.tools.ip.copied)}
-                  sx={{ mt: 1 }}
-                >
-                  {t.tools.ip.copy}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-
-          {/* 响应示例 */}
-          <Card
-            elevation={0}
-            sx={{
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 2,
-              mb: 3,
-            }}
-          >
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                {t.tools.ip.responseExample}
-              </Typography>
-              <Box
-                sx={{
-                  position: "relative",
-                  p: 2,
-                  borderRadius: 1,
-                  bgcolor: alpha(theme.palette.primary.main, 0.06),
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  fontSize: "0.8125rem",
-                }}
-              >
-                <Box
-                  component="pre"
-                  sx={{
-                    m: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-all",
-                    fontFamily: "inherit",
-                    fontSize: "inherit",
-                  }}
-                >
-                  {responseExample}
-                </Box>
-                <Button
-                  variant="text"
-                  size="small"
-                  startIcon={<ContentCopyIcon />}
-                  onClick={() => copyToClipboard(responseExample, t.tools.ip.copied)}
-                  sx={{ mt: 1 }}
-                >
-                  {t.tools.ip.copy}
-                </Button>
-              </Box>
-
-              <Divider sx={{ my: 2 }} />
-
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                {t.tools.ip.responseFields}
-              </Typography>
-              <Box component="ul" sx={{ pl: 2, m: 0, fontSize: "0.875rem", lineHeight: 2 }}>
-                <li>
-                  <Typography component="code" sx={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "0.8125rem", fontWeight: 600, color: "primary.main" }}>
-                    ip
-                  </Typography>
-                  {" — "}{t.tools.ip.fieldIp}
-                </li>
-                <li>
-                  <Typography component="code" sx={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "0.8125rem", fontWeight: 600, color: "primary.main" }}>
-                    headers.x-forwarded-for
-                  </Typography>
-                  {" — "}{t.tools.ip.fieldXff}
-                </li>
-                <li>
-                  <Typography component="code" sx={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace", fontSize: "0.8125rem", fontWeight: 600, color: "primary.main" }}>
-                    headers.x-real-ip
-                  </Typography>
-                  {" — "}{t.tools.ip.fieldXri}
-                </li>
-              </Box>
-            </CardContent>
-          </Card>
+          <Box sx={{ textAlign: "right" }}>
+            <Button component={Link} href="/docs/ip" size="small">
+              {locale === "zh" ? "查看 IP API 文档 →" : "IP API documentation →"}
+            </Button>
+          </Box>
         </Box>
       </Box>
       <Footer />

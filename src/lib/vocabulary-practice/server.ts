@@ -30,6 +30,7 @@ export function vocabularyAuthFailure(error: unknown) {
 
 export interface VocabularyUsageRow {
   usage_id: string;
+  collection_id: string;
   word: string;
   usage_prompt: string;
   last_learn_time: string | Date | null;
@@ -68,6 +69,7 @@ export function toAttempt(row: VocabularyAttemptRow) {
 export function toUsage(row: VocabularyUsageRow, attempts: VocabularyAttemptRow[] = []) {
   return {
     usageId: row.usage_id,
+    collectionId: row.collection_id,
     word: row.word,
     prompt: row.usage_prompt,
     lastLearnTime: row.last_learn_time ? new Date(row.last_learn_time).toISOString() : null,

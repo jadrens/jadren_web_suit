@@ -83,14 +83,15 @@ export const vocabularyPracticeApi = {
 };
 
 export const vocabularyDrillApi = {
+  reorderCollection: (collectionId: string) => apiClient.post<{ saved: boolean }, { action: string; collectionId: string }>("/api/vocabulary-drill/user-data", { action: "reorder_collection", collectionId }),
   userData: () => apiClient.get<import("./types").VocabularyDrillUserDataResponse>("/api/vocabulary-drill/user-data"),
   createCollection: (name: string) => apiClient.post<{ collection: import("./types").VocabularyCollection }, { action: string; name: string }>("/api/vocabulary-drill/user-data", { action: "create_collection", name }),
   deleteCollection: (collectionId: string) => apiClient.delete<void>(`/api/vocabulary-drill/user-data?collectionId=${encodeURIComponent(collectionId)}`),
   addItem: (input: { collectionId: string; dataset: string; sourceWordId?: number; word: string; phonetic: string; phonetics?: import("./types").VocabularyPhonetic[]; meanings: import("./types").DrillMeaning[]; pluralForms?: string; pastForms?: string; example?: string; definition?: string }) => apiClient.post<{ saved: boolean; item?: import("./types").VocabularyCollectionItem }, typeof input & { action: string }>("/api/vocabulary-drill/user-data", { action: "add_item", ...input }),
   transferItem: (input: { collectionId: string; dataset: string; sourceWordId: number }) => apiClient.post<{ restored: boolean; destinationCollectionId: string }, typeof input & { action: string }>("/api/vocabulary-drill/user-data", { action: "transfer_item", ...input }),
-  saveStatDeltas: (deltas: Array<{ collectionId: string; dataset: string; sourceWordId: number; appearances: number; correct: number; wrong: number }>) => apiClient.post<{ saved: boolean }, { action: string; deltas: typeof deltas }>("/api/vocabulary-drill/user-data", { action: "save_stat_deltas", deltas }),
+  saveStatDeltas: (deltas: Array<{ collectionId: string; dataset: string; sourceWordId: number; lastReviewedAt?: string; reviews?: import("@lib/vocabulary-practice/collection-memory").ReviewEvent[]; appearances: number; correct: number; wrong: number }>) => apiClient.post<{ saved: boolean }, { action: string; deltas: typeof deltas }>("/api/vocabulary-drill/user-data", { action: "save_stat_deltas", deltas }),
   deleteItem: (collectionId: string, sourceWordId: number, dataset?: string) => apiClient.delete<void>(`/api/vocabulary-drill/user-data?collectionId=${encodeURIComponent(collectionId)}&sourceWordId=${encodeURIComponent(sourceWordId)}${dataset ? `&dataset=${encodeURIComponent(dataset)}` : ""}`),
-  saveProgress: (input: { dataset: string; mode: string; order: number[]; index: number }) => apiClient.put<{ saved: boolean }, typeof input>("/api/vocabulary-drill/user-data", input),
+  saveProgress: (input: { dataset: string; mode: string; orderGeneratedAt?: string; order: number[]; index: number }) => apiClient.put<{ saved: boolean }, typeof input>("/api/vocabulary-drill/user-data", input),
 };
 
 export const llmSettingsApi = {

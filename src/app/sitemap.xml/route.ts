@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { documentation } from "@lib/publishing/docs";
 import SITE_CONFIG from "@config/app/config";
 import { getAllPostMetas, Locale } from "@lib/publishing/posts";
 
 const STATIC_PATHS = [
   "/",
   "/about",
+  "/docs",
   "/tools",
   "/tools/base64",
   "/tools/colour-picker",
@@ -35,6 +37,7 @@ export async function GET() {
   const locales: Locale[] = ["en", "zh"];
   const posts = await Promise.all(locales.map((locale) => getAllPostMetas(locale)));
   const sitemapEntries: SitemapEntry[] = [
+    ...documentation.map(({ slug }) => ({ path: `/docs/${slug}` })),
     ...STATIC_PATHS.map((path) => ({ path })),
     ...locales.flatMap((locale, index) => [
       { path: `/blog/${locale}` },
