@@ -15,10 +15,13 @@ export async function GET(request: Request) {
     const entries = await response.json() as DictionaryEntry[];
     const phonetics = entries.flatMap(entry => entry.phonetics || []).flatMap(item => {
       const text = String(item.text || "").trim(); const audio = String(item.audio || "").trim();
-      if (!text) return [];
+      if (!text && !audio) return [];
       const accent = /[_-](us|us_|american)/i.test(audio) ? "us" : /[_-](gb|uk|gb_|british)/i.test(audio) ? "uk" : "other";
       return [{ accent, text, ...(audio ? { audio: audio.startsWith("//") ? `https:${audio}` : audio } : {}) }];
-    }).filter((item, index, all) => all.findIndex(candidate => candidate.text === item.text && candidate.accent === item.accent) === index);
+    }).filter((item, index, all) => {
+      const matching = all.map((candidate, candidateIndex) => ({ candidate, candidateIndex })).filter(({ candidate }) => candidate.text === item.text && candidate.accent === item.accent);
+      return index === (matching.find(({ candidate }) => candidate.audio)?.candidateIndex ?? matching[0].candidateIndex);
+    });
     const definitions = entries.flatMap(entry => entry.meanings || []).flatMap(meaning => (meaning.definitions || []).map(definition => ({ partOfSpeech: String(meaning.partOfSpeech || "other"), definition: String(definition.definition || "").trim(), example: String(definition.example || "").trim() }))).filter(item => item.definition);
     return NextResponse.json({ phonetic: phonetics[0]?.text || String(entries[0]?.phonetic || ""), phonetics, definition: definitions[0]?.definition || "", example: definitions.find(item => item.example)?.example || "", definitions });
   } catch (cause) { return internalError(cause); }

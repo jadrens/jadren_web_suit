@@ -207,6 +207,8 @@ export interface CreateVocabularyAttemptResponse {
 
 export type DrillPartOfSpeech = "vt" | "vi" | "v" | "adj" | "adv" | "n" | "prep" | "conj" | "pron" | "int" | "num" | "art" | "other";
 export interface DrillMeaning { text: string; partOfSpeech: DrillPartOfSpeech }
+export interface VocabularyWordQuiz { dataset: string; sourceWordId: number; word: string; meanings: DrillMeaning[]; hints: string[]; createdAt: string }
+export interface VocabularyWordQuizResponse { quiz: VocabularyWordQuiz | null; canGenerate: boolean }
 export interface VocabularyPhonetic { accent: "uk" | "us" | "other"; text: string; audio?: string }
 export interface VocabularyReviewSummary {
   addedAt: string | null; lastReviewedAt: string | null; dueAt: string | null;

@@ -6,7 +6,7 @@ export type LlmApiType = "claude" | "openai-responses" | "openai-completions";
 export interface LlmProfile { id: string; name: string; type: LlmApiType; token: string; baseUrl: string }
 export interface LlmModelProfile { id: string; name: string; modelId: string; providerId: string }
 export type LlmRole = "user" | "assistant" | "system" | "tool";
-export interface LlmMessage { role: LlmRole; content: string; toolCallId?: string; toolCalls?: LlmToolCall[]; providerData?: unknown }
+export interface LlmMessage { role: LlmRole; content: string; toolCallId?: string; toolCalls?: LlmToolCall[]; providerData?: unknown; reasoningContent?: string }
 export interface LlmTool {
   name: string;
   description?: string;
@@ -96,6 +96,9 @@ function makeRequest(profile: LlmProfile, options: LlmRequestBase, stream: boole
   headers: Record<string, string>;
 } {
   const { model, messages, systemPrompt, tools, maxTokens, thinkingBudget, reasoningEffort, temperature } = options;
+  const isDeepSeek = /deepseek/i.test(model) || /(?:^|\.)deepseek\.com(?:\/|$)/i.test(profile.baseUrl.replace(/^https?:\/\//, ""));
+  const isDeepSeekCompletions = profile.type === "openai-completions" && isDeepSeek;
+  const unsupportedDeepSeekToolChoice = isDeepSeek && (options.toolChoice === "required" || typeof options.toolChoice === "object");
   if (profile.type === "claude") {
     const system = [systemPrompt, ...messages.filter((m) => m.role === "system").map((m) => m.content)].filter(Boolean).join("\n\n");
     const body: Record<string, unknown> = {
@@ -118,25 +121,29 @@ function makeRequest(profile: LlmProfile, options: LlmRequestBase, stream: boole
   }
   if (profile.type === "openai-responses") {
     const body: Record<string, unknown> = {
-      model, stream, input: messages.flatMap((m) => m.role === "tool"
-        ? [{ type: "function_call_output", call_id: m.toolCallId, output: m.content }]
-        : m.toolCalls?.length ? (m.providerData as any)?.output || [...(m.content ? [{ role: "assistant", content: m.content }] : []), ...m.toolCalls.map((call) => ({ type: "function_call", call_id: call.id, name: call.name, arguments: call.rawArguments }))]
-        : [{ role: m.role, content: m.content }]),
+      model, stream, input: messages.flatMap((m) => {
+        if (m.role === "tool") return [{ type: "function_call_output", call_id: m.toolCallId, output: m.content }];
+        const previousOutput = (m.providerData as { output?: unknown } | undefined)?.output;
+        if (m.role === "assistant" && Array.isArray(previousOutput)) return previousOutput;
+        if (m.toolCalls?.length) return [...(m.content ? [{ role: "assistant", content: m.content }] : []), ...m.toolCalls.map((call) => ({ type: "function_call", call_id: call.id, name: call.name, arguments: call.rawArguments }))];
+        return [{ role: m.role, content: m.content }];
+      }),
     };
     if (systemPrompt) body.instructions = systemPrompt;
     if (maxTokens !== undefined) body.max_output_tokens = maxTokens;
     if (temperature !== undefined) body.temperature = temperature;
     if (reasoningEffort && reasoningEffort !== "none") body.reasoning = { effort: reasoningEffort, summary: "auto" };
     if (tools?.length) body.tools = tools.map((tool) => ({ type: "function", name: tool.name, description: tool.description, parameters: tool.parameters, strict: tool.strict ?? true }));
-    if (options.toolChoice) body.tool_choice = typeof options.toolChoice === "object" ? { type: "function", name: options.toolChoice.name } : options.toolChoice;
+    if (options.toolChoice && !unsupportedDeepSeekToolChoice) body.tool_choice = typeof options.toolChoice === "object" ? { type: "function", name: options.toolChoice.name } : options.toolChoice;
     return { body, headers: { authorization: `Bearer ${profile.token}`, "content-type": "application/json" } };
   }
-  const body: Record<string, unknown> = { model, stream, messages: [...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []), ...messages.map((m) => m.role === "tool" ? { role: "tool", content: m.content, tool_call_id: m.toolCallId } : m.toolCalls?.length ? { role: "assistant", content: m.content || null, tool_calls: m.toolCalls.map((call) => ({ id: call.id, type: "function", function: { name: call.name, arguments: call.rawArguments } })) } : { role: m.role, content: m.content })] };
+  const body: Record<string, unknown> = { model, stream, messages: [...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []), ...messages.map((m) => m.role === "tool" ? { role: "tool", content: m.content, tool_call_id: m.toolCallId } : m.toolCalls?.length ? { role: "assistant", content: m.content || null, ...(isDeepSeekCompletions && m.reasoningContent !== undefined ? { reasoning_content: m.reasoningContent } : {}), tool_calls: m.toolCalls.map((call) => ({ id: call.id, type: "function", function: { name: call.name, arguments: call.rawArguments } })) } : { role: m.role, content: m.content, ...(isDeepSeekCompletions && m.role === "assistant" && m.reasoningContent !== undefined ? { reasoning_content: m.reasoningContent } : {}) })] };
   if (maxTokens !== undefined) body.max_completion_tokens = maxTokens;
   if (temperature !== undefined) body.temperature = temperature;
   if (reasoningEffort && reasoningEffort !== "none") body.reasoning_effort = reasoningEffort;
   if (tools?.length) body.tools = tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.parameters, strict: tool.strict } }));
-  if (options.toolChoice) body.tool_choice = typeof options.toolChoice === "object" ? { type: "function", function: { name: options.toolChoice.name } } : options.toolChoice;
+  // DeepSeek thinking mode rejects forced tool choices; tools default to auto when present.
+  if (options.toolChoice && !unsupportedDeepSeekToolChoice) body.tool_choice = typeof options.toolChoice === "object" ? { type: "function", function: { name: options.toolChoice.name } } : options.toolChoice;
   if (stream) body.stream_options = { include_usage: true };
   return { body, headers: { authorization: `Bearer ${profile.token}`, "content-type": "application/json" } };
 }
@@ -289,13 +296,13 @@ export class LlmClient {
         if (!options.isComplete || options.isComplete()) return response;
         if (incompleteRetries >= maxIncompleteRetries) return response;
         incompleteRetries++;
-        messages.push({ role: "assistant", content: response.text });
+        messages.push({ role: "assistant", content: response.text, providerData: response.raw, reasoningContent: response.thinking });
         messages.push({ role: "user", content: options.incompletePrompt || "Please use the tools to continue and complete the task." });
         requireTools = true;
         continue;
       }
       if (round === maxRounds) throw new Error(`Maximum tool rounds exceeded (${maxRounds})`);
-      messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls, providerData: response.raw });
+      messages.push({ role: "assistant", content: response.text, toolCalls: response.toolCalls, providerData: response.raw, reasoningContent: response.thinking });
       for (const toolCall of response.toolCalls) {
         const fn = functions.find((tool) => tool.name === toolCall.name);
         if (!fn) throw new Error(`No function provided for tool: ${toolCall.name}`);
@@ -330,7 +337,7 @@ export class LlmClient {
       if (!completed.toolCalls.length) {
         if (options.isComplete?.() === false && incompleteRetries < maxIncompleteRetries) {
           incompleteRetries++;
-          messages.push({ role: "assistant", content: completed.text });
+          messages.push({ role: "assistant", content: completed.text, providerData: completed.raw, reasoningContent: completed.thinking });
           messages.push({ role: "user", content: options.incompletePrompt || "Please use the tools to continue and complete the task." });
           requireTools = true;
           continue;
@@ -340,7 +347,7 @@ export class LlmClient {
         return;
       }
       if (round === maxRounds) throw new Error(`Maximum tool rounds exceeded (${maxRounds})`);
-      messages.push({ role: "assistant", content: completed.text, toolCalls: completed.toolCalls, providerData: completed.raw });
+      messages.push({ role: "assistant", content: completed.text, toolCalls: completed.toolCalls, providerData: completed.raw, reasoningContent: completed.thinking });
       for (const toolCall of completed.toolCalls) {
         const fn = functions.find((tool) => tool.name === toolCall.name);
         if (!fn) throw new Error(`No function provided for tool: ${toolCall.name}`);

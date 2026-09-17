@@ -125,6 +125,24 @@ COMMENT ON TABLE vocabulary_usage IS
 COMMENT ON TABLE vocabulary_practice_attempt IS
   'The five most recent sentence-practice attempts retained for each vocabulary usage.';
 
+CREATE TABLE IF NOT EXISTS vocabulary_word_quiz (
+  dataset VARCHAR(120) NOT NULL,
+  source_word_id INTEGER NOT NULL CHECK (source_word_id > 0),
+  word VARCHAR(100) NOT NULL,
+  dictionary_lookup_key VARCHAR(120) NOT NULL,
+  sense_keys JSONB NOT NULL,
+  meanings JSONB NOT NULL,
+  generator_model VARCHAR(255) NOT NULL,
+  created_by UUID REFERENCES user_main(user_id) ON UPDATE CASCADE ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (dataset, source_word_id),
+  CONSTRAINT vocabulary_word_quiz_sense_keys_array CHECK (jsonb_typeof(sense_keys) = 'array'),
+  CONSTRAINT vocabulary_word_quiz_meanings_array CHECK (jsonb_typeof(meanings) = 'array')
+);
+
+COMMENT ON TABLE vocabulary_word_quiz IS
+  'Shared, administrator-generated word-to-meaning quizzes selected from dictionary senses.';
+
 CREATE TABLE IF NOT EXISTS vocabulary_collection (
   collection_id UUID PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES user_main(user_id) ON DELETE CASCADE,

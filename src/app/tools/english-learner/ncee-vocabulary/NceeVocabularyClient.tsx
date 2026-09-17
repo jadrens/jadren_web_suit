@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, LinearProgress, Stack, Tab, Tabs, TextField, Tooltip, Typography } from "@mui/material";
-import { Snackbar } from "@components/ui/feedback/toast";
+import { Snackbar, toast as globalToast } from "@components/ui/feedback/toast";
 import BookmarkAddRoundedIcon from "@mui/icons-material/BookmarkAddRounded";
 import CloudDownloadRoundedIcon from "@mui/icons-material/CloudDownloadRounded";
 import CloudUploadRoundedIcon from "@mui/icons-material/CloudUploadRounded";
@@ -32,10 +32,11 @@ import { useSiteUrl } from "@lib/site-url";
 import { getLlmModels, getLlmProfiles, LlmClient, type LlmModelProfile, type LlmProfile } from "@lib/llm";
 import { useAuth } from "@lib/client-api/use-auth";
 import { vocabularyDrillApi, type DrillMeaning, type VocabularyCollection } from "@lib/client-api";
+import { dictionaryQuizSenses } from "@lib/vocabulary-practice/word-quiz";
 import { DictionaryLookup } from "../../dictionary/DictionaryClient";
 
 type Mode = "phonetic" | "meaning" | "word";
-interface Exercise { id: number; english: string; phonetic: string; phonetics?: Array<{ accent: "uk" | "us" | "other"; text: string }>; chinese: string; examples?: Array<{ en: string; zh: string }>; hintIndexes: number[]; duplicateCount: number; meanings?: DrillMeaning[]; sourceDataset?: string }
+interface Exercise { id: number; english: string; phonetic: string; phonetics?: Array<{ accent: "uk" | "us" | "other"; text: string }>; chinese: string; examples?: Array<{ en: string; zh: string }>; hintIndexes: number[]; duplicateCount: number; meanings?: DrillMeaning[]; meaningHints?: string[]; sourceDataset?: string; quizDataset?: string }
 interface Grade { isCorrect: boolean; feedback: string }
 interface LocalProgress { orderGeneratedAt?: string; order: number[]; index: number }
 
@@ -120,6 +121,18 @@ function PronunciationCard({ exercise, listenLabel, onSpeak }: { exercise: Exerc
   </Box>;
 }
 
+function WordMeaningAnswer({ exercise, value, onChange, onForget, inputRef, forgotten, copy }: { exercise: Exercise; value: string; onChange: (value: string) => void; onForget: () => void; inputRef: RefObject<HTMLInputElement | null>; forgotten: boolean; copy: typeof nceeVocabularyTranslations.en }) {
+  const [showHint, setShowHint] = useState(false);
+  const dictionaryHints = (exercise.meaningHints || []).filter(Boolean);
+  const hints = (dictionaryHints.length ? dictionaryHints : (exercise.examples || []).map(example => example.en).filter(Boolean)).slice(0, 3);
+  return <Stack spacing={1}>
+    <TextField inputRef={inputRef} autoFocus multiline minRows={2} label={copy.answerAnyMeaning} value={value} onChange={event => onChange(event.target.value)} onKeyDown={event => { if (event.key === ";") { event.preventDefault(); onForget(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />
+    {!forgotten && hints.length > 0 && <Button size="small" sx={{ alignSelf: "flex-start" }} onClick={() => setShowHint(current => !current)}>{showHint ? copy.hideMeaningHint : copy.showMeaningHint}</Button>}
+    {!forgotten && showHint && hints.length > 0 && <Box sx={{ px: 1.5, py: 1, borderLeft: 2, borderColor: "primary.main", bgcolor: "action.hover", borderRadius: 1 }}><Typography variant="caption" color="text.secondary">{copy.englishMeaningHints}</Typography>{hints.map((hint, index) => <Typography key={index} variant="body2">{index + 1}. {hint}</Typography>)}</Box>}
+    {forgotten && <Box sx={{ px: 1.5, py: 1, borderLeft: 2, borderColor: "primary.main", bgcolor: "action.hover", borderRadius: 1 }}><Typography variant="caption" color="text.secondary">{copy.referenceMeanings}</Typography><Typography variant="body2">{(exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" }]).map(meaning => meaning.text).join("；")}</Typography></Box>}
+  </Stack>;
+}
+
 function concurrentOrderedMap<T, R>(items: T[], limit: number, worker: (item: T) => Promise<R>, onProgress: (ready: R[]) => void) {
   const results: Array<R | undefined> = Array(items.length); let nextIndex = 0; let readyCount = 0; let resolveFirst!: (value: R) => void;
   const first = new Promise<R>(resolve => { resolveFirst = resolve; });
@@ -139,6 +152,12 @@ export default function NceeVocabularyClient() {
   const [searchWord, setSearchWord] = useState("");
   const [searchOpen, setSearchOpen] = useState(false); const [searchBusy, setSearchBusy] = useState(false); const [searchResults, setSearchResults] = useState<Exercise[]>([]);
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
+  const speechRequestRef = useRef(0);
+  const speechTimerRef = useRef<number | null>(null);
+  const speechAbortRef = useRef<AbortController | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const recordedAudioRef = useRef(new Map<string, string | null>());
+  const synthesisFailedRef = useRef(false);
   const [deleting, setDeleting] = useState(false); const [transferring, setTransferring] = useState(false);
   const [grade, setGrade] = useState<Grade | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [autoSpeak, setAutoSpeak] = useState(true);
   const [firstLetterHint, setFirstLetterHint] = useState(false);
@@ -181,7 +200,78 @@ export default function NceeVocabularyClient() {
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => { collectionsRef.current = collections; }, [collections]);
-  const speak = useCallback((word: string) => { if (!("speechSynthesis" in window)) return; window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(word); utterance.lang = "en-US"; utterance.rate = .85; window.speechSynthesis.speak(utterance); }, []);
+  const speak = useCallback((word: string, notifyOnFailure = false) => {
+    const requestId = ++speechRequestRef.current;
+    if (speechTimerRef.current !== null) window.clearTimeout(speechTimerRef.current);
+    speechAbortRef.current?.abort();
+    activeAudioRef.current?.pause();
+    activeAudioRef.current = null;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+
+    let reported = false;
+    const reportFailure = () => {
+      if (reported || requestId !== speechRequestRef.current || !notifyOnFailure) return;
+      reported = true;
+      globalToast.warning(copy.pronunciationUnavailable);
+    };
+    const playRecording = async () => {
+      try {
+        let audioUrl = recordedAudioRef.current.get(word);
+        if (audioUrl === undefined) {
+          const controller = new AbortController();
+          speechAbortRef.current = controller;
+          const timeout = window.setTimeout(() => controller.abort(), 6000);
+          try {
+            const response = await fetch(`/api/vocabulary-drill/dictionary?word=${encodeURIComponent(word)}`, { signal: controller.signal });
+            if (!response.ok) throw new Error("Pronunciation lookup failed");
+            const data = await response.json() as { phonetics?: Array<{ accent?: string; audio?: string }> };
+            audioUrl = data.phonetics?.find(item => item.accent === "us" && item.audio)?.audio || data.phonetics?.find(item => item.audio)?.audio || null;
+            recordedAudioRef.current.set(word, audioUrl);
+          } finally { window.clearTimeout(timeout); }
+        }
+        if (requestId !== speechRequestRef.current) return;
+        if (!audioUrl) { reportFailure(); return; }
+        const audio = new Audio(audioUrl);
+        activeAudioRef.current = audio;
+        audio.onended = () => { if (activeAudioRef.current === audio) activeAudioRef.current = null; };
+        audio.onerror = reportFailure;
+        await audio.play();
+      } catch { reportFailure(); }
+    };
+
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined" || synthesisFailedRef.current) {
+      void playRecording();
+      return;
+    }
+    const synthesis = window.speechSynthesis;
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = "en-US";
+    utterance.rate = .85;
+    let started = false;
+    let fallbackStarted = false;
+    const clearTimer = () => { if (speechTimerRef.current !== null) { window.clearTimeout(speechTimerRef.current); speechTimerRef.current = null; } };
+    const startFallback = () => {
+      if (fallbackStarted || requestId !== speechRequestRef.current) return;
+      fallbackStarted = true;
+      synthesisFailedRef.current = true;
+      clearTimer();
+      void playRecording();
+    };
+    utterance.onstart = () => { if (requestId !== speechRequestRef.current) return; started = true; clearTimer(); };
+    utterance.onend = () => { if (requestId !== speechRequestRef.current) return; clearTimer(); if (!started) startFallback(); };
+    utterance.onerror = () => { if (requestId !== speechRequestRef.current) return; startFallback(); };
+    try {
+      synthesis.speak(utterance);
+      speechTimerRef.current = window.setTimeout(() => { if (!started && requestId === speechRequestRef.current) { synthesis.cancel(); startFallback(); } }, 4000);
+    } catch { startFallback(); }
+  }, [copy.pronunciationUnavailable]);
+  useEffect(() => () => {
+    speechRequestRef.current++;
+    if (speechTimerRef.current !== null) window.clearTimeout(speechTimerRef.current);
+    speechAbortRef.current?.abort();
+    activeAudioRef.current?.pause();
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }, []);
   const flushStats = useCallback(async () => {
     if (status !== "authenticated" || user?.status !== 1 || !user.userId) return;
     if (statsFlushRef.current) return statsFlushRef.current;
@@ -201,19 +291,35 @@ export default function NceeVocabularyClient() {
     try { await task; } finally { if (statsFlushRef.current === task) statsFlushRef.current = null; }
   }, [status, user?.status, user?.userId]);
   useEffect(() => { if (status !== "authenticated" || user?.status !== 1) return; const timer = window.setTimeout(() => { void (async () => { try { await flushStats(); const data = await vocabularyDrillApi.userData(); const normalized = data.collections.map(collection => ({ ...collection, items: collection.items.map(item => ({ ...item, sourceWordId: Number(item.sourceWordId), meanings: normalizeMeanings(item.meanings) })) })); collectionsRef.current = normalized; setCollections(normalized); setCollectionId(normalized[0]?.collectionId || ""); } catch { /* retry when the next practice sequence is loaded */ } })(); }, 0); return () => window.clearTimeout(timer); }, [flushStats, status, user?.status, user?.userId]);
-  const fetchWords = useCallback(async (targetDataset: string, targetMode: Mode, ids: number[]) => { if (!ids.length) return []; if (targetDataset.startsWith("collection:")) { const collection = collectionsRef.current.find(item => targetDataset === `collection:${item.collectionId}`); if (!collection) throw new Error("collection_not_found"); const byId = new Map(collection.items.map(item => [Number(item.sourceWordId), item])); return ids.flatMap(rawId => { const id = Number(rawId); const item = byId.get(id); if (!item) return []; return [{ id, english: item.word, phonetic: item.phonetic, chinese: item.meanings.map(m => m.text).join("；"), hintIndexes: randomHintIndexes(item.word, firstLetterHint), duplicateCount: 1, meanings: item.meanings, sourceDataset: item.dataset }]; }); } const response = await fetch(`/api/vocabulary-drill?dataset=${targetDataset}&mode=${targetMode}&ids=${ids.join(",")}`, { cache: "no-store" }); if (!response.ok) throw new Error(); const words = (await response.json()).words as Exercise[]; return firstLetterHint ? words.map(word => ({ ...word, hintIndexes: randomHintIndexes(word.english, true) })) : words; }, [firstLetterHint]);
+  const fetchWords = useCallback(async (targetDataset: string, targetMode: Mode, ids: number[]) => { if (!ids.length) return []; if (targetDataset.startsWith("collection:")) { const collection = collectionsRef.current.find(item => targetDataset === `collection:${item.collectionId}`); if (!collection) throw new Error("collection_not_found"); const byId = new Map(collection.items.map(item => [Number(item.sourceWordId), item])); return ids.flatMap(rawId => { const id = Number(rawId); const item = byId.get(id); if (!item) return []; return [{ id, english: item.word, phonetic: item.phonetic, chinese: item.meanings.map(m => m.text).join("；"), hintIndexes: randomHintIndexes(item.word, firstLetterHint), duplicateCount: 1, meanings: item.meanings, sourceDataset: item.dataset }]; }); } const response = await fetch(`/api/vocabulary-drill?dataset=${targetDataset}&mode=${targetMode}&ids=${ids.join(",")}`, { cache: "no-store" }); if (!response.ok) throw new Error(); const words = (await response.json()).words as Exercise[]; const prepared = targetMode === "word" ? words.map(word => ({ ...word, quizDataset: targetDataset })) : words; return firstLetterHint ? prepared.map(word => ({ ...word, hintIndexes: randomHintIndexes(word.english, true) })) : prepared; }, [firstLetterHint]);
   const enrichWord = useCallback(async (word: Exercise) => {
-    if (word.meanings?.length) return word;
-    if (!selected || !provider) return { ...word, meanings: [{ text: word.chinese, partOfSpeech: "other" as const }] };
-    const byId = new Map<number, DrillMeaning[]>(); let completed = false;
-    try { const client = new LlmClient({ profile: provider, model: selected.modelId, maxToolRounds: 2 }); for await (const event of client.stream({
-      messages: [{ role: "user", content: JSON.stringify({ id: word.id, english: word.english, dictionary: word.chinese }) }],
-      systemPrompt: "预处理一个英语默写词。拆分词典中的不同常见中文义项，并标注词性。词性只能是 v/adj/adv/n/prep/conj/pron/other。不要虚构词义；相近表述合并。必须调用 prepare_word。",
-      maxTokens: 3000, temperature: .1, isComplete: () => completed, incompletePrompt: "立即调用 prepare_word。", maxIncompleteRetries: 1,
-      tools: [{ name: "prepare_word", description: "提交单词的结构化义项", parameters: { type: "object", properties: { id: { type: "integer" }, meanings: { type: "array", minItems: 1, items: { type: "object", properties: { text: { type: "string" }, partOfSpeech: { type: "string", enum: ["v","adj","adv","n","prep","conj","pron","other"] } }, required: ["text","partOfSpeech"], additionalProperties: false } } }, required: ["id","meanings"], additionalProperties: false }, execute: args => { byId.set(Number(args.id), args.meanings as DrillMeaning[]); completed = true; return { accepted: true }; } }]
-    })) { if (event.type === "done") { const usage = event.response.usage; setTokenUsage(value => value + (usage?.totalTokens ?? (usage?.inputTokens || 0) + (usage?.outputTokens || 0))); break; } } } catch { /* dictionary fallback keeps practice available */ }
-    return { ...word, meanings: byId.get(word.id) || [{ text: word.chinese, partOfSpeech: "other" as const }] };
-  }, [provider, selected]);
+    const fallback = word.meanings?.length ? word.meanings : [{ text: word.chinese, partOfSpeech: "other" as const }];
+    if (!word.quizDataset) return { ...word, meanings: fallback };
+    if (status === "uninitialized" || status === "authenticating" || status === "refreshing") return { ...word, meanings: fallback };
+    try {
+      const cached = await vocabularyDrillApi.wordQuiz(word.quizDataset, word.id);
+      if (cached.quiz?.meanings.length) return { ...word, meanings: cached.quiz.meanings, meaningHints: cached.quiz.hints };
+      if (!cached.canGenerate || !selected || !provider) return { ...word, meanings: fallback };
+
+      const response = await fetch(`/api/dictionary/oxford10c?word=${encodeURIComponent(word.english)}`);
+      if (!response.ok) return { ...word, meanings: fallback };
+      const dictionary = await response.json() as { entry: Parameters<typeof dictionaryQuizSenses>[0] };
+      const senses = dictionaryQuizSenses(dictionary.entry);
+      if (!senses.length) return { ...word, meanings: fallback };
+
+      let selectedSenseKeys: string[] = []; let completed = false;
+      const client = new LlmClient({ profile: provider, model: selected.modelId, maxToolRounds: 2 });
+      for await (const event of client.stream({
+        messages: [{ role: "user", content: JSON.stringify({ word: word.english, senses }) }],
+        systemPrompt: "为英语词义默写练习筛选词典义项。只保留现代通用英语中最常见、最值得学习的义项；排除罕见、古旧、方言、极专业及仅限固定短语的义项。不得改写或新增释义，必须通过 select_common_senses 返回 1 到 8 个给定 sense key。",
+        maxTokens: 512, temperature: .1, isComplete: () => completed, incompletePrompt: "立即调用 select_common_senses。", maxIncompleteRetries: 1,
+        tools: [{ name: "select_common_senses", description: "按词典顺序选择常用义项", parameters: { type: "object", properties: { senseKeys: { type: "array", minItems: 1, maxItems: Math.min(8, senses.length), uniqueItems: true, items: { type: "string", enum: senses.map(sense => sense.key) } } }, required: ["senseKeys"], additionalProperties: false }, execute: args => { selectedSenseKeys = Array.isArray(args.senseKeys) ? args.senseKeys.map(String) : []; completed = selectedSenseKeys.length > 0; return { accepted: completed }; } }],
+      })) { if (event.type === "done") { const usage = event.response.usage; setTokenUsage(value => value + (usage?.totalTokens ?? (usage?.inputTokens || 0) + (usage?.outputTokens || 0))); break; } }
+      if (!selectedSenseKeys.length) return { ...word, meanings: fallback };
+      const saved = await vocabularyDrillApi.cacheWordQuiz({ dataset: word.quizDataset, sourceWordId: word.id, word: word.english, senseKeys: selectedSenseKeys, generatorModel: selected.modelId });
+      return { ...word, meanings: saved.quiz?.meanings.length ? saved.quiz.meanings : fallback, meaningHints: saved.quiz?.hints };
+    } catch { return { ...word, meanings: fallback }; }
+  }, [provider, selected, status]);
   const loadMode = useCallback(async (targetDataset: string, targetMode: Mode, reset = false, forceReorder = reset) => { const sequence = ++loadSequenceRef.current; loadingRef.current = true; pendingBucketRef.current = null; refillInFlightRef.current = false; setLoading(true); setExercise(null); setPosition(0); setTotal(0); setBucketRemaining(0); setError(""); setGrade(null); setPhoneticRevealed(false); setForgotten(false); setWrongFlash(false); setAnswerCorrect(false); setAnswer(""); setMeaningAnswers([]); try {
     await flushStats();
     if (sequence !== loadSequenceRef.current) return;
@@ -239,14 +345,14 @@ export default function NceeVocabularyClient() {
     progress.orderGeneratedAt = orderGeneratedAt;
     localStorage.setItem(key, JSON.stringify(progress));
     progressRef.current = progress; setPosition(progress.index + 1); setTotal(progress.order.length); const initialSize = targetMode === "word" ? WORD_INITIAL_BUCKET_SIZE : DEFAULT_BUCKET_SIZE; const fetched = await fetchWords(targetDataset, targetMode, progress.order.slice(progress.index, progress.index + initialSize)); if (!fetched.length) throw new Error("words_not_found"); if (sequence !== loadSequenceRef.current) return;
-    if (targetMode === "word") { let shown = false; const queue = concurrentOrderedMap(fetched, WORD_WORKERS, enrichWord, ready => { if (sequence !== loadSequenceRef.current) return; bucketRef.current = ready; setBucketRemaining(ready.length); if (!shown) { shown = true; setExercise(ready[0]); setMeaningAnswers(Array(ready[0]?.meanings?.length || 1).fill("")); setLoading(false); loadingRef.current = false; } }); pendingBucketRef.current = queue.done; await queue.first; void queue.done.then(words => { if (sequence === loadSequenceRef.current) { bucketRef.current = words; pendingBucketRef.current = null; setBucketRemaining(words.length); } }); }
-    else { bucketRef.current = fetched; setExercise(fetched[0] || null); setMeaningAnswers(Array(fetched[0]?.meanings?.length || 1).fill("")); setBucketRemaining(fetched.length); }
+    if (targetMode === "word") { let shown = false; const queue = concurrentOrderedMap(fetched, WORD_WORKERS, enrichWord, ready => { if (sequence !== loadSequenceRef.current) return; bucketRef.current = ready; setBucketRemaining(ready.length); if (!shown) { shown = true; setExercise(ready[0]); setMeaningAnswers([""]); setLoading(false); loadingRef.current = false; } }); pendingBucketRef.current = queue.done; await queue.first; void queue.done.then(words => { if (sequence === loadSequenceRef.current) { bucketRef.current = words; pendingBucketRef.current = null; setBucketRemaining(words.length); } }); }
+    else { bucketRef.current = fetched; setExercise(fetched[0] || null); setMeaningAnswers([""]); setBucketRemaining(fetched.length); }
   } catch { if (sequence === loadSequenceRef.current) { bucketRef.current = []; progressRef.current = null; setExercise(null); setError(copy.loadFailed); } } finally { if (sequence === loadSequenceRef.current) { loadingRef.current = false; setLoading(false); } } }, [copy.loadFailed, enrichWord, fetchWords, flushStats]);
   const nextQuestion = useCallback(async () => { const progress = progressRef.current; if (!progress || loadingRef.current) return; if (pendingBucketRef.current) { setExercise(null); setLoading(true); bucketRef.current = await pendingBucketRef.current; pendingBucketRef.current = null; setLoading(false); } setGrade(null); setPhoneticRevealed(false); setForgotten(false); setWrongFlash(false); setAnswerCorrect(false); setAnswer(""); progress.index++;
     if (progress.index >= progress.order.length) { await loadMode(dataset, mode, true, false); return; }
-    localStorage.setItem(`${PROGRESS_PREFIX}${dataset}:${mode}`, JSON.stringify(progress)); const remaining = bucketRef.current.slice(1); bucketRef.current = remaining; setBucketRemaining(remaining.length); setExercise(remaining[0] || null); setMeaningAnswers(Array(remaining[0]?.meanings?.length || 1).fill("")); setPosition(progress.index + 1);
+    localStorage.setItem(`${PROGRESS_PREFIX}${dataset}:${mode}`, JSON.stringify(progress)); const remaining = bucketRef.current.slice(1); bucketRef.current = remaining; setBucketRemaining(remaining.length); setExercise(remaining[0] || null); setMeaningAnswers([""]); setPosition(progress.index + 1);
     const refillThreshold = mode === "word" ? WORD_REFILL_THRESHOLD : DEFAULT_REFILL_THRESHOLD; const refillTarget = mode === "word" ? WORD_BUCKET_SIZE : DEFAULT_BUCKET_SIZE;
-    if (remaining.length < refillThreshold && !refillInFlightRef.current) { refillInFlightRef.current = true; const sequence = loadSequenceRef.current; if (!remaining.length) { loadingRef.current = true; setLoading(true); } try { const start = progress.index + remaining.length; const ids = progress.order.slice(start, progress.index + refillTarget); const fetched = await fetchWords(dataset, mode, ids); if (mode === "word") { let appended = 0; const queue = concurrentOrderedMap(fetched, WORD_WORKERS, enrichWord, ready => { if (sequence !== loadSequenceRef.current) return; const additions = ready.slice(appended); appended = ready.length; bucketRef.current = [...bucketRef.current, ...additions]; setBucketRemaining(bucketRef.current.length); if (!remaining.length && bucketRef.current.length) { setExercise(bucketRef.current[0]); setMeaningAnswers(Array(bucketRef.current[0]?.meanings?.length || 1).fill("")); setLoading(false); loadingRef.current = false; } }); void queue.done.catch(() => { if (sequence === loadSequenceRef.current) setError(copy.loadFailed); }).finally(() => { if (sequence === loadSequenceRef.current) refillInFlightRef.current = false; }); }
+    if (remaining.length < refillThreshold && !refillInFlightRef.current) { refillInFlightRef.current = true; const sequence = loadSequenceRef.current; if (!remaining.length) { loadingRef.current = true; setLoading(true); } try { const start = progress.index + remaining.length; const ids = progress.order.slice(start, progress.index + refillTarget); const fetched = await fetchWords(dataset, mode, ids); if (mode === "word") { let appended = 0; const queue = concurrentOrderedMap(fetched, WORD_WORKERS, enrichWord, ready => { if (sequence !== loadSequenceRef.current) return; const additions = ready.slice(appended); appended = ready.length; bucketRef.current = [...bucketRef.current, ...additions]; setBucketRemaining(bucketRef.current.length); if (!remaining.length && bucketRef.current.length) { setExercise(bucketRef.current[0]); setMeaningAnswers([""]); setLoading(false); loadingRef.current = false; } }); void queue.done.catch(() => { if (sequence === loadSequenceRef.current) setError(copy.loadFailed); }).finally(() => { if (sequence === loadSequenceRef.current) refillInFlightRef.current = false; }); }
       else if (sequence === loadSequenceRef.current) { bucketRef.current = [...bucketRef.current, ...fetched]; setBucketRemaining(bucketRef.current.length); refillInFlightRef.current = false; if (!remaining.length) { setExercise(fetched[0] || null); setLoading(false); loadingRef.current = false; } }
     } catch { if (sequence === loadSequenceRef.current) { refillInFlightRef.current = false; setError(copy.loadFailed); setLoading(false); loadingRef.current = false; } } }
   }, [copy.loadFailed, dataset, enrichWord, fetchWords, loadMode, mode]);
@@ -262,7 +368,7 @@ export default function NceeVocabularyClient() {
   const revealPronunciation = useCallback(() => {
     if (mode !== "meaning" || !exercise || loading) return;
     setPhoneticRevealed(true);
-    speak(exercise.english);
+    speak(exercise.english, true);
   }, [exercise, loading, mode, speak]);
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -380,7 +486,7 @@ export default function NceeVocabularyClient() {
   }
 
   async function forgetAnswer() {
-    if (!exercise || loading) return; recordWrong(); setForgotten(true); setGrade(null); if (mode === "word") setMeaningAnswers((exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]).map(meaning => meaning.text)); else setAnswer(exercise.english);
+    if (!exercise || loading) return; recordWrong(); setForgotten(true); setGrade(null); if (mode === "word") setMeaningAnswers([(exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }])[0]?.text || ""]); else setAnswer(exercise.english);
     if (status !== "authenticated" || user?.status !== 1) return;
     try { let target = collections.find(item => item.name.toLocaleLowerCase() === "default"); if (!target) { const created = await vocabularyDrillApi.createCollection("default"); target = created.collection; setCollections(current => [...current, created.collection]); }
       const meanings = exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]; const sourceDataset = exercise.sourceDataset || dataset; await vocabularyDrillApi.addItem({ collectionId: target.collectionId, dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, phonetics: exercise.phonetics, meanings, example: exercise.examples?.[0]?.en || "" }); setCollections(current => current.map(collection => collection.collectionId !== target.collectionId || collection.items.some(item => Number(item.sourceWordId) === exercise.id && item.dataset === sourceDataset) ? collection : { ...collection, items: [...collection.items, { dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, phonetics: exercise.phonetics, meanings, example: exercise.examples?.[0]?.en || "", appearanceCount: 0, correctCount: 0, wrongCount: 0 }] })); setToast(copy.answerSavedToDefault);
@@ -482,11 +588,11 @@ export default function NceeVocabularyClient() {
       {error && <Alert severity="error">{error}</Alert>}
       {loading && !exercise ? <Box sx={{ display: "grid", placeItems: "center", py: 7 }}><CircularProgress /></Box> : exercise && <>
         <Box sx={{ display: "grid", placeItems: "center", textAlign: "center", pt: 5.25, pb: .5, position: "relative" }}><Stack direction="row" spacing={.5} sx={{ position: "absolute", left: 0, top: 0, alignItems: "center" }}><Tooltip title={copy.lookUpCurrentWord}><IconButton size="small" color="primary" aria-label={copy.openDictionary} onClick={() => setDictionaryOpen(true)} sx={{ width: 36, height: 36, border: 1, borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}><MenuBookRoundedIcon fontSize="small" /></IconButton></Tooltip>{mode === "phonetic" && <AutoSpeakButton copy={copy} active={autoSpeak} onClick={() => { const checked = !autoSpeak; setAutoSpeak(checked); localStorage.setItem(AUTO_SPEAK_KEY, String(checked)); }} />}{mode === "meaning" && <MeaningOptionButtons copy={copy} firstLetterHint={firstLetterHint} pauseAfterCorrect={pauseAfterCorrect} onFirstLetterHint={() => { const checked = !firstLetterHint; setFirstLetterHint(checked); localStorage.setItem(FIRST_LETTER_HINT_KEY, String(checked)); }} onPauseAfterCorrect={() => { const checked = !pauseAfterCorrect; setPauseAfterCorrect(checked); localStorage.setItem(PAUSE_AFTER_CORRECT_KEY, String(checked)); }} />}</Stack><Stack direction="row" sx={{ position: "absolute", right: 0, top: 0 }}>{dataset.startsWith("collection:") && <><IconButton size="small" color="primary" title={`${collections.find(item => dataset === `collection:${item.collectionId}`)?.name.toLocaleLowerCase() === "transferred" ? copy.restoreToOriginalCollection : copy.moveToTransferred} (Ctrl + I)`} disabled={transferring || deleting} onClick={() => void transferCollectionItem()}>{transferring ? <CircularProgress size={18} /> : <DriveFileMoveRoundedIcon fontSize="small" />}</IconButton><IconButton size="small" color="error" title={copy.removeFromCollectionWithShortcut} disabled={deleting || transferring} onClick={() => void deleteFromCollection()}>{deleting ? <CircularProgress size={18} /> : <DeleteOutlineRoundedIcon fontSize="small" />}</IconButton></>}<IconButton size="small" title={copy.favorite} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setFavoriteOpen(true)}><BookmarkAddRoundedIcon fontSize="small" /></IconButton></Stack>
-          {mode === "phonetic" && <PronunciationCard exercise={exercise} listenLabel={copy.listen} onSpeak={() => speak(exercise.english)} />}
+          {mode === "phonetic" && <PronunciationCard exercise={exercise} listenLabel={copy.listen} onSpeak={() => speak(exercise.english, true)} />}
           {mode === "meaning" && <Stack spacing={1} sx={{ width: "100%", alignItems: "center" }}><MeaningDisplay exercise={exercise} />{exercise.duplicateCount > 1 && <Chip size="small" variant="outlined" label={`${copy.ambiguous} (${exercise.duplicateCount})`} />}{phoneticRevealed && <PronunciationCard exercise={exercise} listenLabel={copy.listen} />}<Tooltip title={copy.showPronunciationWithShortcut}><Button size="small" variant="text" startIcon={<CampaignRoundedIcon />} onClick={revealPronunciation}>{copy.showPronunciation}</Button></Tooltip></Stack>}
-          {mode === "word" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" color={wrongFlash ? "error" : "primary"} sx={{ fontWeight: 750, animation: wrongFlash ? "wrongPulse .22s ease-in-out 3" : "none", "@keyframes wrongPulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: .2 } } }}>{exercise.english}</Typography><Stack direction="row" spacing={.5}>{(exercise.meanings || []).map((meaning, index) => <Chip key={index} size="small" label={meaning.partOfSpeech} />)}</Stack></Stack>}
+          {mode === "word" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" color={wrongFlash ? "error" : "primary"} sx={{ fontWeight: 750, animation: wrongFlash ? "wrongPulse .22s ease-in-out 3" : "none", "@keyframes wrongPulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: .2 } } }}>{exercise.english}</Typography><Stack direction="row" spacing={.5}>{[...new Set((exercise.meanings || []).map(meaning => meaning.partOfSpeech))].map(part => <Chip key={part} size="small" label={part} />)}</Stack></Stack>}
         </Box>
-        {mode === "meaning" ? <SpellingSlots inputRef={answerInputRef} word={exercise.english} hintIndexes={exercise.hintIndexes} value={answer} label={copy.answerWord} wrongFlash={wrongFlash} correct={answerCorrect} autoFilled={forgotten} onChange={setAnswer} onSubmit={() => void checkAnswer()} onForget={() => void forgetAnswer()} /> : mode === "word" ? <Stack spacing={1}>{(exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]).map((meaning, index) => <TextField key={index} inputRef={index === 0 ? answerInputRef : undefined} autoFocus={index === 0} multiline minRows={2} label={`${meaning.partOfSpeech} · ${copy.answerMeaning} ${index + 1}`} value={meaningAnswers[index] || ""} onChange={event => setMeaningAnswers(values => { const next = [...values]; next[index] = event.target.value; return next; })} onKeyDown={event => { if (event.key === ";") { event.preventDefault(); void forgetAnswer(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />)}</Stack> : <TextField inputRef={answerInputRef} autoFocus label={copy.answerWord} value={answer} error={wrongFlash} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === ";") { event.preventDefault(); void forgetAnswer(); } else if (event.key === "Enter") { event.preventDefault(); void checkAnswer(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />}
+        {mode === "meaning" ? <SpellingSlots inputRef={answerInputRef} word={exercise.english} hintIndexes={exercise.hintIndexes} value={answer} label={copy.answerWord} wrongFlash={wrongFlash} correct={answerCorrect} autoFilled={forgotten} onChange={setAnswer} onSubmit={() => void checkAnswer()} onForget={() => void forgetAnswer()} /> : mode === "word" ? <WordMeaningAnswer key={`${dataset}:${position}:${exercise.id}`} exercise={exercise} value={meaningAnswers[0] || ""} onChange={value => setMeaningAnswers([value])} onForget={() => void forgetAnswer()} inputRef={answerInputRef} forgotten={forgotten} copy={copy} /> : <TextField inputRef={answerInputRef} autoFocus label={copy.answerWord} value={answer} error={wrongFlash} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === ";") { event.preventDefault(); void forgetAnswer(); } else if (event.key === "Enter") { event.preventDefault(); void checkAnswer(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />}
         {(forgotten || answerCorrect) && Boolean(exercise.examples?.length) && <Box sx={{ p: 2, borderLeft: 3, borderColor: "primary.main", bgcolor: "action.hover", borderRadius: 1 }}><Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{copy.dictionaryExamples}</Typography>{exercise.examples?.slice(0, 3).map((example, index) => <Box key={index} sx={{ mt: .75 }}><Typography variant="body2" sx={{ fontStyle: "italic" }}>{example.en}</Typography>{example.zh && <Typography variant="body2" color="text.secondary">{example.zh}</Typography>}</Box>)}</Box>}
         <Tooltip title={copy.forgotWithShortcut}><Box component="span" sx={{ display: "flex", width: "100%" }}><Button fullWidth size="large" variant="outlined" disabled={loading || forgotten || answerCorrect} onClick={() => void forgetAnswer()}>{copy.forgot}<Box component="kbd" sx={{ minWidth: 22, height: 22, ml: .75, px: .6, display: "inline-grid", placeItems: "center", border: "1px solid #808080", borderRadius: 1, bgcolor: "background.paper", color: "inherit", boxShadow: "0 2px 0 rgba(0,0,0,.35)", fontFamily: "monospace", fontSize: 13, lineHeight: 1 }}>;</Box></Button></Box></Tooltip>
         {forgotten || answerCorrect ? <Tooltip title={`${copy.next} (Ctrl + J)`}><Button fullWidth size="large" variant="contained" color={answerCorrect ? "success" : "primary"} endIcon={<NavigateNextRoundedIcon />} onClick={() => void nextQuestion()}>{copy.next}</Button></Tooltip> : !grade ? <Tooltip title={mode === "word" ? copy.check : `${copy.check} (Enter)`}><Box component="span" sx={{ display: "flex", justifyContent: "center" }}><Button size="large" variant="contained" disabled={loading || (mode === "word" ? !meaningAnswers.some(value => value.trim()) || !selected || !provider : !answer.trim())} onClick={() => void checkAnswer()}>{loading ? copy.checking : copy.check}</Button></Box></Tooltip> : <><Alert severity="warning">{grade.feedback}</Alert><Tooltip title={`${copy.next} (Ctrl + J)`}><Button fullWidth size="large" variant="contained" endIcon={<NavigateNextRoundedIcon />} onClick={() => void nextQuestion()}>{copy.next}</Button></Tooltip></>}
