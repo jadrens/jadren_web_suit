@@ -3,7 +3,7 @@ import path from "node:path";
 
 export const documentation = [{
   slug: "dictionary",
-  toolHref: "/tools/dictionary",
+  toolHref: "/tools/english-learner/dictionary",
   toolLabel: { zh: "打开词典", en: "Open dictionary" },
   title: { zh: "词典 API", en: "Dictionary API" },
   description: { zh: "查询英语单词与短语，获取完整词条和前缀建议。", en: "Look up English words and phrases, retrieve complete entries, and request prefix suggestions." },

@@ -82,6 +82,8 @@ bun run dev
 
 默认访问 `http://localhost:3000`。如需使用预设本地域名，可在 `/etc/hosts` 添加 `127.0.0.1 jadren.debug`，然后访问 `http://jadren.debug:3000`。
 
+词汇练习的服务端发音兜底需要安装 `pico2wave`、`espeak-ng` 或 `espeak`（按此顺序尝试）。发音 API 的每 IP 限流记录保存在可写的 `.data/tts-request-monitor.sqlite` 中。
+
 ### 博客投稿与审核
 
 1. 用户注册并验证邮箱。
@@ -249,6 +251,8 @@ bun run dev
 ```
 
 Open `http://localhost:3000`. For the configured local domain, add `127.0.0.1 jadren.debug` to `/etc/hosts`, then open `http://jadren.debug:3000`.
+
+The vocabulary pronunciation API needs `pico2wave`, `espeak-ng`, or `espeak` installed on the server, tried in that order. Its per-IP rate limit uses the writable `.data/tts-request-monitor.sqlite` file.
 
 ### Article submission and moderation
 

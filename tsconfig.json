@@ -21,7 +21,8 @@
       "@config/*": ["./src/config/*"],
       "@styles/*": ["./src/styles/*"],
       "@lib/*": ["./src/lib/*"],
-      "@theme/*": ["./src/theme/*"]
+      "@theme/*": ["./src/theme/*"],
+      "@dns/*": ["./external_tools/dns/src/*"]
     }
   },
   "include": [
@@ -33,5 +34,5 @@
     "build/types/**/*.ts",
     "build/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "external_tools/dns"]
 }

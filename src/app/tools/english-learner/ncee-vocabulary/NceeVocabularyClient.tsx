@@ -33,7 +33,7 @@ import { getLlmModels, getLlmProfiles, LlmClient, type LlmModelProfile, type Llm
 import { useAuth } from "@lib/client-api/use-auth";
 import { vocabularyDrillApi, type DrillMeaning, type VocabularyCollection } from "@lib/client-api";
 import { dictionaryQuizSenses } from "@lib/vocabulary-practice/word-quiz";
-import { DictionaryLookup } from "../../dictionary/DictionaryClient";
+import { DictionaryLookup } from "../dictionary/DictionaryClient";
 
 type Mode = "phonetic" | "meaning" | "word";
 interface Exercise { id: number; english: string; phonetic: string; phonetics?: Array<{ accent: "uk" | "us" | "other"; text: string }>; chinese: string; examples?: Array<{ en: string; zh: string }>; hintIndexes: number[]; duplicateCount: number; meanings?: DrillMeaning[]; meaningHints?: string[]; sourceDataset?: string; quizDataset?: string }
@@ -73,11 +73,11 @@ const meaningColors: Record<DrillMeaning["partOfSpeech"], "primary" | "secondary
   pron: "error", int: "error", num: "info", art: "default", other: "default",
 };
 
-function MeaningDisplay({ exercise }: { exercise: Exercise }) {
+function MeaningDisplay({ exercise, label }: { exercise: Exercise; label: string }) {
   const meanings = exercise.meanings?.length
     ? exercise.meanings
     : [{ partOfSpeech: "other" as const, text: exercise.chinese }];
-  return <Stack spacing={.75} sx={{ width: "100%", maxWidth: 800 }}>
+  return <Stack role="region" aria-label={label} tabIndex={0} spacing={.75} sx={{ width: "100%", maxWidth: 800, maxHeight: "min(32dvh, 300px)", overflowY: "auto", overscrollBehavior: "contain", pr: .5 }}>
     {meanings.map((meaning, meaningIndex) => {
       const definitions = meaning.text.split(/\s*\/\s*/).map(item => item.trim()).filter(Boolean);
       return <Box key={`${meaning.partOfSpeech}-${meaningIndex}`} sx={{ display: "grid", gridTemplateColumns: { xs: "52px minmax(0,1fr)", sm: "58px minmax(0,1fr)" }, gap: 1, alignItems: "start", p: 1, border: 1, borderColor: "divider", borderRadius: 2, bgcolor: "background.paper", textAlign: "left" }}>
@@ -153,11 +153,12 @@ export default function NceeVocabularyClient() {
   const [searchOpen, setSearchOpen] = useState(false); const [searchBusy, setSearchBusy] = useState(false); const [searchResults, setSearchResults] = useState<Exercise[]>([]);
   const [dictionaryOpen, setDictionaryOpen] = useState(false);
   const speechRequestRef = useRef(0);
-  const speechTimerRef = useRef<number | null>(null);
+  const speechCancelRef = useRef<(() => void) | null>(null);
   const speechAbortRef = useRef<AbortController | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-  const recordedAudioRef = useRef(new Map<string, string | null>());
-  const synthesisFailedRef = useRef(false);
+  const generatedAudioRef = useRef(new Map<string, string>());
+  const browserTtsFailedRef = useRef(false);
+  const systemTtsFailedRef = useRef(false);
   const [deleting, setDeleting] = useState(false); const [transferring, setTransferring] = useState(false);
   const [grade, setGrade] = useState<Grade | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [autoSpeak, setAutoSpeak] = useState(true);
   const [firstLetterHint, setFirstLetterHint] = useState(false);
@@ -202,7 +203,7 @@ export default function NceeVocabularyClient() {
   useEffect(() => { collectionsRef.current = collections; }, [collections]);
   const speak = useCallback((word: string, notifyOnFailure = false) => {
     const requestId = ++speechRequestRef.current;
-    if (speechTimerRef.current !== null) window.clearTimeout(speechTimerRef.current);
+    speechCancelRef.current?.();
     speechAbortRef.current?.abort();
     activeAudioRef.current?.pause();
     activeAudioRef.current = null;
@@ -214,62 +215,123 @@ export default function NceeVocabularyClient() {
       reported = true;
       globalToast.warning(copy.pronunciationUnavailable);
     };
-    const playRecording = async () => {
+    const speakWithBrowser = (voice?: SpeechSynthesisVoice) => new Promise<boolean>((resolve) => {
+      if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+        resolve(false);
+        return;
+      }
+      const synthesis = window.speechSynthesis;
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = "en-US";
+      utterance.rate = .9;
+      if (voice) utterance.voice = voice;
+      let startedAt = 0;
+      let finished = false;
+      let timer: number;
+      const finish = (worked: boolean) => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(timer);
+        utterance.onstart = null;
+        utterance.onend = null;
+        utterance.onerror = null;
+        if (speechCancelRef.current === cancel) speechCancelRef.current = null;
+        resolve(worked && requestId === speechRequestRef.current);
+      };
+      const cancel = () => { synthesis.cancel(); finish(false); };
+      speechCancelRef.current = cancel;
+      utterance.onstart = () => {
+        startedAt = performance.now();
+        window.clearTimeout(timer);
+        timer = window.setTimeout(cancel, 15_000);
+      };
+      utterance.onend = () => finish(startedAt > 0 && performance.now() - startedAt > 100);
+      utterance.onerror = () => finish(false);
+      timer = window.setTimeout(cancel, 4_000);
+      try { synthesis.speak(utterance); } catch { finish(false); }
+    });
+
+    const playGenerated = async () => {
       try {
-        let audioUrl = recordedAudioRef.current.get(word);
-        if (audioUrl === undefined) {
+        let audioUrl = generatedAudioRef.current.get(word);
+        if (!audioUrl) {
           const controller = new AbortController();
           speechAbortRef.current = controller;
-          const timeout = window.setTimeout(() => controller.abort(), 6000);
+          const timeout = window.setTimeout(() => controller.abort(), 10_000);
           try {
-            const response = await fetch(`/api/vocabulary-drill/dictionary?word=${encodeURIComponent(word)}`, { signal: controller.signal });
-            if (!response.ok) throw new Error("Pronunciation lookup failed");
-            const data = await response.json() as { phonetics?: Array<{ accent?: string; audio?: string }> };
-            audioUrl = data.phonetics?.find(item => item.accent === "us" && item.audio)?.audio || data.phonetics?.find(item => item.audio)?.audio || null;
-            recordedAudioRef.current.set(word, audioUrl);
-          } finally { window.clearTimeout(timeout); }
+            const response = await fetch("/api/tts/pronunciation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ word }),
+              signal: controller.signal,
+            });
+            if (response.status === 429) {
+              if (notifyOnFailure && requestId === speechRequestRef.current) {
+                reported = true;
+                globalToast.warning(copy.pronunciationRateLimited);
+              }
+              return;
+            }
+            if (!response.ok) throw new Error("Pronunciation generation failed");
+            const blob = await response.blob();
+            if (!blob.size || blob.size > 2_000_000 || !blob.type.startsWith("audio/")) throw new Error("Invalid pronunciation audio");
+            if (requestId !== speechRequestRef.current) return;
+            audioUrl = URL.createObjectURL(blob);
+            const cache = generatedAudioRef.current;
+            cache.set(word, audioUrl);
+            if (cache.size > 16) {
+              const oldest = cache.keys().next().value;
+              if (oldest) { URL.revokeObjectURL(cache.get(oldest)!); cache.delete(oldest); }
+            }
+          } finally {
+            window.clearTimeout(timeout);
+            if (speechAbortRef.current === controller) speechAbortRef.current = null;
+          }
         }
         if (requestId !== speechRequestRef.current) return;
-        if (!audioUrl) { reportFailure(); return; }
         const audio = new Audio(audioUrl);
         activeAudioRef.current = audio;
         audio.onended = () => { if (activeAudioRef.current === audio) activeAudioRef.current = null; };
-        audio.onerror = reportFailure;
+        audio.onerror = () => {
+          if (activeAudioRef.current === audio) activeAudioRef.current = null;
+          if (generatedAudioRef.current.get(word) === audioUrl) {
+            generatedAudioRef.current.delete(word);
+            URL.revokeObjectURL(audioUrl);
+          }
+          reportFailure();
+        };
         await audio.play();
       } catch { reportFailure(); }
     };
 
-    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined" || synthesisFailedRef.current) {
-      void playRecording();
-      return;
-    }
-    const synthesis = window.speechSynthesis;
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.lang = "en-US";
-    utterance.rate = .85;
-    let started = false;
-    let fallbackStarted = false;
-    const clearTimer = () => { if (speechTimerRef.current !== null) { window.clearTimeout(speechTimerRef.current); speechTimerRef.current = null; } };
-    const startFallback = () => {
-      if (fallbackStarted || requestId !== speechRequestRef.current) return;
-      fallbackStarted = true;
-      synthesisFailedRef.current = true;
-      clearTimer();
-      void playRecording();
-    };
-    utterance.onstart = () => { if (requestId !== speechRequestRef.current) return; started = true; clearTimer(); };
-    utterance.onend = () => { if (requestId !== speechRequestRef.current) return; clearTimer(); if (!started) startFallback(); };
-    utterance.onerror = () => { if (requestId !== speechRequestRef.current) return; startFallback(); };
-    try {
-      synthesis.speak(utterance);
-      speechTimerRef.current = window.setTimeout(() => { if (!started && requestId === speechRequestRef.current) { synthesis.cancel(); startFallback(); } }, 4000);
-    } catch { startFallback(); }
-  }, [copy.pronunciationUnavailable]);
+    void (async () => {
+      const voices = "speechSynthesis" in window ? window.speechSynthesis.getVoices() : [];
+      const browserVoice = voices.find((voice) => !voice.localService && /^en-US$/i.test(voice.lang))
+        || voices.find((voice) => /^en-US$/i.test(voice.lang))
+        || voices.find((voice) => !voice.localService && /^en(?:-|_)/i.test(voice.lang))
+        || voices.find((voice) => /^en(?:-|_)/i.test(voice.lang));
+      if (!browserTtsFailedRef.current) {
+        if (await speakWithBrowser(browserVoice)) return;
+        if (requestId !== speechRequestRef.current) return;
+        browserTtsFailedRef.current = true;
+      }
+      const localVoice = !systemTtsFailedRef.current && "speechSynthesis" in window
+        ? window.speechSynthesis.getVoices().find((voice) => voice.localService && /^en(?:-|_)/i.test(voice.lang) && voice.voiceURI !== browserVoice?.voiceURI)
+        : undefined;
+      if (localVoice) {
+        if (await speakWithBrowser(localVoice)) return;
+        if (requestId !== speechRequestRef.current) return;
+        systemTtsFailedRef.current = true;
+      }
+      await playGenerated();
+    })();
+  }, [copy.pronunciationRateLimited, copy.pronunciationUnavailable]);
   useEffect(() => () => {
     speechRequestRef.current++;
-    if (speechTimerRef.current !== null) window.clearTimeout(speechTimerRef.current);
+    speechCancelRef.current?.();
     speechAbortRef.current?.abort();
     activeAudioRef.current?.pause();
+    for (const url of generatedAudioRef.current.values()) URL.revokeObjectURL(url);
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
   const flushStats = useCallback(async () => {
@@ -580,7 +642,7 @@ export default function NceeVocabularyClient() {
   }
 
   return <div className="page-below-navbar flex flex-col"><Box component="main" sx={{ flex: 1, px: { xs: 2, md: 3 }, py: 5 }}><Box sx={{ maxWidth: 780, mx: "auto" }}>
-    <Card variant="outlined" sx={{ borderRadius: 3 }}><CardContent><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0,1fr) auto" }, gap: 1.25, alignItems: "center" }}><Autocomplete size="small" options={datasets} value={datasets.find((item) => item.id === dataset) || builtInDatasets[0]} disableClearable getOptionLabel={(item) => item.name} onChange={(_event, value) => setDataset(value.id)} renderInput={(params) => <TextField {...params} label={copy.dataset} slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, readOnly: true, sx: { userSelect: "none", cursor: "pointer" } } }} />} /><Stack direction="row" spacing={.5} sx={{ justifyContent: { xs: "flex-start", md: "flex-end" } }}><Tooltip title={copy.addCustomWord}><span><IconButton size="small" aria-label={copy.addCustomWord} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setCustomWordOpen(true)}><AddRoundedIcon fontSize="small" /></IconButton></span></Tooltip><Tooltip title={copy.createCollection}><span><IconButton size="small" aria-label={copy.createCollection} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => { setResumeFavoriteAfterCollectionCreate(false); setCollectionDialogOpen(true); }}><CreateNewFolderRoundedIcon fontSize="small" /></IconButton></span></Tooltip>{selectedCollection && <Tooltip title={copy.deleteCurrentCollection}><IconButton size="small" color="error" aria-label={copy.deleteCurrentCollection} onClick={() => setCollectionDeleteOpen(true)}><DeleteForeverRoundedIcon fontSize="small" /></IconButton></Tooltip>}</Stack></Box></CardContent><Tabs value={mode} onChange={(_event, value: Mode) => { if (value === "phonetic") choosePhoneticTabGlyph(); setMode(value); window.location.hash = value; }} variant="fullWidth"><Tab value="phonetic" aria-label={copy.phonetic} label={<Tooltip title={copy.phonetic}><Box><ModeLabel from={phoneticTabGlyph} to="A" /></Box></Tooltip>} /><Tab value="meaning" aria-label={copy.meaning} label={<Tooltip title={copy.meaning}><Box><ModeLabel from="文" to="A" /></Box></Tooltip>} /><Tab value="word" aria-label={copy.word} label={<Tooltip title={copy.word}><Box><ModeLabel from="A" to="文" /></Box></Tooltip>} /></Tabs><CardContent><Stack spacing={2.25}>
+    <Card variant="outlined" sx={{ borderRadius: 3, overflow: mode === "meaning" ? "visible" : "hidden" }}><CardContent><Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0,1fr) auto" }, gap: 1.25, alignItems: "center" }}><Autocomplete size="small" options={datasets} value={datasets.find((item) => item.id === dataset) || builtInDatasets[0]} disableClearable getOptionLabel={(item) => item.name} onChange={(_event, value) => setDataset(value.id)} renderInput={(params) => <TextField {...params} label={copy.dataset} slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, readOnly: true, sx: { userSelect: "none", cursor: "pointer" } } }} />} /><Stack direction="row" spacing={.5} sx={{ justifyContent: { xs: "flex-start", md: "flex-end" } }}><Tooltip title={copy.addCustomWord}><span><IconButton size="small" aria-label={copy.addCustomWord} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setCustomWordOpen(true)}><AddRoundedIcon fontSize="small" /></IconButton></span></Tooltip><Tooltip title={copy.createCollection}><span><IconButton size="small" aria-label={copy.createCollection} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => { setResumeFavoriteAfterCollectionCreate(false); setCollectionDialogOpen(true); }}><CreateNewFolderRoundedIcon fontSize="small" /></IconButton></span></Tooltip>{selectedCollection && <Tooltip title={copy.deleteCurrentCollection}><IconButton size="small" color="error" aria-label={copy.deleteCurrentCollection} onClick={() => setCollectionDeleteOpen(true)}><DeleteForeverRoundedIcon fontSize="small" /></IconButton></Tooltip>}</Stack></Box></CardContent><Tabs value={mode} onChange={(_event, value: Mode) => { if (value === "phonetic") choosePhoneticTabGlyph(); setMode(value); window.location.hash = value; }} variant="fullWidth"><Tab value="phonetic" aria-label={copy.phonetic} label={<Tooltip title={copy.phonetic}><Box><ModeLabel from={phoneticTabGlyph} to="A" /></Box></Tooltip>} /><Tab value="meaning" aria-label={copy.meaning} label={<Tooltip title={copy.meaning}><Box><ModeLabel from="文" to="A" /></Box></Tooltip>} /><Tab value="word" aria-label={copy.word} label={<Tooltip title={copy.word}><Box><ModeLabel from="A" to="文" /></Box></Tooltip>} /></Tabs><CardContent><Stack spacing={2.25}>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}><Box sx={{ flex: 1 }}><Typography variant="caption" color="text.secondary">{copy.progress}：{position} / {total || "…"}</Typography><LinearProgress variant={total ? "determinate" : "indeterminate"} value={total ? position / total * 100 : undefined} sx={{ mt: .5 }} /><Stack direction="row" spacing={1.5} sx={{ mt: .5 }}><Typography variant="caption" color="text.secondary">{copy.bucket}: {bucketRemaining} / {bucketCapacity} · {copy.refillThreshold}: {refillThreshold}</Typography>{mode === "word" && <Typography variant="caption" color="text.secondary">{copy.tokens}: {tokenUsage}</Typography>}</Stack></Box><Stack direction="row" spacing={.5}><Tooltip title={copy.sync}><span><IconButton size="small" aria-label={copy.sync} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => { setSyncError(""); setSyncOpen(true); }}><CloudSyncRoundedIcon fontSize="small" /></IconButton></span></Tooltip><Tooltip title={copy.reset}><IconButton size="small" aria-label={copy.reset} disabled={loading} onClick={() => void loadMode(dataset, mode, true)}><RestartAltRoundedIcon fontSize="small" /></IconButton></Tooltip></Stack></Stack>
       <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}><Tooltip title={copy.previousWithShortcut} arrow><span><IconButton aria-label={copy.previous} disabled={loading || position <= 1} onClick={() => void previousQuestion()}><ChevronLeftRoundedIcon /></IconButton></span></Tooltip><TextField fullWidth size="small" label={copy.findWord} value={searchWord} onChange={event => setSearchWord(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void findWord(); } }} slotProps={{ input: { endAdornment: <Tooltip title={copy.searchWithShortcut}><IconButton edge="end" onClick={() => void findWord()}><SearchRoundedIcon /></IconButton></Tooltip> } }} /><Tooltip title={copy.nextWithShortcut} arrow><span><IconButton aria-label={copy.next} disabled={loading || position >= total} onClick={() => void nextQuestion()}><NavigateNextRoundedIcon /></IconButton></span></Tooltip></Stack>
       {mode === "word" && models.length > 0 && <Autocomplete size="small" options={models} value={selected} disableClearable getOptionLabel={(item) => item.name || item.modelId} isOptionEqualToValue={(a, b) => a.id === b.id} onChange={(_e, value) => setModelId(value.id)} renderInput={(params) => <TextField {...params} label={copy.model} />} />}
@@ -589,10 +651,10 @@ export default function NceeVocabularyClient() {
       {loading && !exercise ? <Box sx={{ display: "grid", placeItems: "center", py: 7 }}><CircularProgress /></Box> : exercise && <>
         <Box sx={{ display: "grid", placeItems: "center", textAlign: "center", pt: 5.25, pb: .5, position: "relative" }}><Stack direction="row" spacing={.5} sx={{ position: "absolute", left: 0, top: 0, alignItems: "center" }}><Tooltip title={copy.lookUpCurrentWord}><IconButton size="small" color="primary" aria-label={copy.openDictionary} onClick={() => setDictionaryOpen(true)} sx={{ width: 36, height: 36, border: 1, borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}><MenuBookRoundedIcon fontSize="small" /></IconButton></Tooltip>{mode === "phonetic" && <AutoSpeakButton copy={copy} active={autoSpeak} onClick={() => { const checked = !autoSpeak; setAutoSpeak(checked); localStorage.setItem(AUTO_SPEAK_KEY, String(checked)); }} />}{mode === "meaning" && <MeaningOptionButtons copy={copy} firstLetterHint={firstLetterHint} pauseAfterCorrect={pauseAfterCorrect} onFirstLetterHint={() => { const checked = !firstLetterHint; setFirstLetterHint(checked); localStorage.setItem(FIRST_LETTER_HINT_KEY, String(checked)); }} onPauseAfterCorrect={() => { const checked = !pauseAfterCorrect; setPauseAfterCorrect(checked); localStorage.setItem(PAUSE_AFTER_CORRECT_KEY, String(checked)); }} />}</Stack><Stack direction="row" sx={{ position: "absolute", right: 0, top: 0 }}>{dataset.startsWith("collection:") && <><IconButton size="small" color="primary" title={`${collections.find(item => dataset === `collection:${item.collectionId}`)?.name.toLocaleLowerCase() === "transferred" ? copy.restoreToOriginalCollection : copy.moveToTransferred} (Ctrl + I)`} disabled={transferring || deleting} onClick={() => void transferCollectionItem()}>{transferring ? <CircularProgress size={18} /> : <DriveFileMoveRoundedIcon fontSize="small" />}</IconButton><IconButton size="small" color="error" title={copy.removeFromCollectionWithShortcut} disabled={deleting || transferring} onClick={() => void deleteFromCollection()}>{deleting ? <CircularProgress size={18} /> : <DeleteOutlineRoundedIcon fontSize="small" />}</IconButton></>}<IconButton size="small" title={copy.favorite} disabled={status !== "authenticated" || user?.status !== 1} onClick={() => setFavoriteOpen(true)}><BookmarkAddRoundedIcon fontSize="small" /></IconButton></Stack>
           {mode === "phonetic" && <PronunciationCard exercise={exercise} listenLabel={copy.listen} onSpeak={() => speak(exercise.english, true)} />}
-          {mode === "meaning" && <Stack spacing={1} sx={{ width: "100%", alignItems: "center" }}><MeaningDisplay exercise={exercise} />{exercise.duplicateCount > 1 && <Chip size="small" variant="outlined" label={`${copy.ambiguous} (${exercise.duplicateCount})`} />}{phoneticRevealed && <PronunciationCard exercise={exercise} listenLabel={copy.listen} />}<Tooltip title={copy.showPronunciationWithShortcut}><Button size="small" variant="text" startIcon={<CampaignRoundedIcon />} onClick={revealPronunciation}>{copy.showPronunciation}</Button></Tooltip></Stack>}
+          {mode === "meaning" && <Stack spacing={1} sx={{ width: "100%", alignItems: "center" }}><MeaningDisplay exercise={exercise} label={copy.referenceMeanings} />{exercise.duplicateCount > 1 && <Chip size="small" variant="outlined" label={`${copy.ambiguous} (${exercise.duplicateCount})`} />}{phoneticRevealed && <PronunciationCard exercise={exercise} listenLabel={copy.listen} />}<Tooltip title={copy.showPronunciationWithShortcut}><Button size="small" variant="text" startIcon={<CampaignRoundedIcon />} onClick={revealPronunciation}>{copy.showPronunciation}</Button></Tooltip></Stack>}
           {mode === "word" && <Stack spacing={1} sx={{ alignItems: "center" }}><Typography variant="h3" color={wrongFlash ? "error" : "primary"} sx={{ fontWeight: 750, animation: wrongFlash ? "wrongPulse .22s ease-in-out 3" : "none", "@keyframes wrongPulse": { "0%,100%": { opacity: 1 }, "50%": { opacity: .2 } } }}>{exercise.english}</Typography><Stack direction="row" spacing={.5}>{[...new Set((exercise.meanings || []).map(meaning => meaning.partOfSpeech))].map(part => <Chip key={part} size="small" label={part} />)}</Stack></Stack>}
         </Box>
-        {mode === "meaning" ? <SpellingSlots inputRef={answerInputRef} word={exercise.english} hintIndexes={exercise.hintIndexes} value={answer} label={copy.answerWord} wrongFlash={wrongFlash} correct={answerCorrect} autoFilled={forgotten} onChange={setAnswer} onSubmit={() => void checkAnswer()} onForget={() => void forgetAnswer()} /> : mode === "word" ? <WordMeaningAnswer key={`${dataset}:${position}:${exercise.id}`} exercise={exercise} value={meaningAnswers[0] || ""} onChange={value => setMeaningAnswers([value])} onForget={() => void forgetAnswer()} inputRef={answerInputRef} forgotten={forgotten} copy={copy} /> : <TextField inputRef={answerInputRef} autoFocus label={copy.answerWord} value={answer} error={wrongFlash} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === ";") { event.preventDefault(); void forgetAnswer(); } else if (event.key === "Enter") { event.preventDefault(); void checkAnswer(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />}
+        {mode === "meaning" ? <Box sx={{ position: "sticky", bottom: { xs: 0, sm: 8 }, zIndex: 2, px: 1, py: .5, bgcolor: "background.paper", borderRadius: 2, boxShadow: "0 -4px 16px rgba(0,0,0,.08)" }}><SpellingSlots inputRef={answerInputRef} word={exercise.english} hintIndexes={exercise.hintIndexes} value={answer} label={copy.answerWord} wrongFlash={wrongFlash} correct={answerCorrect} autoFilled={forgotten} onChange={setAnswer} onSubmit={() => void checkAnswer()} onForget={() => void forgetAnswer()} /></Box> : mode === "word" ? <WordMeaningAnswer key={`${dataset}:${position}:${exercise.id}`} exercise={exercise} value={meaningAnswers[0] || ""} onChange={value => setMeaningAnswers([value])} onForget={() => void forgetAnswer()} inputRef={answerInputRef} forgotten={forgotten} copy={copy} /> : <TextField inputRef={answerInputRef} autoFocus label={copy.answerWord} value={answer} error={wrongFlash} onChange={(event) => setAnswer(event.target.value)} onKeyDown={(event) => { if (event.key === ";") { event.preventDefault(); void forgetAnswer(); } else if (event.key === "Enter") { event.preventDefault(); void checkAnswer(); } }} sx={forgotten ? { bgcolor: "rgba(255, 193, 7, .18)" } : undefined} />}
         {(forgotten || answerCorrect) && Boolean(exercise.examples?.length) && <Box sx={{ p: 2, borderLeft: 3, borderColor: "primary.main", bgcolor: "action.hover", borderRadius: 1 }}><Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>{copy.dictionaryExamples}</Typography>{exercise.examples?.slice(0, 3).map((example, index) => <Box key={index} sx={{ mt: .75 }}><Typography variant="body2" sx={{ fontStyle: "italic" }}>{example.en}</Typography>{example.zh && <Typography variant="body2" color="text.secondary">{example.zh}</Typography>}</Box>)}</Box>}
         <Tooltip title={copy.forgotWithShortcut}><Box component="span" sx={{ display: "flex", width: "100%" }}><Button fullWidth size="large" variant="outlined" disabled={loading || forgotten || answerCorrect} onClick={() => void forgetAnswer()}>{copy.forgot}<Box component="kbd" sx={{ minWidth: 22, height: 22, ml: .75, px: .6, display: "inline-grid", placeItems: "center", border: "1px solid #808080", borderRadius: 1, bgcolor: "background.paper", color: "inherit", boxShadow: "0 2px 0 rgba(0,0,0,.35)", fontFamily: "monospace", fontSize: 13, lineHeight: 1 }}>;</Box></Button></Box></Tooltip>
         {forgotten || answerCorrect ? <Tooltip title={`${copy.next} (Ctrl + J)`}><Button fullWidth size="large" variant="contained" color={answerCorrect ? "success" : "primary"} endIcon={<NavigateNextRoundedIcon />} onClick={() => void nextQuestion()}>{copy.next}</Button></Tooltip> : !grade ? <Tooltip title={mode === "word" ? copy.check : `${copy.check} (Enter)`}><Box component="span" sx={{ display: "flex", justifyContent: "center" }}><Button size="large" variant="contained" disabled={loading || (mode === "word" ? !meaningAnswers.some(value => value.trim()) || !selected || !provider : !answer.trim())} onClick={() => void checkAnswer()}>{loading ? copy.checking : copy.check}</Button></Box></Tooltip> : <><Alert severity="warning">{grade.feedback}</Alert><Tooltip title={`${copy.next} (Ctrl + J)`}><Button fullWidth size="large" variant="contained" endIcon={<NavigateNextRoundedIcon />} onClick={() => void nextQuestion()}>{copy.next}</Button></Tooltip></>}

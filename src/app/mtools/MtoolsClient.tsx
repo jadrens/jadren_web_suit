@@ -10,7 +10,7 @@ import { alpha, useTheme } from "@mui/material";
 import DnsIcon from "@mui/icons-material/Dns";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
-import { checkHealth } from "@lib/dns-manager/api";
+import { checkHealth, getApiBase } from "@dns/lib/api";
 
 interface ToolItem {
   key: string;
@@ -46,9 +46,18 @@ export default function MtoolsClient() {
   const [health, setHealth] = useState<boolean | null>(null);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [checking, setChecking] = useState(true);
+  const [apiBase, setApiBase] = useState("");
 
   const doCheck = useCallback(async () => {
     setChecking(true);
+    const configuredBase = getApiBase();
+    setApiBase(configuredBase);
+    if (!configuredBase) {
+      setHealth(null);
+      setLastCheck(null);
+      setChecking(false);
+      return;
+    }
     try {
       const ok = await checkHealth().then(() => true).catch(() => false);
       setHealth(ok);
@@ -179,114 +188,6 @@ export default function MtoolsClient() {
               </Card>
             ))}
           </Box>
-
-          {/* Health check section */}
-          <Typography
-            variant="h5"
-            sx={{
-              fontWeight: 600,
-              fontFamily: "var(--font-inter)",
-              mb: 2,
-            }}
-          >
-            {t.mtools.health.title}
-          </Typography>
-
-          <Card
-            elevation={0}
-            sx={{
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 2,
-              bgcolor: alpha(
-                health === null
-                  ? theme.palette.text.disabled
-                  : health
-                    ? theme.palette.success.main
-                    : theme.palette.error.main,
-                0.04
-              ),
-            }}
-          >
-            <CardContent
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 2,
-                py: 2.5,
-                px: 3,
-                "&:last-child": { pb: 2.5 },
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                {health === null ? (
-                  <Box
-                    sx={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: "50%",
-                      bgcolor: alpha(theme.palette.text.disabled, 0.12),
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontFamily: "var(--font-jetbrains-mono), monospace",
-                        fontSize: "0.7rem",
-                        color: "text.disabled",
-                      }}
-                    >
-                      --
-                    </Typography>
-                  </Box>
-                ) : health ? (
-                  <CheckCircleIcon sx={{ fontSize: 40, color: "success.main" }} />
-                ) : (
-                  <ErrorIcon sx={{ fontSize: 40, color: "error.main" }} />
-                )}
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    {health === null
-                      ? t.mtools.health.checking
-                      : health
-                        ? t.mtools.health.online
-                        : t.mtools.health.offline}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t.mtools.health.serverLabel}
-                  </Typography>
-                </Box>
-              </Box>
-
-              <Box sx={{ textAlign: "right" }}>
-                <Typography variant="body2" color="text.secondary">
-                  {t.mtools.health.lastChecked}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontFamily: "var(--font-jetbrains-mono), monospace",
-                    fontWeight: 500,
-                  }}
-                >
-                  {lastCheck ? formatTimeAgo(lastCheck, t.mtools.health.timeAgo as unknown as Record<string, string>) : "-"}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.disabled"
-                  sx={{
-                    fontFamily: "var(--font-jetbrains-mono), monospace",
-                  }}
-                >
-                  {lastCheck ? formatTime(lastCheck) : ""}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
         </Box>
       </Box>
       <Footer />
