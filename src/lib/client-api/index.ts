@@ -84,7 +84,7 @@ export const vocabularyPracticeApi = {
 
 export const vocabularyDrillApi = {
   wordQuiz: (dataset: string, sourceWordId: number) => apiClient.get<import("./types").VocabularyWordQuizResponse>(`/api/vocabulary-drill/word-quiz?dataset=${encodeURIComponent(dataset)}&sourceWordId=${encodeURIComponent(sourceWordId)}`),
-  cacheWordQuiz: (input: { dataset: string; sourceWordId: number; word: string; senseKeys: string[]; generatorModel: string }) => apiClient.post<import("./types").VocabularyWordQuizResponse, typeof input>("/api/vocabulary-drill/word-quiz", input),
+  cacheWordQuiz: (input: { dataset: string; sourceWordId: number; word: string; exerciseKind: "meanings" | "dictionary"; senseKeys: string[]; generatorModel: string }) => apiClient.post<import("./types").VocabularyWordQuizResponse, typeof input>("/api/vocabulary-drill/word-quiz", input),
   reorderCollection: (collectionId: string) => apiClient.post<{ saved: boolean }, { action: string; collectionId: string }>("/api/vocabulary-drill/user-data", { action: "reorder_collection", collectionId }),
   userData: () => apiClient.get<import("./types").VocabularyDrillUserDataResponse>("/api/vocabulary-drill/user-data"),
   createCollection: (name: string) => apiClient.post<{ collection: import("./types").VocabularyCollection }, { action: string; name: string }>("/api/vocabulary-drill/user-data", { action: "create_collection", name }),

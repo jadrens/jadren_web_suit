@@ -10,6 +10,7 @@ import { refreshCollectionOrders } from "@lib/vocabulary-practice/collection-ord
 import { saveCollectionStats } from "@lib/vocabulary-practice/collection-stats-server";
 import { validReviewEvents } from "@lib/vocabulary-practice/collection-reviews";
 import { reviewItemKey } from "@lib/vocabulary-practice/collection-order";
+import { formatVocabularyPhonetics, type DisplayPhonetic } from "@lib/vocabulary-practice/phonetics";
 
 async function authenticated(request: Request) {
   const user = await requestVocabularyUser(request);
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
       db.query<{ dataset: string; mode: string; word_order: number[]; current_index: number; order_generated_at: Date | null }>("SELECT dataset,mode,word_order,current_index,order_generated_at FROM vocabulary_drill_progress WHERE user_id=$1", [user!.sub]),
     ]);
     const now = Date.now();
-    return NextResponse.json({ collections: collections.rows.map(c => { const practiceOrder = databaseJsonArray<string>(c.practice_order); const ranks = new Map(practiceOrder.map((key, index) => [key, index])); return ({ collectionId: c.collection_id, name: c.name, orderGeneratedAt: c.order_generated_at, practiceOrder, items: items.rows.filter(i => i.collection_id === c.collection_id).sort((a, b) => (ranks.get(reviewItemKey(a)) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(reviewItemKey(b)) ?? Number.MAX_SAFE_INTEGER)).map(i => ({ dataset: i.dataset, sourceWordId: Number(i.source_word_id), word: i.word, phonetic: i.phonetic, phonetics: arrayFromDatabase(i.phonetics), meanings: meaningsFromDatabase(i.meanings), pluralForms: i.plural_forms, pastForms: i.past_forms, example: i.example, definition: i.definition, appearanceCount: Number(i.appearance_count), correctCount: Number(i.correct_count), wrongCount: Number(i.wrong_count), review: reviewSummary(i, now) })) }); }), progress: progress.rows.map(p => ({ dataset: p.dataset, mode: p.mode, order: p.word_order.map(Number), index: p.current_index, orderGeneratedAt: p.order_generated_at })) }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ collections: collections.rows.map(c => { const practiceOrder = databaseJsonArray<string>(c.practice_order); const ranks = new Map(practiceOrder.map((key, index) => [key, index])); return ({ collectionId: c.collection_id, name: c.name, orderGeneratedAt: c.order_generated_at, practiceOrder, items: items.rows.filter(i => i.collection_id === c.collection_id).sort((a, b) => (ranks.get(reviewItemKey(a)) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(reviewItemKey(b)) ?? Number.MAX_SAFE_INTEGER)).map(i => { const phonetics = arrayFromDatabase(i.phonetics) as DisplayPhonetic[]; return ({ dataset: i.dataset, sourceWordId: Number(i.source_word_id), word: i.word, phonetic: formatVocabularyPhonetics(phonetics, i.phonetic), phonetics, meanings: meaningsFromDatabase(i.meanings), pluralForms: i.plural_forms, pastForms: i.past_forms, example: i.example, definition: i.definition, appearanceCount: Number(i.appearance_count), correctCount: Number(i.correct_count), wrongCount: Number(i.wrong_count), review: reviewSummary(i, now) }); }) }); }), progress: progress.rows.map(p => ({ dataset: p.dataset, mode: p.mode, order: p.word_order.map(Number), index: p.current_index, orderGeneratedAt: p.order_generated_at })) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (cause) { return vocabularyAuthFailure(cause) ?? internalError(cause); }
 }
 
@@ -66,7 +67,8 @@ export async function POST(request: Request) {
         let sourceWordId = requestedId;
         if (sourceWordId === null) { const next = await client.query<{ source_word_id: number }>("SELECT COALESCE(MIN(source_word_id),0)-1 AS source_word_id FROM vocabulary_collection_item WHERE collection_id=$1 AND dataset='custom'", [collectionId]); sourceWordId = Number(next.rows[0].source_word_id); }
         const phonetics = Array.isArray(body.phonetics) ? body.phonetics : [];
-        const values = [collectionId, dataset, sourceWordId, word, String(body.phonetic || "").slice(0, 160), JSON.stringify(phonetics), JSON.stringify(meanings), String(body.pluralForms || "").slice(0, 240), String(body.pastForms || "").slice(0, 240), String(body.example || "").slice(0, 4000), String(body.definition || "").slice(0, 4000)];
+        const combinedPhonetic = formatVocabularyPhonetics(phonetics as DisplayPhonetic[], String(body.phonetic || "")).slice(0, 160);
+        const values = [collectionId, dataset, sourceWordId, word, combinedPhonetic, JSON.stringify(phonetics), JSON.stringify(meanings), String(body.pluralForms || "").slice(0, 240), String(body.pastForms || "").slice(0, 240), String(body.example || "").slice(0, 4000), String(body.definition || "").slice(0, 4000)];
         await client.query("INSERT INTO vocabulary_collection_item(collection_id,dataset,source_word_id,word,phonetic,phonetics,meanings,plural_forms,past_forms,example,definition) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9,$10,$11) ON CONFLICT DO NOTHING", values);
         return { dataset, sourceWordId, word, phonetic: values[4], phonetics, meanings, pluralForms: values[7], pastForms: values[8], example: values[9], definition: values[10], appearanceCount: 0, correctCount: 0, wrongCount: 0 };
       });

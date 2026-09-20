@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { apiError, internalError } from "@lib/auth/http";
 import { withTransaction } from "@lib/auth/db";
-import { requestVocabularyUser, requireVocabularyUser, toAttempt, vocabularyAuthFailure, type VocabularyAttemptRow } from "@lib/vocabulary-practice/server";
+import { collectionMeanings, collectionSentencePractice, collectionUsage, collectionUsages, requestVocabularyUser, requireVocabularyUser, vocabularyAuthFailure, type CollectionUsageItemRow } from "@lib/vocabulary-practice/server";
 
 function shortText(value: unknown, max: number) {
   return typeof value === "string" && value.trim() && value.trim().length <= max ? value.trim() : null;
@@ -24,51 +24,36 @@ export async function POST(request: Request) {
     if (!usageId || !question || !exampleSentence || !answer || !feedback || typeof body.isCorrect !== "boolean" || correctedSentence === undefined) {
       return apiError("Invalid practice attempt", 400, "invalid_attempt");
     }
-    const attempt = await withTransaction(async (client) => {
-      const usage = await client.query<{ recent_results: boolean[] }>(
-        "SELECT recent_results FROM vocabulary_usage WHERE usage_id = $1 AND user_id = $2 FOR UPDATE",
-        [usageId, user!.sub]
-      );
-      if (!usage.rows[0]) return null;
-      const recent = [...(usage.rows[0].recent_results || []), body.isCorrect as boolean].slice(-8);
+    const saved = await withTransaction(async (client) => {
+      const items = await client.query<CollectionUsageItemRow>(
+        `SELECT i.collection_id,i.dataset,i.source_word_id,i.word,
+                CASE WHEN q.meanings IS NOT NULL AND jsonb_array_length(q.meanings)>0 THEN q.meanings ELSE i.meanings END AS meanings,
+                i.sentence_practice,i.created_at
+           FROM vocabulary_collection_item i JOIN vocabulary_collection c USING(collection_id)
+           LEFT JOIN vocabulary_word_quiz q ON q.dataset=i.dataset AND q.source_word_id=i.source_word_id AND q.quiz_version >= 2
+          WHERE c.user_id=$1 FOR UPDATE OF i`, [user!.sub]);
+      const item = items.rows.find(row => collectionUsages(row).some(usage => usage.usageId === usageId));
+      if (!item) return null;
+      const meaning = collectionMeanings(item.meanings).find(candidate => collectionUsage(item, candidate).usageId === usageId)!;
+      const current = collectionUsage(item, meaning);
+      const practice = collectionSentencePractice(item.sentence_practice);
+      const existing = practice[usageId];
+      const recent = [...(Array.isArray(existing?.recentResults) ? existing.recentResults : []), body.isCorrect as boolean].slice(-8);
       const rate = `${recent.filter(Boolean).length}/${recent.length}`;
-      await client.query(
-        `UPDATE vocabulary_usage
-            SET last_learn_time = NOW(),
-                correct_count = correct_count + $3,
-                wrong_count = wrong_count + $4,
-                recent_results = CASE
-                  WHEN cardinality(recent_results) >= 8
-                    THEN array_append(recent_results[2:8], $5::boolean)
-                  ELSE array_append(recent_results, $5::boolean)
-                END,
-                last_8_correct_rate = $6,
-                updated_at = NOW()
-          WHERE usage_id = $1 AND user_id = $2`,
-        [usageId, user!.sub, body.isCorrect ? 1 : 0, body.isCorrect ? 0 : 1, body.isCorrect, rate]
-      );
-      const inserted = await client.query<VocabularyAttemptRow>(
-        `INSERT INTO vocabulary_practice_attempt
-          (attempt_id, usage_id, user_id, question, example_sentence, answer,
-           is_correct, feedback, corrected_sentence)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING attempt_id, usage_id, question, example_sentence, answer,
-                   is_correct, feedback, corrected_sentence, created_at`,
-        [randomUUID(), usageId, user!.sub, question, exampleSentence, answer, body.isCorrect, feedback, correctedSentence]
-      );
-      await client.query(
-        `DELETE FROM vocabulary_practice_attempt
-          WHERE attempt_id IN (
-            SELECT attempt_id FROM vocabulary_practice_attempt
-             WHERE usage_id = $1 AND user_id = $2
-             ORDER BY created_at DESC, attempt_id DESC OFFSET 5
-          )`,
-        [usageId, user!.sub]
-      );
-      return { attempt: toAttempt(inserted.rows[0]), last8CorrectRate: rate };
+      const now = new Date().toISOString();
+      const attempt = { attemptId: randomUUID(), question, exampleSentence, answer, isCorrect: body.isCorrect as boolean, feedback, correctedSentence, createdAt: now };
+      practice[usageId] = {
+        prompt: current.prompt, partOfSpeech: meaning.partOfSpeech,
+        lastLearnTime: now, correct: Number(existing?.correct || 0) + (body.isCorrect ? 1 : 0),
+        wrong: Number(existing?.wrong || 0) + (body.isCorrect ? 0 : 1), recentResults: recent,
+        last8CorrectRate: rate, createdAt: existing?.createdAt || current.createdAt, updatedAt: now,
+        attempts: [attempt, ...(Array.isArray(existing?.attempts) ? existing.attempts : [])].slice(0, 5),
+      };
+      await client.query("UPDATE vocabulary_collection_item SET sentence_practice=$4::jsonb WHERE collection_id=$1 AND dataset=$2 AND source_word_id=$3", [item.collection_id, item.dataset, item.source_word_id, JSON.stringify(practice)]);
+      return { attempt, last8CorrectRate: rate };
     });
-    if (!attempt) return apiError("Vocabulary usage was not found", 404, "usage_not_found");
-    return NextResponse.json(attempt, { status: 201 });
+    if (!saved) return apiError("Vocabulary usage was not found", 404, "usage_not_found");
+    return NextResponse.json(saved, { status: 201 });
   } catch (error) {
     return vocabularyAuthFailure(error) ?? internalError(error);
   }

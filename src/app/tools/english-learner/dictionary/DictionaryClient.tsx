@@ -4,9 +4,11 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress,
-  Divider, InputAdornment, Stack, TextField, Typography,
+  Divider, IconButton, InputAdornment, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import MicRoundedIcon from "@mui/icons-material/MicRounded";
+import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import Footer from "@components/ui/layout/Footer";
 import { toast } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
@@ -31,7 +33,15 @@ interface Entry {
   labels?: Record<string, unknown>; forms?: string[]; senses?: Sense[]; phrases?: Phrase[];
 }
 interface LookupResult { query: string; lookupKey: string; resolvedKey: string; isAlias: boolean; entry: Entry }
-interface Suggestion { word: string; lookupKey: string; isAlias: boolean; target: string | null }
+interface Suggestion { word: string; lookupKey: string; isAlias: boolean; target: string | null; meaning?: string | null }
+type Direction = "en-zh" | "zh-en";
+interface BrowserSpeechRecognition {
+  lang: string; continuous: boolean; interimResults: boolean; maxAlternatives: number;
+  start: () => void; stop: () => void; abort: () => void;
+  onstart: (() => void) | null; onend: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
+  onresult: ((event: { results: ArrayLike<{ 0?: { transcript?: string } }> }) => void) | null;
+}
 
 const POS: Record<string, { en: string; zh: string }> = {
   noun: { en: "noun", zh: "名词" }, verb: { en: "verb", zh: "动词" },
@@ -43,6 +53,10 @@ const POS: Record<string, { en: string; zh: string }> = {
 
 function cleanDisplayWord(value: string) {
   return value.replace(/[ˈˌ·]/g, "");
+}
+
+function directionFor(value: string): Direction {
+  return /\p{Script=Han}/u.test(value) ? "zh-en" : "en-zh";
 }
 
 function SenseView({ sense, labels }: { sense: Sense; labels: { examples: string; reference: string } }) {
@@ -71,11 +85,14 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
   const { t, locale } = useI18n();
   const copy = t.tools.dictionary;
   const [input, setInput] = useState(initialWord);
+  const direction = directionFor(input);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [result, setResult] = useState<LookupResult | null>(null);
   const [loading, setLoading] = useState(false);
   const requestRef = useRef(0);
   const initialLookupRef = useRef(false);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  const [listening, setListening] = useState(false);
 
   useEffect(() => {
     const query = input.trim();
@@ -83,22 +100,22 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch(`/api/dictionary/oxford10c/search?q=${encodeURIComponent(query)}&limit=10`, { signal: controller.signal });
+        const response = await fetch(`/api/dictionary/oxford10c/search?q=${encodeURIComponent(query)}&limit=10&direction=${direction}`, { signal: controller.signal });
         if (!response.ok) return;
         const data = await response.json() as { results?: Suggestion[] };
         setSuggestions(data.results || []);
       } catch { /* Suggestions are optional. */ }
     }, 220);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [input]);
+  }, [direction, input]);
 
-  const lookup = async (rawValue = input) => {
+  const lookup = async (rawValue = input, lookupDirection: Direction = directionFor(rawValue)) => {
     const query = rawValue.trim();
     if (!query || query.length > 120) { toast.warning(copy.invalid); return; }
     const request = ++requestRef.current;
     setInput(query); setLoading(true);
     try {
-      const response = await fetch(`/api/dictionary/oxford10c?word=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/dictionary/oxford10c?word=${encodeURIComponent(query)}&direction=${lookupDirection}`);
       const data = await response.json() as LookupResult | { code?: string };
       if (request !== requestRef.current) return;
       if (!response.ok) {
@@ -126,6 +143,28 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
   }, [initialWord]);
 
   const submit = (event: FormEvent) => { event.preventDefault(); void lookup(); };
+  const toggleDictation = () => {
+    if (recognitionRef.current) { recognitionRef.current.stop(); return; }
+    const speechWindow = window as unknown as {
+      SpeechRecognition?: new () => BrowserSpeechRecognition;
+      webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+    };
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) { toast.info(copy.dictationUnavailable); return; }
+    const recognition = new Recognition();
+    recognition.lang = input.trim() ? (direction === "zh-en" ? "zh-CN" : "en-US") : locale === "zh" ? "zh-CN" : "en-US";
+    recognition.continuous = false; recognition.interimResults = false; recognition.maxAlternatives = 1;
+    recognition.onstart = () => setListening(true);
+    recognition.onresult = event => {
+      const transcript = event.results[0]?.[0]?.transcript?.trim();
+      if (transcript) { setInput(transcript); setSuggestions([]); }
+    };
+    recognition.onerror = event => { if (event.error !== "aborted") toast.warning(copy.dictationFailed); };
+    recognition.onend = () => { if (recognitionRef.current === recognition) recognitionRef.current = null; setListening(false); };
+    recognitionRef.current = recognition;
+    try { recognition.start(); } catch { recognitionRef.current = null; setListening(false); toast.warning(copy.dictationFailed); }
+  };
+  useEffect(() => () => recognitionRef.current?.abort(), []);
   const groupedSenses = useMemo(() => {
     const groups = new Map<string, Sense[]>();
     for (const sense of result?.entry.senses || []) {
@@ -138,14 +177,15 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
   return <>
     <Box component={embedded ? "div" : "main"} className={embedded ? undefined : "page-below-navbar"} sx={{ flex: 1, px: embedded ? 0 : 3, py: embedded ? 0 : { xs: 5, md: 8 } }}>
       <Box sx={{ width: "100%", maxWidth: 900, mx: "auto" }}>
-        <Box component="form" onSubmit={submit} sx={{ display: "flex", gap: 1, mb: 4 }}>
+        <Box component="form" onSubmit={submit} sx={{ mb: 4 }}>
+          <Box sx={{ display: "flex", gap: 1 }}>
           <Autocomplete<Suggestion, false, false, true>
             freeSolo fullWidth options={suggestions} filterOptions={options => options}
             getOptionLabel={option => typeof option === "string" ? cleanDisplayWord(option) : cleanDisplayWord(option.word)}
             inputValue={input} onInputChange={(_event, value) => { setInput(value); if (!value.trim()) setSuggestions([]); }}
             onChange={(_event, value) => { if (value) void lookup(typeof value === "string" ? cleanDisplayWord(value) : value.lookupKey); }}
             renderOption={(props, option) => <li {...props} key={`${option.lookupKey}-${option.target || "entry"}`}>
-              <Box sx={{ minWidth: 0 }}><Typography>{cleanDisplayWord(option.word)}</Typography>{option.isAlias && option.target && <Typography variant="caption" color="text.secondary">→ {cleanDisplayWord(option.target)}</Typography>}</Box>
+              <Box sx={{ minWidth: 0 }}><Typography>{cleanDisplayWord(option.word)}</Typography>{option.meaning && <Typography variant="caption" color="text.secondary">{option.meaning}</Typography>}{option.isAlias && option.target && <Typography variant="caption" color="text.secondary">→ {cleanDisplayWord(option.target)}</Typography>}</Box>
             </li>}
             renderInput={params => <TextField
               {...params}
@@ -161,9 +201,11 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
               }}
             />}
           />
+          <Tooltip title={listening ? copy.stopDictation : copy.dictate}><IconButton type="button" color={listening ? "error" : "default"} aria-label={listening ? copy.stopDictation : copy.dictate} aria-pressed={listening} onClick={toggleDictation} sx={{ width: 52, height: 52, border: 1, borderColor: listening ? "error.main" : "divider", borderRadius: 1 }}>{listening ? <StopCircleRoundedIcon /> : <MicRoundedIcon />}</IconButton></Tooltip>
           <Button type="submit" variant="contained" size="large" disabled={loading || !input.trim()} sx={{ minWidth: { xs: 52, sm: 112 }, px: { xs: 1.5, sm: 3 } }}>
             {loading ? <CircularProgress size={22} color="inherit" /> : <><SearchRoundedIcon sx={{ display: { sm: "none" } }} /><Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>{copy.search}</Box></>}
           </Button>
+          </Box>
         </Box>
 
         {!result && !loading && <Card variant="outlined" sx={{ borderRadius: 3 }}><CardContent sx={{ py: 7, textAlign: "center" }}>

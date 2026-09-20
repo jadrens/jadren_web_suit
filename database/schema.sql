@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS vocabulary_word_quiz (
   dictionary_lookup_key VARCHAR(120) NOT NULL,
   sense_keys JSONB NOT NULL,
   meanings JSONB NOT NULL,
+  quiz_version INTEGER NOT NULL DEFAULT 2,
   generator_model VARCHAR(255) NOT NULL,
   created_by UUID REFERENCES user_main(user_id) ON UPDATE CASCADE ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -139,6 +140,10 @@ CREATE TABLE IF NOT EXISTS vocabulary_word_quiz (
   CONSTRAINT vocabulary_word_quiz_sense_keys_array CHECK (jsonb_typeof(sense_keys) = 'array'),
   CONSTRAINT vocabulary_word_quiz_meanings_array CHECK (jsonb_typeof(meanings) = 'array')
 );
+
+ALTER TABLE vocabulary_word_quiz ADD COLUMN IF NOT EXISTS exercise_kind VARCHAR(20) NOT NULL DEFAULT 'meanings';
+ALTER TABLE vocabulary_word_quiz ADD COLUMN IF NOT EXISTS quiz_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE vocabulary_word_quiz ALTER COLUMN quiz_version SET DEFAULT 2;
 
 COMMENT ON TABLE vocabulary_word_quiz IS
   'Shared, administrator-generated word-to-meaning quizzes selected from dictionary senses.';
@@ -223,6 +228,7 @@ ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS plural_forms VAR
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS past_forms VARCHAR(240) NOT NULL DEFAULT '';
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS example TEXT NOT NULL DEFAULT '';
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS definition TEXT NOT NULL DEFAULT '';
+ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS sentence_practice JSONB NOT NULL DEFAULT '{}'::JSONB;
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS transfer_origin_collection_id UUID REFERENCES vocabulary_collection(collection_id) ON DELETE SET NULL;
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS transfer_origin_dataset VARCHAR(120);
 ALTER TABLE vocabulary_collection_item ADD COLUMN IF NOT EXISTS transfer_origin_source_word_id INTEGER;

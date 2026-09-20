@@ -27,6 +27,7 @@ export interface DictionarySuggestion {
   lookupKey: string;
   isAlias: boolean;
   target: string | null;
+  meaning?: string | null;
 }
 
 interface EntryRow {
@@ -43,6 +44,7 @@ interface SuggestionRow {
   lookup_key: string;
   is_alias: number;
   target: string | null;
+  meaning?: string | null;
 }
 
 declare global {
@@ -74,6 +76,33 @@ function findEntry(db: Database, lookupKey: string): EntryRow | null {
       ORDER BY id
       LIMIT 1`,
   ).get(lookupKey);
+}
+
+function chineseFtsQuery(value: string, prefix: boolean): string {
+  return value.trim().split(/\s+/).filter(Boolean)
+    .map(token => `"${token.replaceAll('"', '""')}"${prefix ? "*" : ""}`)
+    .join(" AND ");
+}
+
+function findChineseEntry(db: Database, query: string): EntryRow | null {
+  const match = chineseFtsQuery(query, false);
+  if (!match) return null;
+  return db.query<EntryRow, [string, string, string]>(
+    `WITH matches AS (
+       SELECT rowid, bm25(entry_search) AS relevance
+         FROM entry_search
+        WHERE entry_search MATCH ?
+     )
+     SELECT e.lookup_key, e.entry_json
+       FROM matches
+       JOIN entries e ON e.id = matches.rowid
+      ORDER BY CASE
+        WHEN EXISTS (SELECT 1 FROM senses s WHERE s.entry_id = e.id AND trim(s.definition_zh) = ?) THEN 0
+        WHEN EXISTS (SELECT 1 FROM senses s WHERE s.entry_id = e.id AND s.definition_zh LIKE ?) THEN 1
+        ELSE 2
+      END, matches.relevance, e.lookup_key
+      LIMIT 1`,
+  ).get(match, query, `%${query}%`);
 }
 
 export function lookupDictionaryEntry(query: string): DictionaryLookupResult | null {
@@ -109,6 +138,20 @@ export function lookupDictionaryEntry(query: string): DictionaryLookupResult | n
   };
 }
 
+export function lookupChineseDictionaryEntry(query: string): DictionaryLookupResult | null {
+  const lookupKey = normalizeDictionaryKey(query);
+  if (!lookupKey) return null;
+  const row = findChineseEntry(getDatabase(), lookupKey);
+  if (!row) return null;
+  return {
+    query,
+    lookupKey,
+    resolvedKey: row.lookup_key,
+    isAlias: true,
+    entry: JSON.parse(row.entry_json) as DictionaryEntry,
+  };
+}
+
 export function suggestDictionaryEntries(query: string, limit: number): DictionarySuggestion[] {
   const lookupKey = normalizeDictionaryKey(query);
   if (!lookupKey) return [];
@@ -136,5 +179,41 @@ export function suggestDictionaryEntries(query: string, limit: number): Dictiona
     lookupKey: row.lookup_key,
     isAlias: row.is_alias === 1,
     target: row.target,
+  }));
+}
+
+export function suggestChineseDictionaryEntries(query: string, limit: number): DictionarySuggestion[] {
+  const lookupKey = normalizeDictionaryKey(query);
+  const match = chineseFtsQuery(lookupKey, true);
+  if (!match) return [];
+  const rows = getDatabase().query<SuggestionRow, [string, string, string, string, string, number]>(
+    `WITH matches AS (
+       SELECT rowid, bm25(entry_search) AS relevance
+         FROM entry_search
+        WHERE entry_search MATCH ?
+     )
+     SELECT COALESCE(e.display_word, e.source_key) AS word,
+            e.lookup_key, 0 AS is_alias, NULL AS target,
+            (SELECT s.definition_zh
+               FROM senses s
+              WHERE s.entry_id = e.id AND s.definition_zh LIKE ?
+              ORDER BY CASE WHEN trim(s.definition_zh) = ? THEN 0 ELSE 1 END, s.sense_index
+              LIMIT 1) AS meaning
+       FROM matches
+       JOIN entries e ON e.id = matches.rowid
+      ORDER BY CASE
+        WHEN EXISTS (SELECT 1 FROM senses s WHERE s.entry_id = e.id AND trim(s.definition_zh) = ?) THEN 0
+        WHEN EXISTS (SELECT 1 FROM senses s WHERE s.entry_id = e.id AND s.definition_zh LIKE ?) THEN 1
+        ELSE 2
+      END, matches.relevance, e.lookup_key
+      LIMIT ?`,
+  ).all(match, `%${lookupKey}%`, lookupKey, lookupKey, `%${lookupKey}%`, limit);
+
+  return rows.map(row => ({
+    word: row.word,
+    lookupKey: row.lookup_key,
+    isAlias: false,
+    target: null,
+    meaning: row.meaning,
   }));
 }

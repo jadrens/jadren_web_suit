@@ -9,15 +9,17 @@ or another application-relative path when deploying the database elsewhere.
 
 ## Exact lookup
 
-`GET /api/dictionary/oxford10c?word=<word-or-phrase>`
+`GET /api/dictionary/oxford10c?word=<word-or-phrase>&direction=<auto|en-zh|zh-en>`
 
 Lookup is case-insensitive, collapses repeated whitespace, and automatically
 follows dictionary aliases such as plural forms. The input limit is 120
-printable characters.
+printable characters. `direction` defaults to `auto`, which detects Chinese
+characters and performs a Chinese-definition-to-English lookup automatically.
 
 ```bash
 curl 'http://localhost:3000/api/dictionary/oxford10c?word=come%20to'
 curl 'http://localhost:3000/api/dictionary/oxford10c?word=apples'
+curl 'http://localhost:3000/api/dictionary/oxford10c?word=%E8%8B%B9%E6%9E%9C'
 ```
 
 Successful response:
@@ -54,13 +56,19 @@ Errors use `{ "code": string, "error": string }`:
 
 ## Prefix suggestions
 
-`GET /api/dictionary/oxford10c/search?q=<prefix>&limit=<1..50>`
+`GET /api/dictionary/oxford10c/search?q=<prefix>&limit=<1..50>&direction=<auto|en-zh|zh-en>`
 
 `limit` defaults to 20. Results include both canonical entries and aliases, so
 the UI can display the spelling entered by users while retaining its target.
+`direction` defaults to `auto`: queries containing Chinese characters use
+Chinese-to-English search, and other queries use English prefix search. In
+`zh-en` mode, results are ranked English entries whose Chinese definitions
+match the query, and each result can include a `meaning` field containing the
+matching Chinese definition.
 
 ```bash
 curl 'http://localhost:3000/api/dictionary/oxford10c/search?q=come%20t&limit=10'
+curl 'http://localhost:3000/api/dictionary/oxford10c/search?q=%E8%8B%B9%E6%9E%9C&direction=zh-en&limit=10'
 ```
 
 ```json

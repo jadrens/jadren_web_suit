@@ -1,6 +1,7 @@
 import { apiError, internalError } from "@lib/auth/http";
 import { db } from "@lib/auth/db";
 import { bearerToken, verifyAccessToken } from "@lib/auth/jwt";
+import { createHash } from "node:crypto";
 
 export class InvalidVocabularyAccessTokenError extends Error {}
 
@@ -51,6 +52,71 @@ export interface VocabularyAttemptRow {
   feedback: string;
   corrected_sentence: string | null;
   created_at: string | Date;
+}
+
+export interface CollectionUsageItemRow {
+  collection_id: string;
+  dataset: string;
+  source_word_id: number;
+  word: string;
+  meanings: unknown;
+  sentence_practice: unknown;
+  created_at: string | Date;
+}
+
+interface CollectionMeaning { text: string; partOfSpeech: string }
+interface StoredSentenceUsage {
+  prompt: string;
+  partOfSpeech: string;
+  lastLearnTime: string | null;
+  correct: number;
+  wrong: number;
+  recentResults: boolean[];
+  last8CorrectRate: string;
+  createdAt: string;
+  updatedAt: string;
+  attempts: ReturnType<typeof toAttempt>[];
+}
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") { try { value = JSON.parse(value); } catch { return {}; } }
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+export function collectionMeanings(value: unknown): CollectionMeaning[] {
+  if (typeof value === "string") { try { value = JSON.parse(value); } catch { return []; } }
+  if (!Array.isArray(value)) return [];
+  return value.flatMap(raw => {
+    if (!raw || typeof raw !== "object") return [];
+    const item = raw as Record<string, unknown>; const text = String(item.text || "").trim();
+    return text ? [{ text, partOfSpeech: String(item.partOfSpeech || "other") }] : [];
+  });
+}
+
+export function collectionUsageId(row: Pick<CollectionUsageItemRow, "collection_id" | "dataset" | "source_word_id">, meaning: CollectionMeaning) {
+  const hex = createHash("sha256").update(JSON.stringify([row.collection_id, row.dataset, Number(row.source_word_id), meaning.partOfSpeech, meaning.text])).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function collectionSentencePractice(value: unknown): Record<string, StoredSentenceUsage> {
+  return jsonObject(value) as Record<string, StoredSentenceUsage>;
+}
+
+export function collectionUsage(row: CollectionUsageItemRow, meaning: CollectionMeaning) {
+  const practice = collectionSentencePractice(row.sentence_practice);
+  const fallbackId = collectionUsageId(row, meaning);
+  const storedEntry = Object.entries(practice).find(([id, value]) => id === fallbackId || (value?.prompt === meaning.text && value?.partOfSpeech === meaning.partOfSpeech));
+  const usageId = storedEntry?.[0] || fallbackId; const stored = storedEntry?.[1]; const createdAt = new Date(stored?.createdAt || row.created_at).toISOString();
+  return {
+    usageId, collectionId: row.collection_id, word: row.word, prompt: meaning.text,
+    lastLearnTime: stored?.lastLearnTime || null, correct: Number(stored?.correct || 0), wrong: Number(stored?.wrong || 0),
+    last8CorrectRate: stored?.last8CorrectRate || "0/0", createdAt,
+    updatedAt: new Date(stored?.updatedAt || createdAt).toISOString(), attempts: Array.isArray(stored?.attempts) ? stored.attempts : [],
+  };
+}
+
+export function collectionUsages(row: CollectionUsageItemRow) {
+  return collectionMeanings(row.meanings).map(meaning => collectionUsage(row, meaning));
 }
 
 export function toAttempt(row: VocabularyAttemptRow) {

@@ -15,11 +15,15 @@ interface QuizRow {
   dataset: string;
   source_word_id: number;
   word: string;
+  exercise_kind: "meanings" | "dictionary";
   dictionary_lookup_key: string;
   sense_keys: string[] | string;
   meanings: DrillMeaning[] | string;
+  quiz_version: number;
   created_at: Date | string;
 }
+
+const CURRENT_QUIZ_VERSION = 2;
 
 function parameters(url: URL) {
   const dataset = (url.searchParams.get("dataset") || "").trim();
@@ -44,6 +48,7 @@ function quiz(row: QuizRow) {
     dataset: row.dataset,
     sourceWordId: Number(row.source_word_id),
     word: row.word,
+    exerciseKind: row.exercise_kind,
     meanings: savedMeanings,
     hints,
     createdAt: new Date(row.created_at).toISOString(),
@@ -60,7 +65,7 @@ async function isAdministrator(userId: string) {
 
 async function findQuiz(dataset: string, sourceWordId: number) {
   const result = await db.query<QuizRow>(
-    `SELECT dataset, source_word_id, word, dictionary_lookup_key, sense_keys, meanings, created_at
+    `SELECT dataset, source_word_id, word, exercise_kind, dictionary_lookup_key, sense_keys, meanings, quiz_version, created_at
        FROM vocabulary_word_quiz
       WHERE dataset = $1 AND source_word_id = $2
       LIMIT 1`,
@@ -86,7 +91,7 @@ export async function GET(request: Request) {
       findQuiz(input.dataset, input.sourceWordId),
       user?.status === 1 ? isAdministrator(user.sub) : Promise.resolve(false),
     ]);
-    return NextResponse.json({ quiz: cached ? quiz(cached) : null, canGenerate }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ quiz: cached && Number(cached.quiz_version) >= CURRENT_QUIZ_VERSION ? quiz(cached) : null, canGenerate }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     const authFailure = vocabularyAuthFailure(error);
     if (authFailure) return authFailure;
@@ -106,10 +111,11 @@ export async function POST(request: Request) {
     const sourceWordId = Number(body.sourceWordId);
     const word = typeof body.word === "string" ? body.word.trim() : "";
     const generatorModel = typeof body.generatorModel === "string" ? body.generatorModel.trim() : "";
+    const exerciseKind = body.exerciseKind === "dictionary" ? "dictionary" : body.exerciseKind === "meanings" ? "meanings" : "";
     const senseKeys = Array.isArray(body.senseKeys)
       ? [...new Set(body.senseKeys.filter((key): key is string => typeof key === "string" && Boolean(key.trim())).map(key => key.trim()))]
       : [];
-    if (dataset !== "ncee" || !Number.isInteger(sourceWordId) || sourceWordId < 1 || !word || word.length > 100 || !generatorModel || generatorModel.length > 255 || !senseKeys.length || senseKeys.length > 12) {
+    if (dataset !== "ncee" || !Number.isInteger(sourceWordId) || sourceWordId < 1 || !word || word.length > 100 || !generatorModel || generatorModel.length > 255 || !exerciseKind || (exerciseKind === "meanings" ? !senseKeys.length || senseKeys.length > 4 : senseKeys.length > 0)) {
       return NextResponse.json({ error: "invalid_quiz" }, { status: 400 });
     }
     const expectedWord = sourceWord(dataset, sourceWordId);
@@ -123,10 +129,14 @@ export async function POST(request: Request) {
 
     await db.query(
       `INSERT INTO vocabulary_word_quiz
-         (dataset, source_word_id, word, dictionary_lookup_key, sense_keys, meanings, generator_model, created_by)
-       VALUES ($1, $2, $3, $4, ($5::text)::jsonb, ($6::text)::jsonb, $7, $8)
-       ON CONFLICT (dataset, source_word_id) DO NOTHING`,
-      [dataset, sourceWordId, expectedWord, dictionary.resolvedKey, JSON.stringify(senseKeys), JSON.stringify(selectedMeanings), generatorModel, user.sub],
+         (dataset, source_word_id, word, exercise_kind, dictionary_lookup_key, sense_keys, meanings, quiz_version, generator_model, created_by)
+       VALUES ($1, $2, $3, $4, $5, ($6::text)::jsonb, ($7::text)::jsonb, $8, $9, $10)
+       ON CONFLICT (dataset, source_word_id) DO UPDATE
+         SET word=EXCLUDED.word, exercise_kind=EXCLUDED.exercise_kind, dictionary_lookup_key=EXCLUDED.dictionary_lookup_key,
+             sense_keys=EXCLUDED.sense_keys, meanings=EXCLUDED.meanings, quiz_version=EXCLUDED.quiz_version,
+             generator_model=EXCLUDED.generator_model, created_by=EXCLUDED.created_by, created_at=NOW()
+       WHERE vocabulary_word_quiz.quiz_version < EXCLUDED.quiz_version`,
+      [dataset, sourceWordId, expectedWord, exerciseKind, dictionary.resolvedKey, JSON.stringify(senseKeys), JSON.stringify(selectedMeanings), CURRENT_QUIZ_VERSION, generatorModel, user.sub],
     );
     const saved = await findQuiz(dataset, sourceWordId);
     if (!saved) throw new Error("Quiz insert did not produce a cache row");
