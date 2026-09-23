@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE = "https://hkns.koi.ci";
+const API_BASE = "https://hzns.rayne.cn";
 
 // Domain must match *.track.rayne.cn
 const TRACK_DOMAIN_RE = /^[a-z0-9]+[a-z0-9\-]*[a-z0-9]\.track\.rayne\.cn$/i;
