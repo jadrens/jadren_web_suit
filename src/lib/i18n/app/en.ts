@@ -515,6 +515,7 @@ export const en = {
       waitingDesc: "Allowing time for DNS queries to be recorded",
       querying: "Querying DNS records...",
       queryingDesc: "Fetching results from the DNS server API",
+      elapsed: (seconds: string) => `Elapsed: ${seconds}s`,
       runAgain: "Run Test Again",
       leakDetected: "DNS Leak Detected!",
       noLeak: "No DNS Leak Detected",
@@ -530,6 +531,7 @@ export const en = {
       nsid: "NSID",
       noData: "No data",
       notFound: "Not found",
+      failed: "Failed",
     },
   },
   mtools: {

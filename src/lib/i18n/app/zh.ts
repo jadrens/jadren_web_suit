@@ -517,6 +517,7 @@ export const zh: TranslationKeys = {
       waitingDesc: "留出时间让 DNS 查询被记录",
       querying: "正在查询 DNS 记录...",
       queryingDesc: "从 DNS 服务器 API 获取结果",
+      elapsed: (seconds: string) => `已花费时间：${seconds} 秒`,
       runAgain: "重新测试",
       leakDetected: "检测到 DNS 泄露！",
       noLeak: "未检测到 DNS 泄露",
@@ -532,6 +533,7 @@ export const zh: TranslationKeys = {
       nsid: "NSID",
       noData: "无数据",
       notFound: "未找到",
+      failed: "查询失败",
     },
   },
   mtools: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Box,
   Typography,
@@ -15,7 +15,6 @@ import {
   TableRow,
   Chip,
   CircularProgress,
-  LinearProgress,
   Tooltip,
   IconButton,
   useTheme,
@@ -74,11 +73,35 @@ interface IpGeolocation {
 interface RowState {
   domain: string;
   found: boolean;
+  failed: boolean;
   queries: QueryResult[];
   loading: boolean;
   geoLoading: boolean;
   geoData: IpGeolocation | null;
   geoError: string | null;
+}
+
+const QUERY_SCHEDULE_MS = [300, 600, 1200, 2000, 4000, 6000, 8000, 10000] as const;
+
+function waitUntil(startedAt: number, targetElapsedMs: number, signal: AbortSignal): Promise<void> {
+  const delay = Math.max(0, startedAt + targetElapsedMs - performance.now());
+
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delay);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -174,10 +197,12 @@ export default function DnsLeakClient() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [rows, setRows] = useState<RowState[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [probeProgress, setProbeProgress] = useState(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [geoDrawerDomain, setGeoDrawerDomain] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const geoCacheRef = useRef<Record<string, Promise<IpGeolocation | null>>>({});
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   // ── pick IP for geo: EDNS subnet IP first, then DNS client IP ──
   const pickIp = useCallback((q: QueryResult): string | null => {
@@ -232,41 +257,34 @@ export default function DnsLeakClient() {
 
   // ── fetch one domain's DNS-leak result ──
   const fetchDomainResult = useCallback(
-    async (domain: string) => {
+    async (domain: string, signal: AbortSignal): Promise<boolean> => {
       try {
         const res = await fetch("/api/dns-leak", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ domains: [domain] }),
+          cache: "no-store",
+          signal,
         });
+        if (!res.ok) return false;
         const data = await res.json();
         const item = data.results?.[0];
         if (item && item.found && item.queries.length > 0) {
           setRows((prev) =>
             prev.map((r) =>
               r.domain === domain
-                ? { ...r, found: true, queries: item.queries, loading: false }
+                ? { ...r, found: true, failed: false, queries: item.queries, loading: false }
                 : r,
             ),
           );
           const ip = pickIp(item.queries[0]);
-          if (ip) fetchGeo(domain, ip);
-        } else {
-          setRows((prev) =>
-            prev.map((r) =>
-              r.domain === domain
-                ? { ...r, found: item?.found ?? false, loading: false }
-                : r,
-            ),
-          );
+          if (ip) void fetchGeo(domain, ip);
+          return true;
         }
-      } catch {
-        setRows((prev) =>
-          prev.map((r) =>
-            r.domain === domain ? { ...r, loading: false } : r,
-          ),
-        );
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") throw err;
       }
+      return false;
     },
     [fetchGeo, pickIp],
   );
@@ -274,9 +292,11 @@ export default function DnsLeakClient() {
   // ── start test ──
   const startTest = useCallback(async () => {
     abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     geoCacheRef.current = {}; // 清空 IP 地理信息缓存，避免干扰下一次测试
     setError(null);
-    setProbeProgress(0);
+    setElapsedMs(0);
     setPhase("probing");
 
     const newDomains = generateDomains(10);
@@ -285,6 +305,7 @@ export default function DnsLeakClient() {
     const initialRows: RowState[] = newDomains.map((d) => ({
       domain: d,
       found: false,
+      failed: false,
       queries: [],
       loading: true,
       geoLoading: false,
@@ -293,29 +314,54 @@ export default function DnsLeakClient() {
     }));
     setRows(initialRows);
 
-    // ── step 1: fire all Image probes ──
-    let completed = 0;
-    const probes = newDomains.map(
-      (domain) =>
-        new Promise<void>((resolve) => {
-          const img = new Image();
-          img.src = `https://${domain}/probe.png?t=${Date.now()}&r=${Math.random()}`;
-          const done = () => {
-            completed++;
-            setProbeProgress(Math.round((completed / newDomains.length) * 100));
-            resolve();
-          };
-          img.onload = done;
-          img.onerror = done;
-          setTimeout(done, 8000);
-        }),
-    );
-    await Promise.all(probes);
+    const testStartedAt = performance.now();
+    const elapsedTimer = window.setInterval(() => {
+      if (abortRef.current === controller) {
+        setElapsedMs(performance.now() - testStartedAt);
+      }
+    }, 100);
 
-    // ── step 2: wait 1s then fire 10 individual API calls ──
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Each domain owns its probe and retry schedule. Promise.all only starts and
+    // awaits the independent jobs; a slow domain never delays another domain's polling.
+    const domainJobs = newDomains.map(async (domain) => {
+      const domainStartedAt = performance.now();
+      const img = new Image();
+      img.onload = img.onerror = () => undefined;
+      img.src = `https://${domain}/probe.png?t=${Date.now()}&r=${Math.random()}`;
+
+      try {
+        for (const retryAtMs of QUERY_SCHEDULE_MS) {
+          await waitUntil(domainStartedAt, retryAtMs, controller.signal);
+          if (await fetchDomainResult(domain, controller.signal)) return;
+        }
+
+        setRows((prev) =>
+          prev.map((row) =>
+            row.domain === domain
+              ? { ...row, found: false, failed: true, loading: false }
+              : row,
+          ),
+        );
+      } finally {
+        img.onload = null;
+        img.onerror = null;
+        if (controller.signal.aborted) img.removeAttribute("src");
+      }
+    });
+
     setPhase("streaming");
-    newDomains.forEach((domain) => fetchDomainResult(domain));
+    try {
+      await Promise.all(domainJobs);
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
+        setError(err instanceof Error ? err.message : "DNS leak test failed");
+      }
+    } finally {
+      window.clearInterval(elapsedTimer);
+      if (abortRef.current === controller) {
+        setElapsedMs(performance.now() - testStartedAt);
+      }
+    }
   }, [fetchDomainResult]);
 
   // ── derived ──
@@ -416,7 +462,7 @@ export default function DnsLeakClient() {
               </Box>
             )}
 
-            {phase === "probing" && (
+            {phase === "probing" && rows.length === 0 && (
               <Box sx={{ textAlign: "center", py: 4 }}>
                 <CircularProgress size={48} sx={{ mb: 2 }} />
                 <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
@@ -429,28 +475,17 @@ export default function DnsLeakClient() {
                 >
                   {t.tools.dnsLeak.sendingProbesDesc}
                 </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={probeProgress}
-                  sx={{
-                    borderRadius: 4,
-                    height: 6,
-                    maxWidth: 300,
-                    mx: "auto",
-                  }}
-                />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ mt: 0.5, display: "block" }}
-                >
-                  {probeProgress}%
-                </Typography>
               </Box>
             )}
 
             {(phase === "streaming" || (phase === "probing" && rows.length > 0)) && (
               <Box>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                  {!allDone && <CircularProgress size={18} />}
+                  <Typography variant="body2" color="text.secondary">
+                    {t.tools.dnsLeak.elapsed((elapsedMs / 1000).toFixed(1))}
+                  </Typography>
+                </Box>
                 {error && (
                   <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
                     {error}
@@ -653,6 +688,8 @@ export default function DnsLeakClient() {
                                     </Tooltip>
                                   ) : row.found ? (
                                     <Chip label={t.tools.dnsLeak.noData} size="small" color="warning" variant="outlined" sx={{ borderRadius: 2 }} />
+                                  ) : row.failed ? (
+                                    <Chip label={t.tools.dnsLeak.failed} size="small" color="error" variant="outlined" sx={{ borderRadius: 2 }} />
                                   ) : (
                                     <Chip label={t.tools.dnsLeak.notFound} size="small" color="error" variant="outlined" sx={{ borderRadius: 2 }} />
                                   )}

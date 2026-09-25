@@ -30,6 +30,7 @@ async function fetchQueries(
 ): Promise<QueryItem[]> {
   const url = `${API_BASE}/api/queries?domain=${encodeURIComponent(domain)}`;
   const res = await fetch(url, {
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
