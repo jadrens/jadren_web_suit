@@ -3,6 +3,7 @@ import SITE_CONFIG from "@config/app/config";
 const ROBOTS = `User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /rpc/
 
 Sitemap: ${SITE_CONFIG.baseUrl}/sitemap.xml
 `;

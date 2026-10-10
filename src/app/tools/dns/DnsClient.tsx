@@ -22,6 +22,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import SearchIcon from "@mui/icons-material/Search";
 import Footer from "@components/ui/layout/Footer";
 import { Snackbar } from "@components/ui/feedback/toast";
+import { toolsApi } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import { alpha } from "@mui/material";
@@ -56,16 +57,6 @@ interface IpGeolocation {
   mobile: boolean;
   proxy: boolean;
   hosting: boolean;
-}
-
-interface ApiResponse {
-  domain?: string;
-  type?: string;
-  Answer?: DnsRecord[];
-  Authority?: DnsRecord[];
-  Additional?: DnsRecord[];
-  comment?: string;
-  error?: string;
 }
 
 const DISPLAY_ORDER = [
@@ -197,25 +188,8 @@ export default function DnsClient() {
     type: SupportedRecordType,
     host: string
   ): Promise<DnsRecord[]> {
-    const url = `/api/dns?domain=${encodeURIComponent(
-      host
-    )}&type=${encodeURIComponent(type)}`;
-    const res = await fetch(url);
-    const data: ApiResponse = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || `HTTP ${res.status}`);
-    }
-
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
-    return [
-      ...(data.Answer || []),
-      ...(data.Authority || []),
-      ...(data.Additional || []),
-    ];
+    const data = await toolsApi.resolveDns(host, type);
+    return [...data.Answer, ...data.Authority, ...data.Additional];
   }
 
   const handleLookup = async () => {
@@ -372,11 +346,9 @@ export default function DnsClient() {
       // When input is an IP, fetch geolocation info (best-effort)
       if (isIp) {
         setGeoLoading(true);
-        fetch(`/api/ip-geo?ip=${encodeURIComponent(host)}`, {
-          signal: AbortSignal.timeout(10000),
-        })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((geo) => setGeoData(geo))
+        toolsApi
+          .ipGeo(host, { signal: AbortSignal.timeout(10000) })
+          .then((geo) => setGeoData(geo as unknown as IpGeolocation))
           .catch(() => setGeoData(null))
           .finally(() => setGeoLoading(false));
       }

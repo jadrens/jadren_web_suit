@@ -11,6 +11,7 @@ import MicRoundedIcon from "@mui/icons-material/MicRounded";
 import StopCircleRoundedIcon from "@mui/icons-material/StopCircleRounded";
 import Footer from "@components/ui/layout/Footer";
 import { toast } from "@components/ui/feedback/toast";
+import { ApiError, dictionaryApi } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 
@@ -100,10 +101,8 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch(`/api/dictionary/oxford10c/search?q=${encodeURIComponent(query)}&limit=10&direction=${direction}`, { signal: controller.signal });
-        if (!response.ok) return;
-        const data = await response.json() as { results?: Suggestion[] };
-        setSuggestions(data.results || []);
+        const data = await dictionaryApi.search(query, direction, 10, { signal: controller.signal });
+        setSuggestions(data.results as unknown as Suggestion[]);
       } catch { /* Suggestions are optional. */ }
     }, 220);
     return () => { window.clearTimeout(timer); controller.abort(); };
@@ -115,19 +114,16 @@ export function DictionaryLookup({ initialWord = "", embedded = false }: { initi
     const request = ++requestRef.current;
     setInput(query); setLoading(true);
     try {
-      const response = await fetch(`/api/dictionary/oxford10c?word=${encodeURIComponent(query)}&direction=${lookupDirection}`);
-      const data = await response.json() as LookupResult | { code?: string };
+      const data = await dictionaryApi.lookup(query, lookupDirection);
       if (request !== requestRef.current) return;
-      if (!response.ok) {
-        setResult(null);
-        toast[response.status === 404 ? "info" : response.status === 400 ? "warning" : "error"](
-          response.status === 404 ? copy.noResults : response.status === 400 ? copy.invalid : copy.unavailable,
-        );
-        return;
-      }
-      setResult(data as LookupResult);
-    } catch {
-      if (request === requestRef.current) toast.error(copy.unavailable);
+      setResult(data as unknown as LookupResult);
+    } catch (error) {
+      if (request !== requestRef.current) return;
+      const status = error instanceof ApiError ? error.status : 0;
+      if (status) setResult(null);
+      toast[status === 404 ? "info" : status === 400 ? "warning" : "error"](
+        status === 404 ? copy.noResults : status === 400 ? copy.invalid : copy.unavailable,
+      );
     } finally {
       if (request === requestRef.current) setLoading(false);
     }

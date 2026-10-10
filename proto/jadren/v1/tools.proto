@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package jadren.v1;
+
+import "google/protobuf/struct.proto";
+
+// DictionaryService looks words up in the bundled Oxford dictionary database.
+service DictionaryService {
+  rpc Lookup(LookupRequest) returns (LookupResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc Search(SearchRequest) returns (SearchResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message LookupRequest {
+  string word = 1;
+  // "auto" (default), "en-zh" or "zh-en".
+  string direction = 2;
+}
+// The entry document is schemaless dictionary data.
+message LookupResponse { google.protobuf.Struct result = 1; }
+
+message SearchRequest {
+  string query = 1;
+  // 1-50, defaults to 20.
+  int32 limit = 2;
+  string direction = 3;
+}
+message SearchResponse {
+  string query = 1;
+  int32 count = 2;
+  repeated google.protobuf.Struct results = 3;
+}
+
+// ToolsService groups the small network utilities and the blog search.
+service ToolsService {
+  // GetClientIp echoes the caller address seen behind the reverse proxy.
+  rpc GetClientIp(GetClientIpRequest) returns (GetClientIpResponse);
+  rpc LookupIpGeo(LookupIpGeoRequest) returns (LookupIpGeoResponse);
+  rpc ResolveDns(ResolveDnsRequest) returns (ResolveDnsResponse);
+  rpc CheckDnsLeak(CheckDnsLeakRequest) returns (CheckDnsLeakResponse);
+  // SynthesizePronunciation renders an English word as a WAV clip.
+  rpc SynthesizePronunciation(SynthesizePronunciationRequest) returns (SynthesizePronunciationResponse);
+  rpc SearchPosts(SearchPostsRequest) returns (SearchPostsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message GetClientIpRequest {}
+message GetClientIpResponse {
+  string ip = 1;
+  optional string x_forwarded_for = 2;
+  optional string x_real_ip = 3;
+}
+
+message LookupIpGeoRequest { string ip = 1; }
+// The geolocation document is passed through from ip-api.com.
+message LookupIpGeoResponse { google.protobuf.Struct data = 1; }
+
+message DnsRecord {
+  string name = 1;
+  string type = 2;
+  int32 ttl = 3;
+  string data = 4;
+}
+message ResolveDnsRequest {
+  string domain = 1;
+  // Defaults to "A".
+  string type = 2;
+}
+message ResolveDnsResponse {
+  string domain = 1;
+  string type = 2;
+  repeated DnsRecord answer = 3;
+  repeated DnsRecord authority = 4;
+  repeated DnsRecord additional = 5;
+  optional string comment = 6;
+}
+
+message LeakQuery {
+  optional int64 id = 1;
+  string query_type = 2;
+  string client_ip = 3;
+  string country_code = 4;
+  string city = 5;
+  optional string edns_subnet = 6;
+  optional string edns_country_code = 7;
+  optional string nsid = 8;
+  string created_at = 9;
+}
+message LeakDomainResult {
+  string domain = 1;
+  bool found = 2;
+  repeated LeakQuery queries = 3;
+}
+message CheckDnsLeakRequest { repeated string domains = 1; }
+message CheckDnsLeakResponse { repeated LeakDomainResult results = 1; }
+
+message SynthesizePronunciationRequest { string word = 1; }
+message SynthesizePronunciationResponse {
+  bytes audio = 1;
+  string content_type = 2;
+}
+
+message SearchPostsRequest {
+  string query = 1;
+  // "en" (default) or "zh".
+  string locale = 2;
+}
+message SearchPostsResponse {
+  repeated google.protobuf.Struct results = 1;
+  repeated string tags = 2;
+}

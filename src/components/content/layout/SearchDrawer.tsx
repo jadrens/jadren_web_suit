@@ -20,6 +20,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
+import { toolsApi } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/content";
 import { Locale } from "@lib/publishing/posts";
 
@@ -55,9 +56,8 @@ export default function SearchDrawer({ open, onClose, locale }: SearchDrawerProp
     }
     setLoading(true);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&locale=${locale}`);
-      const data: SearchResponse = await res.json();
-      setResults(data.results);
+      const data = await toolsApi.searchPosts(q, locale);
+      setResults(data.results as unknown as SearchResponse["results"]);
     } catch {
       setResults([]);
     } finally {

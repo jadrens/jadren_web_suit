@@ -1,28 +1,29 @@
 ## Quick start
 
-Both endpoints return public JSON responses and require no authentication or API key. Use your site's origin; examples below use the local development server.
+Both methods are public [Connect](https://connectrpc.com/) RPCs (`jadren.v1.DictionaryService`) and require no authentication or API key. Send a `POST` with a JSON body and `Content-Type: application/json`; the response is plain JSON. gRPC-Web and binary Protobuf clients work as well. Use your site's origin; examples below use the local development server.
 
 ```bash
-curl 'http://localhost:3000/api/dictionary/oxford10c?word=apple'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Lookup -H 'Content-Type: application/json' -d '{"word":"apple"}'
 ```
 
 ## Exact lookup
 
-`GET /api/dictionary/oxford10c?word=<word-or-phrase>`
+`POST /rpc/jadren.v1.DictionaryService/Lookup` with `{ "word": "<word-or-phrase>" }`
 
 Lookup is case-insensitive, collapses repeated whitespace, and automatically
 follows dictionary aliases such as plural forms. The input limit is 120
 printable characters.
 
 ```bash
-curl 'http://localhost:3000/api/dictionary/oxford10c?word=come%20to'
-curl 'http://localhost:3000/api/dictionary/oxford10c?word=apples'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Lookup -H 'Content-Type: application/json' -d '{"word":"come to"}'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Lookup -H 'Content-Type: application/json' -d '{"word":"apples"}'
 ```
 
-Successful response:
+Successful response (the dictionary document is wrapped in `result`):
 
 ```json
 {
+ "result": {
   "query": "apples",
   "lookupKey": "apples",
   "resolvedKey": "apple",
@@ -38,6 +39,7 @@ Successful response:
     "phrases": [],
     "warnings": []
   }
+ }
 }
 ```
 
@@ -47,21 +49,21 @@ therefore have an empty top-level `senses` array with data under `phrases`.
 
 ### Exact lookup errors
 
-Errors use `{ "code": string, "error": string }`:
+Errors use the Connect error shape `{ "code": string, "message": string, "details": [...] }`. The HTTP status follows the Connect code, and the application code (for example `word_not_found`) is carried in a `jadren.v1.ErrorDetail` entry of `details` (readable as `details[0].debug.code` in JSON):
 
-- `400 invalid_word`: missing, too long, or contains control characters.
-- `404 word_not_found`: neither an entry nor a resolvable alias exists.
-- `503 dictionary_unavailable`: database missing, unreadable, or invalid.
+- `400 invalid_argument` / `invalid_word`: missing, too long, or contains control characters.
+- `404 not_found` / `word_not_found`: neither an entry nor a resolvable alias exists.
+- `503 unavailable` / `dictionary_unavailable`: database missing, unreadable, or invalid.
 
 ## Prefix suggestions
 
-`GET /api/dictionary/oxford10c/search?q=<prefix>&limit=<1..50>`
+`POST /rpc/jadren.v1.DictionaryService/Search` with `{ "query": "<prefix>", "limit": 1..50 }`
 
 `limit` defaults to 20. Results include both canonical entries and aliases, so
 the UI can display the spelling entered by users while retaining its target.
 
 ```bash
-curl 'http://localhost:3000/api/dictionary/oxford10c/search?q=come%20t&limit=10'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Search -H 'Content-Type: application/json' -d '{"query":"come t","limit":10}'
 ```
 
 ```json
@@ -85,11 +87,14 @@ No matches return `200` with `count: 0` and an empty `results` array. `count` is
 
 ```javascript
 async function lookupWord(word) {
-  const params = new URLSearchParams({ word });
-  const response = await fetch(`/api/dictionary/oxford10c?${params}`);
+  const response = await fetch("/rpc/jadren.v1.DictionaryService/Lookup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ word }),
+  });
   const data = await response.json();
-  if (!response.ok) throw new Error(`${data.code}: ${data.error}`);
-  return data.entry;
+  if (!response.ok) throw new Error(`${data.code}: ${data.message}`);
+  return data.result.entry;
 }
 
 const entry = await lookupWord("come to");
@@ -115,7 +120,7 @@ Fields can be absent or empty. Always check both `senses` and `phrases` when dis
 
 ## Suggestion errors
 
-Errors use the same `{ code, error }` shape as exact lookups.
+Errors use the same Connect error shape as exact lookups; the table shows the HTTP status and the application code in `details`.
 
 | HTTP status | Code | Meaning |
 | --- | --- | --- |
@@ -125,6 +130,4 @@ Errors use the same `{ code, error }` shape as exact lookups.
 
 ## Caching
 
-Successful exact responses cache for five minutes in browsers and one day in shared
-caches. Suggestions cache for one minute in browsers and one hour in shared
-caches.
+Both methods are side-effect free, so they also accept the Connect `GET` form, for example `GET /rpc/jadren.v1.DictionaryService/Lookup?connect=v1&encoding=json&message=%7B%22word%22%3A%22apple%22%7D`. Successful exact responses carry cache headers for five minutes in browsers and one day in shared caches; suggestions for one minute and one hour. The headers only help when clients use the `GET` form, because `POST` responses are not cached.

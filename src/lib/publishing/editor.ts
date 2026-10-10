@@ -91,7 +91,7 @@ interface ArticleRow {
   contributors: ArticleContributor[] | null;
 }
 
-export async function editorUser(request: Request) {
+export async function editorUser(request: { headers: Headers }) {
   const token = bearerToken(request);
   if (!token) return null;
   try {

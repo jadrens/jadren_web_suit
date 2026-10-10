@@ -78,7 +78,7 @@ export async function verifyRefreshableToken(token: string) {
   return userPayload;
 }
 
-export function bearerToken(request: Request) {
+export function bearerToken(request: { headers: Headers }) {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return null;
   const token = authorization.slice(7).trim();

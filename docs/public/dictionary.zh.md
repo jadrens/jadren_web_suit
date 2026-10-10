@@ -1,33 +1,35 @@
 ## 快速开始
 
-词典提供精确查询和前缀建议两个公开 JSON 接口，无需登录或 API Key。请求地址使用当前站点域名；下面的示例以本地开发地址为例。
+词典提供精确查询和前缀建议两个公开的 [Connect](https://connectrpc.com/) RPC 方法（`jadren.v1.DictionaryService`），无需登录或 API Key。使用 `POST` 并设置 `Content-Type: application/json`，请求与响应均为普通 JSON；也可使用 gRPC-Web 或二进制 Protobuf 客户端。请求地址使用当前站点域名；下面的示例以本地开发地址为例。
 
 ```bash
-curl 'http://localhost:3000/api/dictionary/oxford10c?word=apple'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Lookup -H 'Content-Type: application/json' -d '{"word":"apple"}'
 ```
 
 ## 精确查询
 
 ```http
-GET /api/dictionary/oxford10c?word=apples
+POST /rpc/jadren.v1.DictionaryService/Lookup
+
+{ "word": "apples" }
 ```
 
 ### 请求参数
 
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |
-| `word` | 是 | 英语单词或短语。去除首尾空格后为 1–120 个字符，不能包含控制字符。 |
+| `word`（JSON 字段） | 是 | 英语单词或短语。去除首尾空格后为 1–120 个字符，不能包含控制字符。 |
 
 查询不区分大小写，多余空白会合并；复数等别名会自动解析到正式词条。短语中的空格需要进行 URL 编码。
 
 ```bash
-curl 'http://localhost:3000/api/dictionary/oxford10c?word=come%20to'
-curl 'http://localhost:3000/api/dictionary/oxford10c?word=apples'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Lookup -H 'Content-Type: application/json' -d '{"word":"come to"}'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Lookup -H 'Content-Type: application/json' -d '{"word":"apples"}'
 ```
 
 ### 响应示例
 
-成功返回 `200 OK`。下面省略了具体释义内容，空数组仅用于展示结构。
+成功返回 `200 OK`。下面省略了具体释义内容，空数组仅用于展示结构。词典内容位于响应的 `result` 字段内，下面展示的是 `result` 的内容。
 
 ```json
 {
@@ -70,18 +72,20 @@ curl 'http://localhost:3000/api/dictionary/oxford10c?word=apples'
 ## 前缀建议
 
 ```http
-GET /api/dictionary/oxford10c/search?q=exper&limit=10
+POST /rpc/jadren.v1.DictionaryService/Search
+
+{ "query": "exper", "limit": 10 }
 ```
 
 ### 请求参数
 
 | 参数 | 必填 | 说明 |
 | --- | --- | --- |
-| `q` | 是 | 单词或短语前缀，去除首尾空格后为 1–120 个字符，不能包含控制字符 |
+| `query`（JSON 字段） | 是 | 单词或短语前缀，去除首尾空格后为 1–120 个字符，不能包含控制字符 |
 | `limit` | 否 | 返回数量上限，整数 1–50，默认 20 |
 
 ```bash
-curl 'http://localhost:3000/api/dictionary/oxford10c/search?q=exper&limit=10'
+curl -s http://localhost:3000/rpc/jadren.v1.DictionaryService/Search -H 'Content-Type: application/json' -d '{"query":"exper","limit":10}'
 ```
 
 ### 响应示例
@@ -103,17 +107,20 @@ curl 'http://localhost:3000/api/dictionary/oxford10c/search?q=exper&limit=10'
 
 ## JavaScript 调用
 
-使用 `URLSearchParams` 编码单词或短语，并在读取词条前检查响应状态。
+在读取词条前检查响应状态；词条内容位于响应的 `result` 字段。
 
 ```javascript
 async function lookupWord(word) {
-  const params = new URLSearchParams({ word });
-  const response = await fetch(`/api/dictionary/oxford10c?${params}`);
+  const response = await fetch("/rpc/jadren.v1.DictionaryService/Lookup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ word }),
+  });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(`${data.code}: ${data.error}`);
+    throw new Error(`${data.code}: ${data.message}`);
   }
-  return data.entry;
+  return data.result.entry;
 }
 
 const entry = await lookupWord("come to");
@@ -122,10 +129,10 @@ console.log(entry.senses, entry.phrases);
 
 ## 错误响应
 
-错误统一返回 `{ "code": string, "error": string }`。
+错误统一返回 Connect 错误结构 `{ "code": string, "message": string, "details": [...] }`。HTTP 状态码随 Connect 错误码变化，业务错误码（如 `word_not_found`）位于 `details` 中类型为 `jadren.v1.ErrorDetail` 的条目里（JSON 中可通过 `details[0].debug.code` 读取）。
 
 ```json
-{ "code": "word_not_found", "error": "Dictionary entry not found" }
+{ "code": "not_found", "message": "Dictionary entry not found", "details": [{ "type": "jadren.v1.ErrorDetail", "debug": { "code": "word_not_found" } }] }
 ```
 
 | HTTP 状态 | 错误码 | 原因 |
@@ -143,4 +150,4 @@ console.log(entry.senses, entry.phrases);
 | 精确查询 | 5 分钟 | 1 天 |
 | 前缀建议 | 1 分钟 | 1 小时 |
 
-以上缓存头用于成功响应。
+以上缓存头用于成功响应。两个方法都无副作用，也支持 Connect 的 `GET` 形式（例如 `GET /rpc/jadren.v1.DictionaryService/Lookup?connect=v1&encoding=json&message=...`）；缓存头只在使用 `GET` 时生效，`POST` 响应不会被缓存。

@@ -47,7 +47,7 @@ import type {
   EditorArticleSummary,
 } from "@lib/publishing/editor";
 import { useI18n, type Locale } from "@lib/i18n/content";
-import { apiClient, type HttpMethod } from "@lib/client-api";
+import { editorApi } from "@lib/client-api";
 import { useAuth } from "@lib/client-api/use-auth";
 import Link from "next/link";
 import VditorEditor from "./VditorEditor";
@@ -90,14 +90,6 @@ function articleFingerprint(
   });
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const body = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body;
-  return apiClient.request<T>((init?.method ?? "GET") as HttpMethod, path, {
-    body,
-    headers: init?.headers,
-  });
-}
-
 export default function EditorClient() {
   const { locale, t } = useI18n();
   const auth = useAuth();
@@ -134,17 +126,10 @@ export default function EditorClient() {
       return true;
     }
 
-    const query = new URLSearchParams(
-      next.pendingId
-        ? { pendingId: next.pendingId }
-        : { postId: next.postId ?? "" }
-    );
     setBusy(true);
     setMessage(null);
     try {
-      const { content } = await api<{ content: string }>(
-        `/api/editor/articles/content?${query.toString()}`
-      );
+      const content = await editorApi.articleContent(next);
       const loaded = { ...next, content };
       setArticle(loaded);
       setSavedFingerprint(articleFingerprint(loaded));
@@ -162,7 +147,7 @@ export default function EditorClient() {
   }, [copy.loadFailed]);
 
   const loadArticles = useCallback(async () => {
-    const data = await api<{ articles: EditorArticleSummary[]; isAdmin: boolean }>("/api/editor/articles");
+    const data = await editorApi.listArticles();
     setArticles(data.articles);
     setIsAdmin(data.isAdmin);
     const searchParams = new URLSearchParams(window.location.search);
@@ -254,10 +239,7 @@ export default function EditorClient() {
     setBusy(true);
     setMessage(null);
     try {
-      const result = await api<{ pendingId: string }>("/api/editor/articles", {
-        method: "POST",
-        body: JSON.stringify({ ...article, tags: normalizedTags }),
-      });
+      const result = { pendingId: await editorApi.saveDraft({ ...article, tags: normalizedTags }) };
       const next = {
         ...article,
         pendingId: result.pendingId,
@@ -286,15 +268,7 @@ export default function EditorClient() {
     if (!pendingId) return;
     setBusy(true);
     try {
-      const result = await api<{
-        postId: string;
-        locale: string;
-        slug: string;
-        notificationSent: boolean;
-      }>("/api/editor/publish", {
-        method: "POST",
-        body: JSON.stringify({ pendingId, message: approvalMessage }),
-      });
+      const result = await editorApi.publishDraft(pendingId, approvalMessage);
       const publishedArticle = {
         ...article,
         postId: result.postId,
@@ -333,15 +307,14 @@ export default function EditorClient() {
   };
 
   const forkArticle = async (target: EditorArticleSummary) => {
-    const path = target.pendingId
-      ? `/api/admin/pending/${encodeURIComponent(target.pendingId)}/fork`
-      : `/api/admin/articles/${encodeURIComponent(target.postId ?? "")}/fork`;
     setBusy(true);
     setMessage(null);
     closeArticleMenu();
     try {
-      const result = await api<{ pendingId: string }>(path, { method: "POST" });
-      window.location.assign(`/editor?pending=${encodeURIComponent(result.pendingId)}`);
+      const pendingId = target.pendingId
+        ? await editorApi.forkPending(target.pendingId)
+        : await editorApi.forkArticle(target.postId ?? "");
+      window.location.assign(`/editor?pending=${encodeURIComponent(pendingId)}`);
     } catch (error) {
       setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.forkFailed });
       setBusy(false);
@@ -350,16 +323,12 @@ export default function EditorClient() {
 
   const deleteArticle = async () => {
     if (!deleteTarget || !deleteReason.trim()) return;
-    const path = deleteTarget.pendingId
-      ? `/api/admin/pending/${encodeURIComponent(deleteTarget.pendingId)}`
-      : `/api/admin/articles/${encodeURIComponent(deleteTarget.postId ?? "")}`;
     setBusy(true);
     setMessage(null);
     try {
-      const result = await api<{ deleted: boolean; notificationSent: boolean | null }>(path, {
-        method: "DELETE",
-        body: JSON.stringify({ reason: deleteReason }),
-      });
+      const result = deleteTarget.pendingId
+        ? await editorApi.rejectPending(deleteTarget.pendingId, deleteReason)
+        : await editorApi.deleteArticle(deleteTarget.postId ?? "", deleteReason);
       const deletedPostId = deleteTarget.postId;
       const deletedPendingId = deleteTarget.pendingId;
       setDeleteTarget(null);

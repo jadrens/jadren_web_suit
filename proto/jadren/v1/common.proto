@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package jadren.v1;
+
+// ErrorDetail carries the stable, machine-readable application error code
+// (for example "invalid_credentials") alongside the gRPC status code.
+message ErrorDetail {
+  string code = 1;
+}
+
+message Phonetic {
+  // "uk", "us" or "other".
+  string accent = 1;
+  string text = 2;
+  optional string audio = 3;
+}
+
+message Meaning {
+  string text = 1;
+  string part_of_speech = 2;
+}

@@ -28,6 +28,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import CloseIcon from "@mui/icons-material/Close";
 import { alpha } from "@mui/material";
 import Footer from "@components/ui/layout/Footer";
+import { toolsApi } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/app";
 
 // ---------------------------------------------------------------------------
@@ -227,13 +228,9 @@ export default function DnsLeakClient() {
           try {
             // Use our own API proxy to avoid mixed-content errors
             // (ip-api.com only supports HTTP, so the browser can't call it directly on an HTTPS page)
-            const res = await fetch(
-              `/api/ip-geo?ip=${encodeURIComponent(ip)}`,
-              { signal: AbortSignal.timeout(10000) },
-            );
-            if (res.ok) {
-              return await res.json();
-            }
+            return (await toolsApi.ipGeo(ip, {
+              signal: AbortSignal.timeout(10000),
+            })) as unknown as IpGeolocation;
           } catch {
             // ignore, geo is best-effort
           }
@@ -259,16 +256,7 @@ export default function DnsLeakClient() {
   const fetchDomainResult = useCallback(
     async (domain: string, signal: AbortSignal): Promise<boolean> => {
       try {
-        const res = await fetch("/api/dns-leak", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domains: [domain] }),
-          cache: "no-store",
-          signal,
-        });
-        if (!res.ok) return false;
-        const data = await res.json();
-        const item = data.results?.[0];
+        const [item] = await toolsApi.dnsLeak([domain], { signal });
         if (item && item.found && item.queries.length > 0) {
           setRows((prev) =>
             prev.map((r) =>
@@ -282,7 +270,7 @@ export default function DnsLeakClient() {
           return true;
         }
       } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") throw err;
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       }
       return false;
     },

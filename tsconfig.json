@@ -21,6 +21,7 @@
       "@config/*": ["./src/config/*"],
       "@styles/*": ["./src/styles/*"],
       "@lib/*": ["./src/lib/*"],
+      "@gen/*": ["./src/gen/*"],
       "@theme/*": ["./src/theme/*"],
       "@dns/*": ["./external_tools/dns/src/*"]
     }

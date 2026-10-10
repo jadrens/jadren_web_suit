@@ -1,5 +1,5 @@
 import { db } from "@lib/auth/db";
-import { apiError, internalError } from "@lib/auth/http";
+import { apiFailure } from "@lib/rpc/server/errors";
 import { bearerToken, verifyAccessToken } from "@lib/auth/jwt";
 import type { ReminderScheduleType } from "./validation";
 
@@ -21,40 +21,26 @@ export interface ReminderRow {
   last_delivery_status?: "sent" | "rate_limited" | null;
 }
 
-export class InvalidAccessTokenError extends Error {}
-
-export async function requestReminderUser(request: Request) {
+export async function requestReminderUser(request: { headers: Headers }) {
   const token = bearerToken(request);
   if (!token) return null;
   try {
     return await verifyAccessToken(token);
   } catch (error) {
     if (error instanceof Error && error.message.includes("JWT_SECRET")) throw error;
-    throw new InvalidAccessTokenError();
+    throw apiFailure("Token is invalid or expired", 401, "invalid_token");
   }
 }
 
-export function reminderAuthFailure(error: unknown) {
-  if (error instanceof Error && error.message.includes("JWT_SECRET")) {
-    return internalError(error);
-  }
-  if (error instanceof InvalidAccessTokenError) {
-    return apiError("Token is invalid or expired", 401, "invalid_token");
-  }
-  return null;
-}
-
-export function requireVerifiedReminderUser(
-  user: Awaited<ReturnType<typeof requestReminderUser>>
-) {
-  if (!user) return apiError("Bearer token is required", 401, "token_required");
-  if (user.status === 2) {
-    return apiError("Account is unavailable", 403, "account_unavailable");
-  }
+/** Resolve the caller and require a verified, available account. */
+export async function verifiedReminderUser(request: { headers: Headers }) {
+  const user = await requestReminderUser(request);
+  if (!user) throw apiFailure("Bearer token is required", 401, "token_required");
+  if (user.status === 2) throw apiFailure("Account is unavailable", 403, "account_unavailable");
   if (user.status !== 1) {
-    return apiError("Verify your email before creating reminders", 403, "email_unverified");
+    throw apiFailure("Verify your email before creating reminders", 403, "email_unverified");
   }
-  return null;
+  return user;
 }
 
 export function toReminder(row: ReminderRow) {

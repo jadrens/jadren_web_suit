@@ -1,9 +1,12 @@
 ## Quick start
 
-Retrieve the client IP address for the current request. This public endpoint requires no authentication, API key, or request parameters and returns JSON.
+Retrieve the client IP address for the current request. This public [Connect](https://connectrpc.com/) RPC requires no authentication or API key and returns JSON.
 
 ```http
-GET /api/ip
+POST /rpc/jadren.v1.ToolsService/GetClientIp
+Content-Type: application/json
+
+{}
 ```
 
 Examples use the site's origin. For local development, replace it with `http://localhost:3000`.
@@ -13,7 +16,7 @@ Examples use the site's origin. For local development, replace it with `http://l
 ### Basic request
 
 ```bash
-curl -s https://jadren.me/api/ip
+curl -s https://jadren.me/rpc/jadren.v1.ToolsService/GetClientIp -H 'Content-Type: application/json' -d '{}'
 ```
 
 ### Pretty-print JSON
@@ -21,13 +24,13 @@ curl -s https://jadren.me/api/ip
 With `jq` installed:
 
 ```bash
-curl -s https://jadren.me/api/ip | jq .
+curl -s https://jadren.me/rpc/jadren.v1.ToolsService/GetClientIp -H 'Content-Type: application/json' -d '{}' | jq .
 ```
 
 ### Print only the IP
 
 ```bash
-curl -s https://jadren.me/api/ip | jq -r '.ip'
+curl -s https://jadren.me/rpc/jadren.v1.ToolsService/GetClientIp -H 'Content-Type: application/json' -d '{}' | jq -r '.ip'
 ```
 
 ## Response example
@@ -37,10 +40,8 @@ Successful requests return `200 OK`. Addresses below are illustrative; actual va
 ```json
 {
   "ip": "203.0.113.10",
-  "headers": {
-    "x-forwarded-for": "203.0.113.10, 192.0.2.20",
-    "x-real-ip": "203.0.113.10"
-  }
+  "xForwardedFor": "203.0.113.10, 192.0.2.20",
+  "xRealIp": "203.0.113.10"
 }
 ```
 
@@ -49,17 +50,21 @@ Successful requests return `200 OK`. Addresses below are illustrative; actual va
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `ip` | string | Client IP extracted from request headers, or `unknown` when unavailable |
-| `headers.x-forwarded-for` | string or null | Complete incoming `X-Forwarded-For` header; `null` if empty or missing |
-| `headers.x-real-ip` | string or null | Incoming `X-Real-IP` header; `null` if empty or missing |
+| `xForwardedFor` | string, optional | Complete incoming `X-Forwarded-For` header; omitted if empty or missing |
+| `xRealIp` | string, optional | Incoming `X-Real-IP` header; omitted if empty or missing |
 
-`/api/ip` only returns the IP and forwarding headers. Location, ISP, and other details displayed separately on the IP lookup page are not part of this response.
+`GetClientIp` only returns the IP and forwarding headers. Location, ISP, and other details displayed separately on the IP lookup page are not part of this response.
 
 ## JavaScript example
 
 Use a relative URL from a page on this site:
 
 ```javascript
-const response = await fetch('/api/ip');
+const response = await fetch('/rpc/jadren.v1.ToolsService/GetClientIp', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: '{}',
+});
 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 const data = await response.json();
 console.log(data.ip);
@@ -75,11 +80,7 @@ When both headers are missing:
 
 ```json
 {
-  "ip": "unknown",
-  "headers": {
-    "x-forwarded-for": null,
-    "x-real-ip": null
-  }
+  "ip": "unknown"
 }
 ```
 

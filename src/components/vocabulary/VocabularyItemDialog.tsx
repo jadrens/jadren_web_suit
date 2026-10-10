@@ -7,7 +7,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import CollectionDialog from "@components/vocabulary/CollectionDialog";
 import { toast } from "@components/ui/feedback/toast";
-import { vocabularyDrillApi, type DrillMeaning, type DrillPartOfSpeech, type VocabularyCollection, type VocabularyCollectionItem, type VocabularyPhonetic } from "@lib/client-api";
+import { ApiError, dictionaryApi, vocabularyDrillApi, type DrillMeaning, type DrillPartOfSpeech, type VocabularyCollection, type VocabularyCollectionItem, type VocabularyPhonetic } from "@lib/client-api";
 import { getLlmModels, getLlmProfiles, LlmClient } from "@lib/llm";
 
 const partsOfSpeech: DrillPartOfSpeech[] = ["vt", "vi", "v", "adj", "adv", "n", "prep", "conj", "pron", "int", "num", "art", "other"];
@@ -77,13 +77,15 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
     const requestId = ++lookupRequestRef.current;
     setLookingUp(true);
     try {
-      const response = await fetch(`/api/dictionary/oxford10c?word=${encodeURIComponent(normalizedWord)}`);
-      if (requestId !== lookupRequestRef.current) return;
-      if (!response.ok) {
-        toast[response.status === 404 ? "info" : "error"](response.status === 404 ? (zh ? "词典中没有找到该单词，请手动填写。" : "Word not found in the dictionary. Enter it manually.") : (zh ? "词典查询失败，请稍后重试。" : "Dictionary lookup failed. Please try again."));
+      let entry: DictionaryResult["entry"];
+      try {
+        ({ entry } = await dictionaryApi.lookup(normalizedWord) as unknown as DictionaryResult);
+      } catch (error) {
+        if (requestId !== lookupRequestRef.current) return;
+        const notFound = error instanceof ApiError && error.status === 404;
+        toast[notFound ? "info" : "error"](notFound ? (zh ? "词典中没有找到该单词，请手动填写。" : "Word not found in the dictionary. Enter it manually.") : (zh ? "词典查询失败，请稍后重试。" : "Dictionary lookup failed. Please try again."));
         return;
       }
-      const { entry } = await response.json() as DictionaryResult;
       if (requestId !== lookupRequestRef.current) return;
       lookedUpWordRef.current = normalizedWord;
       const seenParts = new Set<DrillPartOfSpeech>();

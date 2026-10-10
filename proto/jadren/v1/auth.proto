@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package jadren.v1;
+
+// AuthService handles account registration, e-mail verification and JWT
+// sessions. Authenticated RPCs read "authorization: Bearer <jwt>" metadata.
+service AuthService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Login(LoginRequest) returns (TokenResponse);
+  // Refresh accepts the token in the request or in the authorization header.
+  rpc Refresh(RefreshRequest) returns (TokenResponse);
+  rpc Me(MeRequest) returns (MeResponse);
+  rpc SendVerificationCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
+  rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
+}
+
+message User {
+  string user_id = 1;
+  string nickname = 2;
+  string email = 3;
+  optional string phone = 4;
+  string registered_at = 5;
+  // 0 = unverified, 1 = verified, 2 = unavailable.
+  int32 status = 6;
+}
+
+message RegisterRequest {
+  string nickname = 1;
+  string email = 2;
+  string password = 3;
+  optional string phone = 4;
+}
+message RegisterResponse { User user = 1; }
+
+message LoginRequest {
+  string identifier = 1;
+  string password = 2;
+}
+
+message RefreshRequest { string token = 1; }
+
+message TokenResponse {
+  string access_token = 1;
+  string token_type = 2;
+  int32 expires_in = 3;
+  int32 refresh_window = 4;
+  User user = 5;
+}
+
+message MeRequest {}
+message MeResponse {
+  User user = 1;
+  int64 issued_at = 2;
+  int64 expires_at = 3;
+}
+
+message SendVerificationCodeRequest {
+  string email = 1;
+  // "en" or "zh".
+  string locale = 2;
+}
+message SendVerificationCodeResponse {
+  string message = 1;
+  int32 expires_in = 2;
+  string sent_at = 3;
+  string expires_at = 4;
+}
+
+message VerifyEmailRequest {
+  string email = 1;
+  string code = 2;
+}
+message VerifyEmailResponse {
+  string message = 1;
+  User user = 2;
+}

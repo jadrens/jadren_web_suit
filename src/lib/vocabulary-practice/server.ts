@@ -1,32 +1,26 @@
-import { apiError, internalError } from "@lib/auth/http";
+import { apiFailure } from "@lib/rpc/server/errors";
 import { db } from "@lib/auth/db";
 import { bearerToken, verifyAccessToken } from "@lib/auth/jwt";
 import { createHash } from "node:crypto";
 
-export class InvalidVocabularyAccessTokenError extends Error {}
-
-export async function requestVocabularyUser(request: Request) {
+export async function requestVocabularyUser(request: { headers: Headers }) {
   const token = bearerToken(request);
   if (!token) return null;
   try {
     return await verifyAccessToken(token);
   } catch (error) {
     if (error instanceof Error && error.message.includes("JWT_SECRET")) throw error;
-    throw new InvalidVocabularyAccessTokenError();
+    throw apiFailure("Token is invalid or expired", 401, "invalid_token");
   }
 }
 
-export function requireVocabularyUser(user: Awaited<ReturnType<typeof requestVocabularyUser>>) {
-  if (!user) return apiError("Bearer token is required", 401, "token_required");
-  if (user.status === 2) return apiError("Account is unavailable", 403, "account_unavailable");
-  if (user.status !== 1) return apiError("Verify your email before practicing vocabulary", 403, "email_unverified");
-  return null;
-}
-
-export function vocabularyAuthFailure(error: unknown) {
-  if (error instanceof Error && error.message.includes("JWT_SECRET")) return internalError(error);
-  if (error instanceof InvalidVocabularyAccessTokenError) return apiError("Token is invalid or expired", 401, "invalid_token");
-  return null;
+/** Resolve the caller and require a verified, available account. */
+export async function verifiedVocabularyUser(request: { headers: Headers }) {
+  const user = await requestVocabularyUser(request);
+  if (!user) throw apiFailure("Bearer token is required", 401, "token_required");
+  if (user.status === 2) throw apiFailure("Account is unavailable", 403, "account_unavailable");
+  if (user.status !== 1) throw apiFailure("Verify your email before practicing vocabulary", 403, "email_unverified");
+  return user;
 }
 
 export interface VocabularyUsageRow {

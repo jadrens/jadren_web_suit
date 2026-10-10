@@ -1,20 +1,24 @@
 # Auth API
 
-All request and response bodies use JSON. JWTs use `HS256` and are accepted through
-`Authorization: Bearer <token>`.
+Auth is served by `jadren.v1.AuthService` (see [`rpc-api.md`](rpc-api.md) for the
+transport). Requests and responses are Protobuf messages defined in
+`proto/jadren/v1/auth.proto`; with the Connect protocol they can also be sent as
+plain JSON. JWTs use `HS256` and are accepted through
+`Authorization: Bearer <token>` metadata.
 
-Auth errors use a stable machine-readable code plus a short English message:
+Failures carry a gRPC status code, a short English message, and a stable
+machine-readable application code in a `jadren.v1.ErrorDetail`:
 
 ```json
 {
-  "code": "invalid_credentials",
-  "error_msg": "Invalid credentials",
-  "error": "Invalid credentials"
+  "code": "unauthenticated",
+  "message": "Invalid credentials",
+  "details": [{ "type": "jadren.v1.ErrorDetail", "debug": { "code": "invalid_credentials" } }]
 }
 ```
 
-Clients should translate `code`; `error_msg` is intended for diagnostics.
-`error` remains as a compatibility alias.
+Clients should translate the application code (`ApiError.code` in the browser
+client); the message is intended for diagnostics.
 
 ## Environment
 
@@ -46,9 +50,11 @@ is reserved for future subscription or service-notification state. It has no
 foreign key to `user_main`, so it can also represent an email without a user
 account.
 
-## Endpoints
+## Methods
 
-### `POST /api/auth/register`
+Every method is `POST /rpc/jadren.v1.AuthService/<Method>`.
+
+### `Register`
 
 ```json
 {
@@ -62,7 +68,7 @@ account.
 Creates a user with `status: 0`. Nickname and email are unique; phone is
 optional. Passwords are bcrypt hashes and never returned.
 
-### `POST /api/auth/login`
+### `Login`
 
 ```json
 {
@@ -78,22 +84,22 @@ metadata, and the public user object.
 Failed attempts are limited in a 15-minute sliding window: eight attempts for
 one identifier/IP pair and 30 attempts across all identifiers from one IP.
 Successful authentication clears the matching pair. A limited request returns
-HTTP `429`, code `login_rate_limit`, and `Retry-After: 900`. The reverse proxy
+gRPC status `RESOURCE_EXHAUSTED` (HTTP `429`), application code `login_rate_limit`, and `Retry-After: 900` metadata. The reverse proxy
 must overwrite forwarded-IP headers so clients cannot spoof their source IP.
 
-### `GET /api/auth/me`
+### `Me`
 
 Validates a non-expired access token without a database lookup and returns its
 user claims: ID, nickname, email, phone, registration date, and status.
 
-### `POST /api/auth/refresh`
+### `Refresh`
 
-Accepts the old token as a Bearer token, or as `{ "token": "..." }`. A token
+Accepts the old token as a Bearer token, or as the request's `token` field. A token
 can be refreshed for 16 days from its original issue time, even though its
 normal access lifetime is one day. The endpoint reloads the user from the
 database and only issues a new token when the current status is `0` or `1`.
 
-### `POST /api/auth/email/send-code`
+### `SendVerificationCode`
 
 ```json
 { "email": "user@example.com", "locale": "en" }
@@ -104,10 +110,10 @@ bcrypt hash. Resend sends the HTML and plain-text verification email from
 `auth@jadren.me`. `locale` accepts `en` or `zh` and defaults to English.
 A local Bun SQLite database atomically limits each email
 to six attempts per three hours and each client IP to 30 attempts per hour.
-Either limit returns HTTP `429`. Monitoring rows older than three hours are
+Either limit fails with `RESOURCE_EXHAUSTED` (HTTP `429`). Monitoring rows older than three hours are
 deleted automatically.
 
-### `POST /api/auth/email/verify`
+### `VerifyEmail`
 
 ```json
 {

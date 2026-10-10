@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package jadren.v1;
+
+service QuickLinkService {
+  rpc ListQuickLinks(ListQuickLinksRequest) returns (ListQuickLinksResponse);
+  rpc CreateQuickLink(CreateQuickLinkRequest) returns (CreateQuickLinkResponse);
+  rpc UpdateQuickLink(UpdateQuickLinkRequest) returns (UpdateQuickLinkResponse);
+  rpc DeleteQuickLink(DeleteQuickLinkRequest) returns (DeleteQuickLinkResponse);
+}
+
+message QuickLink {
+  string short_name = 1;
+  string target_url = 2;
+  optional string note = 3;
+  string created_at = 4;
+  string expires_at = 5;
+  string click_count = 6;
+}
+
+message ListQuickLinksRequest {}
+message ListQuickLinksResponse { repeated QuickLink links = 1; }
+
+message CreateQuickLinkRequest {
+  string short_name = 1;
+  string target_url = 2;
+  optional string note = 3;
+  string expires_at = 4;
+}
+message CreateQuickLinkResponse { QuickLink link = 1; }
+
+// UpdateQuickLink changes only the fields that are set. An empty note clears it.
+message UpdateQuickLinkRequest {
+  string short_name = 1;
+  optional string target_url = 2;
+  optional string note = 3;
+  optional string expires_at = 4;
+  optional bool disable = 5;
+}
+message UpdateQuickLinkResponse { QuickLink link = 1; }
+
+message DeleteQuickLinkRequest { string short_name = 1; }
+message DeleteQuickLinkResponse {}
+
+service ReminderService {
+  rpc ListReminders(ListRemindersRequest) returns (ListRemindersResponse);
+  rpc CreateReminder(CreateReminderRequest) returns (ReminderResponse);
+  rpc UpdateReminderContent(UpdateReminderContentRequest) returns (ReminderResponse);
+  rpc UpdateReminderSchedule(UpdateReminderScheduleRequest) returns (ReminderResponse);
+  // SetReminderStatus pauses or resumes a reminder ("active" or "paused").
+  rpc SetReminderStatus(SetReminderStatusRequest) returns (ReminderResponse);
+  // ReactivateReminder reschedules a completed one-time reminder.
+  rpc ReactivateReminder(ReactivateReminderRequest) returns (ReminderResponse);
+  rpc DeleteReminder(DeleteReminderRequest) returns (DeleteReminderResponse);
+  rpc ListReminderAudits(ListReminderAuditsRequest) returns (ListReminderAuditsResponse);
+}
+
+message Reminder {
+  string reminder_id = 1;
+  string title = 2;
+  string note = 3;
+  optional string remind_at = 4;
+  optional string next_remind_at = 5;
+  bool repeats = 6;
+  // "one_time", "repeat" or "never".
+  string schedule_type = 7;
+  optional int32 repeat_interval_minutes = 8;
+  // "active", "paused" or "completed".
+  string status = 9;
+  string created_at = 10;
+  string updated_at = 11;
+  optional string last_sent_at = 12;
+  optional string completed_at = 13;
+  // "sent" or "rate_limited".
+  optional string last_delivery_status = 14;
+}
+
+message ListRemindersRequest {}
+message ListRemindersResponse { repeated Reminder reminders = 1; }
+message ReminderResponse { Reminder reminder = 1; }
+
+message CreateReminderRequest {
+  string title = 1;
+  string note = 2;
+  optional string remind_at = 3;
+  string schedule_type = 4;
+  optional int32 repeat_interval_minutes = 5;
+}
+
+message UpdateReminderContentRequest {
+  string reminder_id = 1;
+  string title = 2;
+  string note = 3;
+}
+
+message UpdateReminderScheduleRequest {
+  string reminder_id = 1;
+  string schedule_type = 2;
+  optional string remind_at = 3;
+  optional int32 repeat_interval_minutes = 4;
+}
+
+message SetReminderStatusRequest {
+  string reminder_id = 1;
+  string status = 2;
+}
+
+message ReactivateReminderRequest {
+  string reminder_id = 1;
+  string remind_at = 2;
+}
+
+message DeleteReminderRequest { string reminder_id = 1; }
+message DeleteReminderResponse {}
+
+message EmailAudit {
+  string audit_id = 1;
+  optional string reminder_id = 2;
+  string recipient_email = 3;
+  string subject = 4;
+  string body_text = 5;
+  string content_sha256 = 6;
+  // "pending", "sent" or "failed".
+  string status = 7;
+  optional string provider_email_id = 8;
+  optional string failure_message = 9;
+  string created_at = 10;
+  optional string sent_at = 11;
+}
+message ListReminderAuditsRequest {}
+message ListReminderAuditsResponse { repeated EmailAudit audits = 1; }
+
+service LlmSettingsService {
+  // GetBackup fails with NOT_FOUND when no cloud backup exists.
+  rpc GetBackup(GetBackupRequest) returns (BackupResponse);
+  rpc PutBackup(EncryptedBackup) returns (BackupResponse);
+}
+
+message EncryptedBackup {
+  int32 version = 1;
+  string salt = 2;
+  string iv = 3;
+  string ciphertext = 4;
+  optional string updated_at = 5;
+}
+message GetBackupRequest {}
+message BackupResponse { EncryptedBackup backup = 1; }

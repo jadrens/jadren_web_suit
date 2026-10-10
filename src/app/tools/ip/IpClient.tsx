@@ -16,6 +16,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import Footer from "@components/ui/layout/Footer";
 import { Snackbar } from "@components/ui/feedback/toast";
+import { toolsApi } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 
@@ -106,16 +107,13 @@ export default function IpClient() {
     setError(null);
     setGeoData(null);
     try {
-      const res = await fetch("/api/ip");
-      if (!res.ok) throw new Error("Failed to fetch IP");
-      const data = await res.json();
+      const data = await toolsApi.clientIp();
       setIp(data.ip);
 
       // Async fetch geo info
       setGeoLoading(true);
-      fetch(`/api/ip-geo?ip=${encodeURIComponent(data.ip)}`, { signal: AbortSignal.timeout(10000) })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((geo) => setGeoData(geo))
+      toolsApi.ipGeo(data.ip, { signal: AbortSignal.timeout(10000) })
+        .then((geo) => setGeoData(geo as unknown as IpGeolocation))
         .catch(() => setGeoData(null))
         .finally(() => setGeoLoading(false));
     } catch (err) {

@@ -1,0 +1,309 @@
+syntax = "proto3";
+
+package jadren.v1;
+
+import "jadren/v1/common.proto";
+
+// SentencePracticeService stores sentence-practice progress on the vocabulary
+// items of the caller's collections.
+service SentencePracticeService {
+  rpc ListUsages(ListUsagesRequest) returns (ListUsagesResponse);
+  rpc CreateUsage(CreateUsageRequest) returns (CreateUsageResponse);
+  rpc DeleteUsage(DeleteUsageRequest) returns (DeleteUsageResponse);
+  rpc RecordAttempt(RecordAttemptRequest) returns (RecordAttemptResponse);
+}
+
+message PracticeAttempt {
+  string attempt_id = 1;
+  string question = 2;
+  string example_sentence = 3;
+  string answer = 4;
+  bool is_correct = 5;
+  string feedback = 6;
+  optional string corrected_sentence = 7;
+  string created_at = 8;
+}
+
+message PracticeUsage {
+  string usage_id = 1;
+  string collection_id = 2;
+  string word = 3;
+  string prompt = 4;
+  optional string last_learn_time = 5;
+  int32 correct = 6;
+  int32 wrong = 7;
+  string last8_correct_rate = 8;
+  string created_at = 9;
+  string updated_at = 10;
+  repeated PracticeAttempt attempts = 11;
+}
+
+message CollectionSummary {
+  string collection_id = 1;
+  string name = 2;
+}
+
+message ListUsagesRequest {}
+message ListUsagesResponse {
+  repeated CollectionSummary collections = 1;
+  repeated PracticeUsage usages = 2;
+}
+
+message CreateUsageRequest {
+  string collection_id = 1;
+  string word = 2;
+  string prompt = 3;
+}
+message CreateUsageResponse { PracticeUsage usage = 1; }
+
+message DeleteUsageRequest { string usage_id = 1; }
+message DeleteUsageResponse {}
+
+message RecordAttemptRequest {
+  string usage_id = 1;
+  string question = 2;
+  string example_sentence = 3;
+  string answer = 4;
+  bool is_correct = 5;
+  string feedback = 6;
+  optional string corrected_sentence = 7;
+}
+message RecordAttemptResponse {
+  PracticeAttempt attempt = 1;
+  string last8_correct_rate = 2;
+}
+
+// VocabularyDrillService serves the bundled word lists, the caller's
+// collections and the AI-generated word quiz cache.
+service VocabularyDrillService {
+  // ListWordIds returns the drillable word ids of a dataset for a mode.
+  rpc ListWordIds(ListWordIdsRequest) returns (ListWordIdsResponse);
+  rpc SearchWords(SearchWordsRequest) returns (SearchWordsResponse);
+  // GetWords fails with NOT_FOUND when none of the ids is drillable.
+  rpc GetWords(GetWordsRequest) returns (GetWordsResponse);
+  // LookupOnlineWord queries the public dictionaryapi.dev service.
+  rpc LookupOnlineWord(LookupOnlineWordRequest) returns (LookupOnlineWordResponse);
+
+  rpc GetUserData(GetUserDataRequest) returns (GetUserDataResponse);
+  rpc SaveProgress(SaveProgressRequest) returns (SaveResponse);
+  rpc CreateCollection(CreateCollectionRequest) returns (CreateCollectionResponse);
+  rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse);
+  rpc ReorderCollection(ReorderCollectionRequest) returns (SaveResponse);
+  rpc AddItem(AddItemRequest) returns (AddItemResponse);
+  rpc TransferItem(TransferItemRequest) returns (TransferItemResponse);
+  rpc DeleteItem(DeleteItemRequest) returns (DeleteItemResponse);
+  rpc SaveStatDeltas(SaveStatDeltasRequest) returns (SaveResponse);
+
+  rpc GetWordQuiz(GetWordQuizRequest) returns (WordQuizResponse);
+  // CacheWordQuiz stores a generated quiz and requires an administrator.
+  rpc CacheWordQuiz(CacheWordQuizRequest) returns (WordQuizResponse);
+}
+
+message SaveResponse { bool saved = 1; }
+
+message WordExample {
+  string en = 1;
+  string zh = 2;
+}
+
+message DrillWord {
+  int32 id = 1;
+  string english = 2;
+  string phonetic = 3;
+  string chinese = 4;
+  repeated Phonetic phonetics = 5;
+  repeated Meaning meanings = 6;
+  repeated WordExample examples = 7;
+  repeated int32 hint_indexes = 8;
+  int32 duplicate_count = 9;
+}
+
+message ListWordIdsRequest {
+  string dataset = 1;
+  // "phonetic", "meaning" or "word".
+  string mode = 2;
+}
+message ListWordIdsResponse { repeated int32 ids = 1; }
+
+message WordMatch {
+  int32 id = 1;
+  string english = 2;
+}
+message SearchWordsRequest {
+  string dataset = 1;
+  string mode = 2;
+  string query = 3;
+}
+message SearchWordsResponse { repeated WordMatch matches = 1; }
+
+message GetWordsRequest {
+  string dataset = 1;
+  string mode = 2;
+  repeated int32 ids = 3;
+}
+message GetWordsResponse { repeated DrillWord words = 1; }
+
+message OnlineDefinition {
+  string part_of_speech = 1;
+  string definition = 2;
+  string example = 3;
+}
+message LookupOnlineWordRequest { string word = 1; }
+message LookupOnlineWordResponse {
+  string phonetic = 1;
+  repeated Phonetic phonetics = 2;
+  string definition = 3;
+  string example = 4;
+  repeated OnlineDefinition definitions = 5;
+}
+
+message ReviewSummary {
+  optional string added_at = 1;
+  optional string last_reviewed_at = 2;
+  optional string due_at = 3;
+  // "new", "due" or "scheduled".
+  string status = 4;
+  bool estimated = 5;
+  optional double recall_probability = 6;
+  optional double stability_days = 7;
+  optional double difficulty = 8;
+  optional int32 lapses = 9;
+  string calculated_at = 10;
+}
+
+message CollectionItem {
+  optional ReviewSummary review = 1;
+  string dataset = 2;
+  int32 source_word_id = 3;
+  string word = 4;
+  string phonetic = 5;
+  repeated Phonetic phonetics = 6;
+  repeated Meaning meanings = 7;
+  optional string plural_forms = 8;
+  optional string past_forms = 9;
+  optional string example = 10;
+  optional string definition = 11;
+  int32 appearance_count = 12;
+  int32 correct_count = 13;
+  int32 wrong_count = 14;
+}
+
+message Collection {
+  optional string order_generated_at = 1;
+  repeated string practice_order = 2;
+  string collection_id = 3;
+  string name = 4;
+  repeated CollectionItem items = 5;
+}
+
+message DrillProgress {
+  string dataset = 1;
+  string mode = 2;
+  optional string order_generated_at = 3;
+  repeated int32 order = 4;
+  int32 index = 5;
+}
+
+message GetUserDataRequest {}
+message GetUserDataResponse {
+  repeated Collection collections = 1;
+  repeated DrillProgress progress = 2;
+}
+
+message SaveProgressRequest {
+  string dataset = 1;
+  string mode = 2;
+  optional string order_generated_at = 3;
+  repeated int32 order = 4;
+  int32 index = 5;
+}
+
+message CreateCollectionRequest { string name = 1; }
+message CreateCollectionResponse { Collection collection = 1; }
+
+message DeleteCollectionRequest { string collection_id = 1; }
+message DeleteCollectionResponse {}
+
+message ReorderCollectionRequest { string collection_id = 1; }
+
+message AddItemRequest {
+  string collection_id = 1;
+  string dataset = 2;
+  // Unset creates a custom word with a generated negative id.
+  optional int32 source_word_id = 3;
+  string word = 4;
+  string phonetic = 5;
+  repeated Phonetic phonetics = 6;
+  repeated Meaning meanings = 7;
+  optional string plural_forms = 8;
+  optional string past_forms = 9;
+  optional string example = 10;
+  optional string definition = 11;
+}
+message AddItemResponse {
+  bool saved = 1;
+  optional CollectionItem item = 2;
+}
+
+message TransferItemRequest {
+  string collection_id = 1;
+  string dataset = 2;
+  int32 source_word_id = 3;
+}
+message TransferItemResponse {
+  bool restored = 1;
+  string destination_collection_id = 2;
+}
+
+message DeleteItemRequest {
+  string collection_id = 1;
+  int32 source_word_id = 2;
+  optional string dataset = 3;
+}
+message DeleteItemResponse {}
+
+message ReviewEvent {
+  string id = 1;
+  string reviewed_at = 2;
+  // "again", "hard" or "good".
+  string rating = 3;
+}
+
+message StatDelta {
+  string collection_id = 1;
+  string dataset = 2;
+  int32 source_word_id = 3;
+  optional string last_reviewed_at = 4;
+  repeated ReviewEvent reviews = 5;
+  int32 appearances = 6;
+  int32 correct = 7;
+  int32 wrong = 8;
+}
+message SaveStatDeltasRequest { repeated StatDelta deltas = 1; }
+
+message WordQuiz {
+  string dataset = 1;
+  int32 source_word_id = 2;
+  string word = 3;
+  // "meanings" or "dictionary".
+  string exercise_kind = 4;
+  repeated Meaning meanings = 5;
+  repeated string hints = 6;
+  string created_at = 7;
+}
+message WordQuizResponse {
+  optional WordQuiz quiz = 1;
+  bool can_generate = 2;
+}
+message GetWordQuizRequest {
+  string dataset = 1;
+  int32 source_word_id = 2;
+}
+message CacheWordQuizRequest {
+  string dataset = 1;
+  int32 source_word_id = 2;
+  string word = 3;
+  string exercise_kind = 4;
+  repeated string sense_keys = 5;
+  string generator_model = 6;
+}

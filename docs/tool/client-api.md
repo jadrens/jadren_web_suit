@@ -4,39 +4,33 @@ The client foundation lives in `src/lib/client-api`. `AuthLifecycle` is mounted
 in the root layout, so a stored session is restored as soon as the browser app
 hydrates.
 
-## Generic requests
+## RPC clients
 
-`apiClient` automatically attaches the current Bearer token. On HTTP `401`, it
-deduplicates token refresh work and retries the original request once.
+The browser talks to the server with [Connect](https://connectrpc.com/) RPCs
+over `/rpc` (see [`rpc-api.md`](rpc-api.md)). `src/lib/client-api/rpc.ts`
+builds the typed service clients; `index.ts` wraps them in the per-feature
+objects the UI uses (`quickLinksApi`, `remindersApi`, `vocabularyDrillApi`,
+`dictionaryApi`, `toolsApi`, `editorApi`, ...) and `mappers.ts` converts
+Protobuf messages into the plain types in `types.ts`.
+
+An interceptor attaches the current Bearer token. On `UNAUTHENTICATED` it
+deduplicates token refresh work and retries the original call once.
 
 ```ts
-import { apiClient } from "@/lib/client-api";
+import { quickLinksApi } from "@lib/client-api";
 
-interface ToolItem {
-  id: string;
-  name: string;
-}
-
-const item = await apiClient.get<ToolItem>("/api/items/1");
-
-const created = await apiClient.post<ToolItem, { name: string }>(
-  "/api/items",
-  { name: "Example" }
-);
-
-await apiClient.patch<ToolItem, Partial<ToolItem>>(
-  "/api/items/1",
-  { name: "Updated" }
-);
-
-await apiClient.delete<void>("/api/items/1");
+const { links } = await quickLinksApi.list();
+await quickLinksApi.create({
+  shortName: "docs",
+  targetUrl: "https://example.com",
+  expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+});
 ```
 
-The wrapper supports `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, and
-`OPTIONS`, typed bodies and responses, query parameters, JSON, `FormData`,
-custom headers, caller cancellation, and per-request timeouts. Set
-`auth: false` for public endpoints. Failed responses throw `ApiError`, which
-contains `status`, `url`, and parsed response `details`.
+Calls time out after 15 seconds. Pass `{ signal }` (where a wrapper accepts
+call options) to cancel. Failed calls throw `ApiError`, which contains
+`status` (the HTTP status equivalent of the RPC status code), `code` (the
+application code such as `invalid_credentials`), and `url`.
 
 ## Authentication methods
 
@@ -87,7 +81,7 @@ export function AccountButton() {
 - Concurrent refresh requests share one promise.
 - Browser tabs synchronize login and logout through the `storage` event.
 - Returning online or foregrounding the page triggers a refresh when needed.
-- A `401` refreshes and retries only once, preventing retry loops.
+- An `UNAUTHENTICATED` response refreshes and retries only once, preventing retry loops.
 - A refresh rejected with `401` or `403` clears the session immediately.
 
 Because the backend deliberately uses stateless Bearer JWTs instead of secure

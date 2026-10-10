@@ -1,4 +1,6 @@
-import { ApiClient, ApiError } from "./http";
+import { ApiError } from "./http";
+import { toUserProfile } from "./mappers";
+import { createAnonymousClients } from "./rpc";
 import type {
   AuthSnapshot,
   LoginRequest,
@@ -113,12 +115,27 @@ function isStoredSession(value: unknown): value is StoredSession {
   );
 }
 
+function tokenResponse(response: {
+  accessToken: string;
+  expiresIn: number;
+  refreshWindow: number;
+  user?: Parameters<typeof toUserProfile>[0];
+}): TokenResponse {
+  return {
+    accessToken: response.accessToken,
+    tokenType: "Bearer",
+    expiresIn: response.expiresIn,
+    refreshWindow: response.refreshWindow,
+    user: toUserProfile(response.user),
+  };
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Authentication request failed";
 }
 
 export class AuthSessionManager {
-  private readonly transport = new ApiClient();
+  private readonly rpc = createAnonymousClients();
   private readonly listeners = new Set<() => void>();
   private snapshot: AuthSnapshot = SERVER_SNAPSHOT;
   private session: StoredSession | null = null;
@@ -179,23 +196,17 @@ export class AuthSessionManager {
     return this.session.accessToken;
   };
 
-  register = (input: RegisterRequest) =>
-    this.transport.post<RegisterResponse, RegisterRequest>(
-      "/api/auth/register",
-      input,
-      { auth: false }
-    );
+  register = async (input: RegisterRequest): Promise<RegisterResponse> => {
+    const response = await this.rpc.auth.register({ ...input, phone: input.phone ?? undefined });
+    return { user: toUserProfile(response.user) };
+  };
 
   login = async (input: LoginRequest) => {
     await this.initialize();
     const previousSession = this.session;
     this.publish("authenticating", null, null);
     try {
-      const response = await this.transport.post<TokenResponse, LoginRequest>(
-        "/api/auth/login",
-        input,
-        { auth: false }
-      );
+      const response = tokenResponse(await this.rpc.auth.login(input));
       this.acceptToken(response);
       return response.user;
     } catch (error) {
@@ -218,21 +229,21 @@ export class AuthSessionManager {
 
   logout = () => this.clearSession();
 
-  sendVerificationCode = (email: string, locale: "en" | "zh" = "en") =>
-    this.transport.post<
-      SendVerificationCodeResponse,
-      { email: string; locale: "en" | "zh" }
-    >(
-      "/api/auth/email/send-code",
-      { email, locale },
-      { auth: false }
-    );
+  sendVerificationCode = async (
+    email: string,
+    locale: "en" | "zh" = "en"
+  ): Promise<SendVerificationCodeResponse> => {
+    const { message, expiresIn, sentAt, expiresAt } =
+      await this.rpc.auth.sendVerificationCode({ email, locale });
+    return { message, expiresIn, sentAt, expiresAt };
+  };
 
   verifyEmail = async (email: string, code: string) => {
-    const response = await this.transport.post<
-      VerifyEmailResponse,
-      { email: string; code: string }
-    >("/api/auth/email/verify", { email, code }, { auth: false });
+    const verified = await this.rpc.auth.verifyEmail({ email, code });
+    const response: VerifyEmailResponse = {
+      message: verified.message,
+      user: toUserProfile(verified.user),
+    };
 
     if (this.session?.user.email.toLowerCase() === email.trim().toLowerCase()) {
       this.session = { ...this.session, user: response.user };
@@ -246,10 +257,15 @@ export class AuthSessionManager {
   loadCurrentUser = async () => {
     const token = this.getAccessToken();
     if (!token) return null;
-    const response = await this.transport.get<MeResponse>("/api/auth/me", {
-      auth: false,
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const me = await this.rpc.auth.me(
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const response: MeResponse = {
+      user: toUserProfile(me.user),
+      issuedAt: Number(me.issuedAt),
+      expiresAt: Number(me.expiresAt),
+    };
     if (this.session) {
       this.session = { ...this.session, user: response.user };
       this.persistSession();
@@ -275,10 +291,9 @@ export class AuthSessionManager {
 
     this.publish("refreshing", current.user, current.expiresAt);
     try {
-      const response = await this.transport.post<
-        TokenResponse,
-        { token: string }
-      >("/api/auth/refresh", { token: current.accessToken }, { auth: false });
+      const response = tokenResponse(
+        await this.rpc.auth.refresh({ token: current.accessToken })
+      );
       this.acceptToken(response);
       return response.accessToken;
     } catch (error) {

@@ -106,7 +106,7 @@ export function validateEmailSend(sendToEmail: string, ip: string) {
   return rateLimiter().validate(sendToEmail, ip);
 }
 
-export function requestIp(request: Request) {
+export function requestIp(request: { headers: Headers }) {
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0];
   const candidate =
     request.headers.get("cf-connecting-ip") ||

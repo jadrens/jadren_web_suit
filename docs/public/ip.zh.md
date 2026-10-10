@@ -1,9 +1,12 @@
 ## 快速开始
 
-获取当前请求的客户端 IP 地址。接口公开，无需登录、API Key 或请求参数，返回 JSON。
+获取当前请求的客户端 IP 地址。这是一个公开的 [Connect](https://connectrpc.com/) RPC 方法，无需登录或 API Key，返回 JSON。
 
 ```http
-GET /api/ip
+POST /rpc/jadren.v1.ToolsService/GetClientIp
+Content-Type: application/json
+
+{}
 ```
 
 以下示例使用站点地址；本地开发时可以替换为 `http://localhost:3000`。
@@ -13,7 +16,7 @@ GET /api/ip
 ### 基础请求
 
 ```bash
-curl -s https://jadren.me/api/ip
+curl -s https://jadren.me/rpc/jadren.v1.ToolsService/GetClientIp -H 'Content-Type: application/json' -d '{}'
 ```
 
 ### 格式化 JSON
@@ -21,13 +24,13 @@ curl -s https://jadren.me/api/ip
 安装 `jq` 后，可以格式化查看响应：
 
 ```bash
-curl -s https://jadren.me/api/ip | jq .
+curl -s https://jadren.me/rpc/jadren.v1.ToolsService/GetClientIp -H 'Content-Type: application/json' -d '{}' | jq .
 ```
 
 ### 只输出 IP
 
 ```bash
-curl -s https://jadren.me/api/ip | jq -r '.ip'
+curl -s https://jadren.me/rpc/jadren.v1.ToolsService/GetClientIp -H 'Content-Type: application/json' -d '{}' | jq -r '.ip'
 ```
 
 ## 响应示例
@@ -37,10 +40,8 @@ curl -s https://jadren.me/api/ip | jq -r '.ip'
 ```json
 {
   "ip": "203.0.113.10",
-  "headers": {
-    "x-forwarded-for": "203.0.113.10, 192.0.2.20",
-    "x-real-ip": "203.0.113.10"
-  }
+  "xForwardedFor": "203.0.113.10, 192.0.2.20",
+  "xRealIp": "203.0.113.10"
 }
 ```
 
@@ -49,17 +50,21 @@ curl -s https://jadren.me/api/ip | jq -r '.ip'
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
 | `ip` | string | 从请求头提取的客户端 IP；缺少可用值时为 `unknown` |
-| `headers.x-forwarded-for` | string 或 null | 收到的完整 `X-Forwarded-For` 请求头；空值或缺失时为 `null` |
-| `headers.x-real-ip` | string 或 null | 收到的 `X-Real-IP` 请求头；空值或缺失时为 `null` |
+| `xForwardedFor` | string，可选 | 收到的完整 `X-Forwarded-For` 请求头；空值或缺失时省略 |
+| `xRealIp` | string，可选 | 收到的 `X-Real-IP` 请求头；空值或缺失时省略 |
 
-`/api/ip` 只返回 IP 与转发头，不包含 IP 查询页面额外展示的地理位置、运营商等信息。
+`GetClientIp` 只返回 IP 与转发头，不包含 IP 查询页面额外展示的地理位置、运营商等信息。
 
 ## JavaScript 调用
 
 在本站页面中可以使用相对地址：
 
 ```javascript
-const response = await fetch('/api/ip');
+const response = await fetch('/rpc/jadren.v1.ToolsService/GetClientIp', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: '{}',
+});
 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 const data = await response.json();
 console.log(data.ip);
@@ -75,11 +80,7 @@ console.log(data.ip);
 
 ```json
 {
-  "ip": "unknown",
-  "headers": {
-    "x-forwarded-for": null,
-    "x-real-ip": null
-  }
+  "ip": "unknown"
 }
 ```
 

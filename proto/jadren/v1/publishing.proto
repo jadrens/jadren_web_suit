@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package jadren.v1;
+
+// EditorService is the author-facing blog workflow: drafts, review and publish.
+service EditorService {
+  rpc ListArticles(ListArticlesRequest) returns (ListArticlesResponse);
+  // GetArticleContent returns the Markdown body of a draft or published post.
+  rpc GetArticleContent(GetArticleContentRequest) returns (GetArticleContentResponse);
+  rpc SaveDraft(SaveDraftRequest) returns (SaveDraftResponse);
+  // PublishDraft requires an administrator.
+  rpc PublishDraft(PublishDraftRequest) returns (PublishDraftResponse);
+}
+
+// AdminService is the administrator review queue.
+service AdminService {
+  rpc ListPending(ListPendingRequest) returns (ListPendingResponse);
+  rpc RejectPending(RejectPendingRequest) returns (NotifiedDeleteResponse);
+  rpc ForkPending(ForkPendingRequest) returns (ForkResponse);
+  rpc DeleteArticle(DeleteArticleRequest) returns (NotifiedDeleteResponse);
+  rpc ForkArticle(ForkArticleRequest) returns (ForkResponse);
+}
+
+message ArticleContributor {
+  string user_id = 1;
+  string name = 2;
+  int32 contribution_count = 3;
+}
+
+// EditorArticle is a draft or a published post. content is empty in listings.
+message EditorArticle {
+  optional string pending_id = 1;
+  optional string post_id = 2;
+  string locale = 3;
+  string slug = 4;
+  string title = 5;
+  string description = 6;
+  string content = 7;
+  repeated string tags = 8;
+  string updated_at = 9;
+  bool published = 10;
+  optional string author_id = 11;
+  optional string author_name = 12;
+  optional string owner_id = 13;
+  optional string owner_name = 14;
+  optional string last_edited_user = 15;
+  optional string last_edited_user_name = 16;
+  optional string forked_from_pending_id = 17;
+  repeated ArticleContributor contributors = 18;
+}
+
+message ListArticlesRequest {}
+message ListArticlesResponse {
+  repeated EditorArticle articles = 1;
+  bool is_admin = 2;
+}
+
+message GetArticleContentRequest {
+  optional string pending_id = 1;
+  optional string post_id = 2;
+}
+message GetArticleContentResponse { string content = 1; }
+
+message SaveDraftRequest {
+  optional string pending_id = 1;
+  optional string post_id = 2;
+  string locale = 3;
+  string slug = 4;
+  string title = 5;
+  string description = 6;
+  string content = 7;
+  repeated string tags = 8;
+}
+message SaveDraftResponse { string pending_id = 1; }
+
+message PublishDraftRequest {
+  string pending_id = 1;
+  string message = 2;
+}
+message PublishDraftResponse {
+  string post_id = 1;
+  string pending_id = 2;
+  string locale = 3;
+  string slug = 4;
+  string title = 5;
+  string author_id = 6;
+  string author_email = 7;
+  bool notification_sent = 8;
+}
+
+message ListPendingRequest {}
+message ListPendingResponse { repeated EditorArticle pending = 1; }
+
+message RejectPendingRequest {
+  string pending_id = 1;
+  string reason = 2;
+}
+message DeleteArticleRequest {
+  string post_id = 1;
+  string reason = 2;
+}
+message NotifiedDeleteResponse {
+  bool deleted = 1;
+  // Unset when the article had no author to notify.
+  optional bool notification_sent = 2;
+}
+
+message ForkPendingRequest { string pending_id = 1; }
+message ForkArticleRequest { string post_id = 1; }
+message ForkResponse { string pending_id = 1; }

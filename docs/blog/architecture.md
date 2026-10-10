@@ -58,9 +58,7 @@
 │   │   │           ├── page.tsx # Blog post page (SSR)
 │   │   │           └── PostClient.tsx  # Post client component (TOC, sidebar, nav)
 │   │   ├── editor/              # Authenticated Markdown editor
-│   │   └── api/
-│   │       ├── search/          # Public search endpoint
-│   │       └── editor/          # Draft and publish endpoints
+│   │   └── rpc/[service]/[method]/  # Connect/gRPC-Web endpoint for every RPC service
 │   │
 │   ├── components/
 │   │   ├── content/             # Markdown rendering
@@ -134,7 +132,7 @@
 | `/blog/zh` | `src/app/blog/[locale]/page.tsx` | Chinese blog listing |
 | `/blog/en/<slug>` | `src/app/blog/[locale]/[slug]/page.tsx` | Single blog post |
 | `/editor` | `src/app/editor/page.tsx` | Authenticated Markdown editor |
-| `/api/search` | `src/app/api/search/route.ts` | Search API (GET) |
+| `/rpc/<package.Service>/<Method>` | `src/app/rpc/[service]/[method]/route.ts` | Connect RPC endpoint (search, auth, editor, tools, ...) |
 
 All blog pages use `dynamic = "force-dynamic"` (SSR only, no static generation).
 
