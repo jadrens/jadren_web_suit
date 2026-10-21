@@ -2,6 +2,8 @@
 
 English · [简体中文](README.zh-CN.md)
 
+Website: [jadren.me](https://jadren.me)
+
 An integrated personal web platform powered by Next.js, combining a bilingual blog, community publishing, online utilities, English-learning tools, and reminders under one domain and account system.
 
 ## Overview
