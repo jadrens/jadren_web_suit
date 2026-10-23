@@ -1,8 +1,10 @@
 name: Deploy
 
 # Manual only. Each target deploys its own release branch:
-#   global -> main    (jadren.me, GitHub environment "production")
+#   global -> main    (jadren.me, GitHub environment "production-global")
 #   cn     -> main-cn (jadren.cn, GitHub environment "production-cn")
+# Repository-level secrets hold what both sites share (database, JWT, email,
+# DNS token); each environment holds its own server's SSH_* secrets.
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +28,7 @@ jobs:
     if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: ${{ inputs.target == 'cn' && 'production-cn' || 'production' }}
+    environment: ${{ inputs.target == 'cn' && 'production-cn' || 'production-global' }}
 
     env:
       DEPLOY_PATH: /home/dragonren/service/web/jadren_web_suit
