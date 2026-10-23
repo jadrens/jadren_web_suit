@@ -178,7 +178,8 @@ async function resolveWithNative(hostname: string, rrtype: string): Promise<DnsR
 }
 
 // Any resolver speaking the Google/Cloudflare DNS-over-HTTPS JSON format works here.
-const DOH_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
+// CN: Cloudflare DoH is unreachable from mainland China; AliDNS serves the same JSON format.
+const DOH_JSON_ENDPOINT = "https://dns.alidns.com/resolve";
 
 async function resolveWithDoH(hostname: string, rrtype: string): Promise<DnsSection> {
   const res = await fetch(

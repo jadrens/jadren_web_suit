@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import "vditor/dist/index.css";
 import { Box } from "@mui/material";
 import { useTheme } from "@theme/ThemeProvider";
+import { version as vditorVersion } from "vditor/package.json";
 
 interface VditorEditorProps {
   value: string;
@@ -47,6 +48,8 @@ export default function VditorEditor({
         lang: locale === "zh" ? "zh_CN" : "en_US",
         theme: theme === "dark" ? "dark" : "classic",
         cache: { enable: false },
+        // CN: Vditor loads lute, i18n and themes from unpkg by default, which times out in mainland China.
+        cdn: `https://registry.npmmirror.com/vditor/${vditorVersion}/files`,
         counter: { enable: true, type: "markdown" },
         resize: { enable: false },
         toolbarConfig: { pin: true },
