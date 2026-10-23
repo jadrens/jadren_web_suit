@@ -3,8 +3,10 @@
 import { Box, Typography, Chip, Avatar } from "@mui/material";
 import EmailIcon from "@mui/icons-material/Email";
 import GitHubIcon from "@mui/icons-material/GitHub";
+import LinkIcon from "@mui/icons-material/Link";
 import { useI18n } from "@lib/i18n/portal";
 import { GITHUB_REPO_URL } from "@lib/github";
+import SITE_CONFIG from "@config/app/config";
 import BouncingAvatar from "@components/ui/layout/BouncingAvatar";
 
 export default function Footer() {
@@ -63,9 +65,9 @@ export default function Footer() {
             variant="outlined"
             sx={{ p: 1.5 }}
           />
-          {/* <Chip
+          <Chip
             icon={<LinkIcon sx={{ fontSize: 14 }} />}
-            label={t.footer.beian}
+            label={SITE_CONFIG.icpLicense}
             component="a"
             href="https://beian.miit.gov.cn/"
             clickable
@@ -74,7 +76,7 @@ export default function Footer() {
             target="_blank"
             rel="noopener"
             sx={{ p: 1.5 }}
-          /> */}
+          />
           <Chip
             icon={<GitHubIcon sx={{ fontSize: 14 }} />}
             label={t.footer.github}

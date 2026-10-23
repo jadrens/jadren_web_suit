@@ -80,6 +80,18 @@ export default function Footer() {
               sx={{ p: 1.5 }}
             />
           )}
+          <Chip
+            icon={<LinkIcon sx={{ fontSize: 14 }} />}
+            label={SITE_CONFIG.icpLicense}
+            component="a"
+            href="https://beian.miit.gov.cn/"
+            clickable
+            size="small"
+            variant="outlined"
+            target="_blank"
+            rel="noopener"
+            sx={{ p: 1.5 }}
+          />
         </Box>
       </Box>
     </Box>

@@ -71,7 +71,6 @@ export const CONTACT_ICON_REGISTRY: Record<string, () => ReactNode> = {
 
   // SVG-based icons (mask — inherits currentColor for theme support)
   discord:  () => <SvgIcon name="discord" />,
-  telegram: () => <SvgIcon name="telegram" />,
   x:        () => <SvgIcon name="x" />,
 
   // SVG-based icons (img — keep original multi-colour / gradient)

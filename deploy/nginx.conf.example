@@ -7,7 +7,7 @@ upstream jadren_web_suit {
 server {
     listen 80;
     listen [::]:80;
-    server_name jadren.me;
+    server_name jadren.cn;
 
     location / {
         proxy_pass http://jadren_web_suit;
@@ -24,6 +24,6 @@ server {
 server {
     listen 80;
     listen [::]:80;
-    server_name blog.jadren.me tool.jadren.me;
-    return 308 $scheme://jadren.me$request_uri;
+    server_name www.jadren.cn blog.jadren.cn tool.jadren.cn;
+    return 308 $scheme://jadren.cn$request_uri;
 }

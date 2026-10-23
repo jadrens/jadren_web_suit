@@ -119,12 +119,6 @@ export const CONTACT_CONFIG = {
     username: "dragonren",
     color: "#00A1D6",
   },
-  telegram: {
-    enabled: true,
-    url: "https://t.me/dragonrens",
-    username: "@dragonrens",
-    color: "#26A5E4",
-  },
   email: {
     enabled: true,
     address: "jaden@jadren.moe",
