@@ -3,8 +3,9 @@ name: Deploy
 # Manual only. Each target deploys its own release branch:
 #   global -> main    (jadren.me, GitHub environment "production-global")
 #   cn     -> main-cn (jadren.cn, GitHub environment "production-cn")
-# Repository-level secrets hold what both sites share (database, JWT, email,
-# DNS token); each environment holds its own server's SSH_* secrets.
+# Each environment holds its complete set of secrets (application + SSH_*);
+# nothing is read from repository-level secrets, so a missing value fails the
+# job instead of silently falling back to the other site's configuration.
 on:
   workflow_dispatch:
     inputs:
