@@ -1,13 +1,21 @@
-name: Deploy production
+name: Deploy
 
+# Manual only. Each target deploys its own release branch:
+#   global -> main    (jadren.me, GitHub environment "production")
+#   cn     -> main-cn (jadren.cn, GitHub environment "production-cn")
 on:
-  push:
-    branches:
-      - run
   workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        type: choice
+        options:
+          - global
+          - cn
+        default: global
 
 concurrency:
-  group: production
+  group: deploy-${{ inputs.target }}
   cancel-in-progress: false
 
 permissions:
@@ -18,16 +26,19 @@ jobs:
     if: vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: production
+    environment: ${{ inputs.target == 'cn' && 'production-cn' || 'production' }}
 
     env:
       DEPLOY_PATH: /home/dragonren/service/web/jadren_web_suit
       ARCHIVE_NAME: jadren-web-suit-build.tar.gz
+      DEPLOY_BRANCH: ${{ inputs.target == 'cn' && 'main-cn' || 'main' }}
+      SITE_HOST: ${{ inputs.target == 'cn' && 'jadren.cn' || 'jadren.me' }}
 
     steps:
       - name: Check out source
         uses: actions/checkout@v7
         with:
+          ref: ${{ env.DEPLOY_BRANCH }}
           submodules: recursive
 
       - name: Set up Bun
@@ -71,6 +82,8 @@ jobs:
         env:
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
           ARCHIVE_NAME: ${{ env.ARCHIVE_NAME }}
+          DEPLOY_BRANCH: ${{ env.DEPLOY_BRANCH }}
+          SITE_HOST: ${{ env.SITE_HOST }}
           DNS_MANAGER_TOKEN: ${{ secrets.DNS_MANAGER_TOKEN }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -86,7 +99,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
-          envs: DEPLOY_PATH,ARCHIVE_NAME,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,RESEND_API_KEY
+          envs: DEPLOY_PATH,ARCHIVE_NAME,DEPLOY_BRANCH,SITE_HOST,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,RESEND_API_KEY
           command_timeout: 10m
           script: |
             bash -c '
@@ -96,13 +109,14 @@ jobs:
 
             if [ ! -d "$DEPLOY_PATH/.git" ]; then
               mkdir -p "$(dirname "$DEPLOY_PATH")"
-              git clone --branch run --depth 1 "$repository" "$DEPLOY_PATH"
+              git clone --branch "$DEPLOY_BRANCH" --depth 1 "$repository" "$DEPLOY_PATH"
             fi
 
+            # Fetch via FETCH_HEAD: older single-branch clones (tracking the former
+            # "run" branch) have no remote-tracking ref for the release branch.
             cd "$DEPLOY_PATH"
-            git fetch origin run
-            git checkout run
-            git reset --hard origin/run
+            git fetch --depth 1 origin "$DEPLOY_BRANCH"
+            git checkout -B "$DEPLOY_BRANCH" FETCH_HEAD
 
             if ! command -v bun > /dev/null || [ "$(bun --version)" != "1.4.0" ]; then
               curl -fsSL https://bun.com/install | bash -s "bun-v1.4.0"
@@ -143,7 +157,7 @@ jobs:
 
             for attempt in 1 2 3 4 5; do
               if curl --fail --silent --show-error \
-                --header "Host: jadren.me" \
+                --header "Host: $SITE_HOST" \
                 http://127.0.0.1:3000/ > /dev/null; then
                 exit 0
               fi

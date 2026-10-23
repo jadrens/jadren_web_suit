@@ -166,7 +166,7 @@ bun run start -- -p 3000
 
 The application does not terminate TLS. Use a reverse proxy in production. An Nginx example is available at [`deploy/nginx.conf.example`](deploy/nginx.conf.example), with systemd units under `deploy/`.
 
-GitHub Actions builds the application, synchronizes the server, applies the database schema, runs `scripts/deploy/` tasks in order, installs service units, and performs a health check. Deployment is disabled by default. Set the repository variable `DEPLOY_ENABLED=true`; pushes to `run` will then deploy production. Tasks must be safe to retry, and `database/schema.sql` must always describe the final database state.
+GitHub Actions builds the application, synchronizes the server, applies the database schema, runs `scripts/deploy/` tasks in order, installs service units, and performs a health check. Deployment is disabled by default. Set the repository variable `DEPLOY_ENABLED=true`, then run the **Deploy** workflow manually and pick a target: `global` deploys `main` to jadren.me (environment `production`), `cn` deploys `main-cn` to jadren.cn (environment `production-cn`). Each environment holds its own SSH and database secrets. Day-to-day work happens on `dev`; `main-cn` carries the CN-only patch (domain, ICP filing number, removed services) on top of `main`. Tasks must be safe to retry, and `database/schema.sql` must always describe the final database state.
 
 ## License
 

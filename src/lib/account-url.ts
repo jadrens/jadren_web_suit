@@ -12,6 +12,7 @@ export function isSafeAccountReturn(value: string | undefined) {
       (url.protocol === "https:" || url.protocol === "http:") &&
       [
         "jadren.me",
+        "jadren.cn",
         "jadren.debug",
         "localhost",
       ].includes(url.hostname)

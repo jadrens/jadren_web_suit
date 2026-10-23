@@ -34,8 +34,8 @@ interface JwtTiming {
 }
 
 function sharedCookieDomain(hostname: string) {
-  if (hostname === "jadren.me" || hostname.endsWith(".jadren.me")) {
-    return ".jadren.me";
+  for (const domain of ["jadren.me", "jadren.cn"]) {
+    if (hostname === domain || hostname.endsWith(`.${domain}`)) return `.${domain}`;
   }
   if (hostname === "jadren.debug" || hostname.endsWith(".jadren.debug")) {
     return ".jadren.debug";
