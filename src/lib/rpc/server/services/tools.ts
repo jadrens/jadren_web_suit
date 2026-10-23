@@ -177,9 +177,12 @@ async function resolveWithNative(hostname: string, rrtype: string): Promise<DnsR
   }
 }
 
+// Any resolver speaking the Google/Cloudflare DNS-over-HTTPS JSON format works here.
+const DOH_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
+
 async function resolveWithDoH(hostname: string, rrtype: string): Promise<DnsSection> {
   const res = await fetch(
-    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(hostname)}&type=${rrtype}`,
+    `${DOH_JSON_ENDPOINT}?name=${encodeURIComponent(hostname)}&type=${rrtype}`,
     { headers: { Accept: "application/dns-json" } }
   );
   if (!res.ok) throw new Error(`DNS-over-HTTPS failed: ${res.status}`);
@@ -194,7 +197,8 @@ async function resolveWithDoH(hostname: string, rrtype: string): Promise<DnsSect
 
 // --- DNS leak test ---------------------------------------------------------
 
-const LEAK_API_BASE = "https://hzns.koi.ci";
+// CaliDNS master (moved from hzal1 to shal1 along with hzns -> shns).
+const LEAK_API_BASE = "https://shns.koi.ci";
 const TRACK_DOMAIN_RE = /^[a-z0-9]+[a-z0-9-]*[a-z0-9]\.track\.rayne\.cn$/i;
 
 interface LeakQueryItem {
