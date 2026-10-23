@@ -6,6 +6,10 @@ name: Deploy
 # Each environment holds its complete set of secrets (application + SSH_*);
 # nothing is read from repository-level secrets, so a missing value fails the
 # job instead of silently falling back to the other site's configuration.
+#
+# The runner ships everything the server needs (source + build) in one archive,
+# so servers never contact GitHub: deploy/install-release.sh installs it using
+# the npm mirror pinned in bun.lock and a checksummed Bun download.
 on:
   workflow_dispatch:
     inputs:
@@ -33,9 +37,17 @@ jobs:
 
     env:
       DEPLOY_PATH: /home/dragonren/service/web/jadren_web_suit
-      ARCHIVE_NAME: jadren-web-suit-build.tar.gz
+      ARCHIVE_NAME: jadren-web-suit-release.tar.gz
       DEPLOY_BRANCH: ${{ inputs.target == 'cn' && 'main-cn' || 'main' }}
       SITE_HOST: ${{ inputs.target == 'cn' && 'jadren.cn' || 'jadren.me' }}
+      BUN_VERSION: 1.4.0
+      # sha256 of bun-linux-x64.zip for BUN_VERSION (from the release's SHASUMS256.txt).
+      BUN_SHA256: 2d03fb5fb83ac8b567aca0a281b2ce1a1a19d488f56c2968d88c3f25e92fe452
+      # GitHub downloads are unreliable from mainland China; gh.koi.ci proxies GitHub.
+      BUN_MIRRORS: >-
+        ${{ inputs.target == 'cn'
+          && 'https://registry.npmmirror.com/-/binary/bun/bun-v1.4.0/bun-linux-x64.zip https://gh.koi.ci/https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip'
+          || 'https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip https://registry.npmmirror.com/-/binary/bun/bun-v1.4.0/bun-linux-x64.zip' }}
 
     steps:
       - name: Check out source
@@ -47,7 +59,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -65,10 +77,15 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: bun run build
 
-      - name: Package build
-        run: tar -czf "$ARCHIVE_NAME" build
+      # Tracked source (including the dns submodule) plus the build, minus Next's
+      # build cache, which is large and only useful on the build machine.
+      - name: Package release
+        run: |
+          git ls-files -z --recurse-submodules > release-files
+          tar -czf "$ARCHIVE_NAME" --exclude=build/cache --null -T release-files build
+          ls -lh "$ARCHIVE_NAME"
 
-      - name: Upload build
+      - name: Upload release
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -85,8 +102,10 @@ jobs:
         env:
           DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
           ARCHIVE_NAME: ${{ env.ARCHIVE_NAME }}
-          DEPLOY_BRANCH: ${{ env.DEPLOY_BRANCH }}
           SITE_HOST: ${{ env.SITE_HOST }}
+          BUN_VERSION: ${{ env.BUN_VERSION }}
+          BUN_SHA256: ${{ env.BUN_SHA256 }}
+          BUN_MIRRORS: ${{ env.BUN_MIRRORS }}
           DNS_MANAGER_TOKEN: ${{ secrets.DNS_MANAGER_TOKEN }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -102,71 +121,15 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
-          envs: DEPLOY_PATH,ARCHIVE_NAME,DEPLOY_BRANCH,SITE_HOST,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,RESEND_API_KEY
+          envs: DEPLOY_PATH,ARCHIVE_NAME,SITE_HOST,BUN_VERSION,BUN_SHA256,BUN_MIRRORS,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,RESEND_API_KEY
           command_timeout: 10m
           script: |
             bash -c '
             set -Eeuo pipefail
-            export PATH="$HOME/.bun/bin:$PATH"
-            repository="https://github.com/${{ github.repository }}.git"
-
-            if [ ! -d "$DEPLOY_PATH/.git" ]; then
-              mkdir -p "$(dirname "$DEPLOY_PATH")"
-              git clone --branch "$DEPLOY_BRANCH" --depth 1 "$repository" "$DEPLOY_PATH"
-            fi
-
-            # Fetch via FETCH_HEAD: older single-branch clones (tracking the former
-            # "run" branch) have no remote-tracking ref for the release branch.
-            cd "$DEPLOY_PATH"
-            git fetch --depth 1 origin "$DEPLOY_BRANCH"
-            git checkout -B "$DEPLOY_BRANCH" FETCH_HEAD
-
-            if ! command -v bun > /dev/null || [ "$(bun --version)" != "1.4.0" ]; then
-              curl -fsSL https://bun.com/install | bash -s "bun-v1.4.0"
-              hash -r
-            fi
-
-            bun install --frozen-lockfile
-
-            rm -rf build
-            tar -xzf "$HOME/$ARCHIVE_NAME"
+            incoming="$DEPLOY_PATH.incoming"
+            rm -rf "$incoming"
+            mkdir -p "$incoming"
+            tar -xzf "$HOME/$ARCHIVE_NAME" -C "$incoming"
             rm -f "$HOME/$ARCHIVE_NAME"
-
-            umask 077
-            {
-              printf "DNS_MANAGER_TOKEN=%s\n" "$DNS_MANAGER_TOKEN"
-              printf "POSTGRES_USER=%s\n" "$POSTGRES_USER"
-              printf "POSTGRES_PASSWORD=%s\n" "$POSTGRES_PASSWORD"
-              printf "POSTGRES_DB=%s\n" "$POSTGRES_DB"
-              printf "POSTGRES_HOST=%s\n" "$POSTGRES_HOST"
-              printf "POSTGRES_PORT=%s\n" "$POSTGRES_PORT"
-              printf "POSTGRES_SSL=%s\n" "$POSTGRES_SSL"
-              printf "JWT_SECRET=%s\n" "$JWT_SECRET"
-              printf "RESEND_API_KEY=%s\n" "$RESEND_API_KEY"
-            } > .env
-
-            mkdir -p data .data
-            bun run db:setup
-            bun run deploy:run
-
-            sudo install -m 0644 deploy/jadren-web-suit.service /etc/systemd/system/jadren-web-suit.service
-            sudo install -m 0644 deploy/jadren-reminder-dispatch.service /etc/systemd/system/jadren-reminder-dispatch.service
-            sudo install -m 0644 deploy/jadren-reminder-dispatch.timer /etc/systemd/system/jadren-reminder-dispatch.timer
-            sudo systemctl daemon-reload
-            sudo systemctl enable jadren-web-suit.service
-            sudo systemctl enable --now jadren-reminder-dispatch.timer
-            sudo systemctl restart jadren-web-suit.service
-            sudo systemctl is-active --quiet jadren-reminder-dispatch.timer
-
-            for attempt in 1 2 3 4 5; do
-              if curl --fail --silent --show-error \
-                --header "Host: $SITE_HOST" \
-                http://127.0.0.1:3000/ > /dev/null; then
-                exit 0
-              fi
-              sleep 2
-            done
-
-            sudo journalctl -u jadren-web-suit.service -n 100 --no-pager
-            exit 1
+            exec bash "$incoming/deploy/install-release.sh" "$incoming"
             '
