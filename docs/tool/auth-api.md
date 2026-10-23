@@ -28,7 +28,7 @@ Required:
 POSTGRES_USER=dragonren
 POSTGRES_PASSWORD=...
 POSTGRES_DB=dra_web
-POSTGRES_HOST=hzal1.koi.ci
+POSTGRES_HOST=shal1.koi.ci
 POSTGRES_PORT=5432
 POSTGRES_SSL=true
 JWT_SECRET=... # at least 32 characters
