@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import "vditor/dist/index.css";
 import { Box } from "@mui/material";
 import { useTheme } from "@theme/ThemeProvider";
 

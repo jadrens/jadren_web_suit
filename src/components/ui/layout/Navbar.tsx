@@ -141,7 +141,7 @@ export default function Navbar() {
           >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
               <Avatar
-                src="/avatar.svg"
+                src="/avatar.webp"
                 alt="jadren"
                 sx={{ width: 44, height: 44 }}
               />

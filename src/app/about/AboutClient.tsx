@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import Footer from "@components/content/layout/Footer";
+import Footer from "@components/ui/layout/Footer";
 import MarkdownContent from "@components/content/MarkdownContent";
 import { ReadingProgressProvider } from "@components/content/reading/ReadingProgressContext";
 import { Box, Paper, Avatar, Link as MuiLink, useTheme, Alert } from "@mui/material";
 import { Snackbar } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/content";
 import { alpha } from "@mui/material";
-import { CONTACT_CONFIG, resolveContactColor } from "@config/publishing/contact";
-import { CONTACT_ICON_REGISTRY } from "@config/publishing/contact-icons";
+import { CONTACT_CONFIG, resolveContactColor } from "@config/app/contact";
+import { CONTACT_ICON_REGISTRY } from "@config/app/contact-icons";
 
 interface AboutClientProps {
   content: Record<"en" | "zh", string>;
@@ -64,7 +64,7 @@ export default function AboutClient({ content }: AboutClientProps) {
         <Box sx={{ width: "100%", maxWidth: 720 }}>
           <Box sx={{ textAlign: "center", mb: 4 }}>
             <Avatar
-              src="/avatar.svg"
+              src="/avatar.webp"
               alt="jadren"
               sx={{
                 width: 100,

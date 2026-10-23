@@ -12,8 +12,9 @@ export default function Home() {
         <main className="flex-1 flex items-center justify-center relative z-10 px-4">
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
             <Avatar
-              src="/avatar.svg"
+              src="/avatar.webp"
               alt="Jadren Rayne"
+              slotProps={{ img: { fetchPriority: "high" } }}
               sx={{
                 width: 136,
                 height: 136,

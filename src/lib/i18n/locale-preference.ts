@@ -1,6 +1,7 @@
 export type GlobalLocale = "en" | "zh";
 
 const STORAGE_KEY = "locale";
+export const LOCALE_COOKIE = STORAGE_KEY;
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export function isGlobalLocale(value: string | null): value is GlobalLocale {
@@ -9,6 +10,13 @@ export function isGlobalLocale(value: string | null): value is GlobalLocale {
 
 export function normalizeGlobalLocale(language: string): GlobalLocale {
   return language.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+// Server-side equivalent of readGlobalLocale: the cookie wins, then the browser's Accept-Language.
+export function resolveRequestLocale(cookieValue: string | undefined, acceptLanguage: string | null): GlobalLocale {
+  const value = cookieValue ?? null;
+  if (isGlobalLocale(value)) return value;
+  return normalizeGlobalLocale(acceptLanguage?.split(",")[0]?.trim() ?? "");
 }
 
 function getBaseHostname(hostname: string) {

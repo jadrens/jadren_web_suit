@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Matter from "matter-js";
+import type MatterJS from "matter-js";
 import { useTheme } from "@theme/ThemeProvider";
 
 // --- Simplex-like noise (self-contained, no dependency) ---
@@ -76,6 +76,7 @@ export default function ConfettiBackground() {
   const mouseRef = useRef({ x: -1000, y: -1000, active: false });
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const isDarkRef = useRef(false);
+  const matterRef = useRef<typeof MatterJS | null>(null);
 
   useEffect(() => {
     isDarkRef.current = theme === "dark";
@@ -83,8 +84,13 @@ export default function ConfettiBackground() {
 
   useEffect(() => {
     const loadImages = async () => {
-      await Promise.all(
-        CONFETTI_SVGS.map(
+      // matter-js loads alongside the images instead of blocking the page's initial JS.
+      const matter = import("matter-js").then(({ default: Matter }) => {
+        matterRef.current = Matter;
+      });
+      await Promise.all([
+        matter,
+        ...CONFETTI_SVGS.map(
           (svg) =>
             new Promise<void>((resolve) => {
               const img = new Image();
@@ -95,15 +101,16 @@ export default function ConfettiBackground() {
               };
               img.onerror = () => resolve();
             })
-        )
-      );
+        ),
+      ]);
       setImagesLoaded(true);
     };
     loadImages();
   }, []);
 
   useEffect(() => {
-    if (!imagesLoaded) return;
+    const Matter = matterRef.current;
+    if (!imagesLoaded || !Matter) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -213,7 +220,7 @@ export default function ConfettiBackground() {
       const globalFlowX = Math.sin(time * 0.03) * 0.000005;
       const globalFlowY = Math.cos(time * 0.025) * 0.000005;
 
-      Composite.allBodies(Engine.world).forEach((body: Matter.Body) => {
+      Composite.allBodies(Engine.world).forEach((body: MatterJS.Body) => {
         if (body.isStatic) return;
 
         const cfg = (body as any).depthConfig;
@@ -267,7 +274,7 @@ export default function ConfettiBackground() {
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      Composite.allBodies(Engine.world).forEach((body: Matter.Body) => {
+      Composite.allBodies(Engine.world).forEach((body: MatterJS.Body) => {
         if (body.isStatic) return;
         const svgKey = (body as any).svgKey as string;
         const img = imagesRef.current.get(svgKey);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { authSession } from "./index";
+import { authSession } from "./session";
 
 export function useAuth() {
   const snapshot = useSyncExternalStore(

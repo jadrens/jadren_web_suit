@@ -2,7 +2,7 @@ import type { JsonObject } from "@bufbuild/protobuf";
 import type { CallOptions } from "@connectrpc/connect";
 import type { EditorArticle, EditorArticleSummary } from "@lib/publishing/editor";
 import type { ReviewEvent } from "@lib/vocabulary-practice/collection-memory";
-import { AuthSessionManager } from "./auth-session";
+import { authSession } from "./session";
 import {
   meaningInit,
   phoneticInit,
@@ -21,7 +21,7 @@ import {
 import { createRpcClients } from "./rpc";
 import type * as T from "./types";
 
-export const authSession = new AuthSessionManager();
+export { authSession };
 
 const rpc = createRpcClients({
   getAccessToken: authSession.getAccessToken,

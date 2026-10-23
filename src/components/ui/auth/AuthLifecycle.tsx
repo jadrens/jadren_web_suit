@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { authSession } from "@lib/client-api";
+import { authSession } from "@lib/client-api/session";
 
 export default function AuthLifecycle({ children }: { children: ReactNode }) {
   useEffect(() => {

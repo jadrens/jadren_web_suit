@@ -5,7 +5,7 @@ import EmailIcon from "@mui/icons-material/Email";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import { useI18n } from "@lib/i18n/portal";
 import { GITHUB_REPO_URL } from "@lib/github";
-import BouncingAvatar from "./BouncingAvatar";
+import BouncingAvatar from "@components/ui/layout/BouncingAvatar";
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -33,7 +33,7 @@ export default function Footer() {
         }}
       >
         <Avatar
-          src="/avatar.svg"
+          src="/avatar.webp"
           alt="jadren"
           sx={{
             width: 48,

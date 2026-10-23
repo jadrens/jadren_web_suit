@@ -35,7 +35,7 @@ export default function Footer() {
         }}
       >
         <Avatar
-          src="/avatar.svg"
+          src="/avatar.webp"
           alt="jadren"
           className="footer-avatar"
           sx={{ width: 48, height: 48, transition: "transform 0.2s", "&:hover": { transform: "scale(1.2)" } }}

@@ -1,6 +1,6 @@
 import { ApiError } from "./http";
 import { toUserProfile } from "./mappers";
-import { createAnonymousClients } from "./rpc";
+import type { createAnonymousClients } from "./rpc-transport";
 import type {
   AuthSnapshot,
   LoginRequest,
@@ -134,14 +134,23 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Authentication request failed";
 }
 
+type AnonymousClients = ReturnType<typeof createAnonymousClients>;
+
 export class AuthSessionManager {
-  private readonly rpc = createAnonymousClients();
+  // The RPC stack (connect + protobuf runtime) is fetched on the first auth call, so
+  // anonymous visitors (who never make one) don't download it with every page.
+  private clients: Promise<AnonymousClients> | null = null;
   private readonly listeners = new Set<() => void>();
   private snapshot: AuthSnapshot = SERVER_SNAPSHOT;
   private session: StoredSession | null = null;
   private initialized = false;
   private refreshPromise: Promise<string | null> | null = null;
   private refreshTimer: number | null = null;
+
+  private authClient = async () => {
+    this.clients ??= import("./rpc-transport").then((module) => module.createAnonymousClients());
+    return (await this.clients).auth;
+  };
 
   getSnapshot = () => this.snapshot;
   getServerSnapshot = () => SERVER_SNAPSHOT;
@@ -197,7 +206,7 @@ export class AuthSessionManager {
   };
 
   register = async (input: RegisterRequest): Promise<RegisterResponse> => {
-    const response = await this.rpc.auth.register({ ...input, phone: input.phone ?? undefined });
+    const response = await (await this.authClient()).register({ ...input, phone: input.phone ?? undefined });
     return { user: toUserProfile(response.user) };
   };
 
@@ -206,7 +215,7 @@ export class AuthSessionManager {
     const previousSession = this.session;
     this.publish("authenticating", null, null);
     try {
-      const response = tokenResponse(await this.rpc.auth.login(input));
+      const response = tokenResponse(await (await this.authClient()).login(input));
       this.acceptToken(response);
       return response.user;
     } catch (error) {
@@ -234,12 +243,12 @@ export class AuthSessionManager {
     locale: "en" | "zh" = "en"
   ): Promise<SendVerificationCodeResponse> => {
     const { message, expiresIn, sentAt, expiresAt } =
-      await this.rpc.auth.sendVerificationCode({ email, locale });
+      await (await this.authClient()).sendVerificationCode({ email, locale });
     return { message, expiresIn, sentAt, expiresAt };
   };
 
   verifyEmail = async (email: string, code: string) => {
-    const verified = await this.rpc.auth.verifyEmail({ email, code });
+    const verified = await (await this.authClient()).verifyEmail({ email, code });
     const response: VerifyEmailResponse = {
       message: verified.message,
       user: toUserProfile(verified.user),
@@ -257,7 +266,7 @@ export class AuthSessionManager {
   loadCurrentUser = async () => {
     const token = this.getAccessToken();
     if (!token) return null;
-    const me = await this.rpc.auth.me(
+    const me = await (await this.authClient()).me(
       {},
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -292,7 +301,7 @@ export class AuthSessionManager {
     this.publish("refreshing", current.user, current.expiresAt);
     try {
       const response = tokenResponse(
-        await this.rpc.auth.refresh({ token: current.accessToken })
+        await (await this.authClient()).refresh({ token: current.accessToken })
       );
       this.acceptToken(response);
       return response.accessToken;

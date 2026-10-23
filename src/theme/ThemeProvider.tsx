@@ -9,8 +9,9 @@ import {
   useState,
 } from "react";
 import { COORDINATES_KEY, currentAutomaticTheme, MODE_KEY, ThemeCoordinates, ThemeMode } from "./settings";
+import { isTheme, RESOLVED_THEME_COOKIE, Theme, THEME_STORAGE_KEY } from "./bootstrap";
 
-export type Theme = "light" | "dark";
+export type { Theme };
 
 interface ThemeContextType {
   theme: Theme;
@@ -20,7 +21,7 @@ interface ThemeContextType {
   refreshTheme: () => void;
 }
 
-const STORAGE_KEY = "theme";
+const STORAGE_KEY = THEME_STORAGE_KEY;
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -30,10 +31,6 @@ const ThemeContext = createContext<ThemeContextType>({
   setMode: () => {},
   refreshTheme: () => {},
 });
-
-function isTheme(value: string | null): value is Theme {
-  return value === "light" || value === "dark";
-}
 
 function getBaseHostname(hostname: string) {
   const labels = hostname.split(".");
@@ -51,13 +48,13 @@ function readThemeCookie() {
   return isTheme(value) ? value : null;
 }
 
-function writeThemeCookie(theme: Theme) {
+function writeThemeCookie(theme: Theme, name = STORAGE_KEY) {
   const baseHostname = getBaseHostname(window.location.hostname);
   const domain = baseHostname && !baseHostname.includes(":")
     ? `; Domain=${baseHostname}`
     : "";
 
-  document.cookie = `${STORAGE_KEY}=${theme}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${domain}`;
+  document.cookie = `${name}=${theme}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${domain}`;
 }
 
 function getInitialTheme(): Theme {
@@ -74,15 +71,25 @@ export function useTheme() {
   return useContext(ThemeContext);
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("light");
+// initialTheme comes from the server (RESOLVED_THEME_COOKIE), so SSR output and the first client render agree.
+export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme; children: ReactNode }) {
+  const [theme, setTheme] = useState<Theme>(initialTheme);
   const [mode, setModeState] = useState<ThemeMode>("system");
-  const [mounted, setMounted] = useState(false);
+  const preferenceApplied = useRef(false);
   const hasExplicitTheme = useRef(false);
+
+  // Declared before the mount effect: on the first commit the DOM already carries the theme
+  // set by the server / THEME_INIT_SCRIPT, so only sync once the stored preference is resolved.
+  useEffect(() => {
+    if (!preferenceApplied.current) return;
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.colorScheme = theme;
+    writeThemeCookie(theme, RESOLVED_THEME_COOKIE);
+  }, [theme]);
 
   useEffect(() => {
     applyPreference();
-    setMounted(true);
+    preferenceApplied.current = true;
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handleSystemThemeChange = (event: MediaQueryListEvent) => {
@@ -120,12 +127,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  useEffect(() => {
-    if (!mounted) return;
-    document.documentElement.setAttribute("data-theme", theme);
-    document.documentElement.style.colorScheme = theme;
-  }, [mounted, theme]);
-
   const toggleTheme = () => {
     localStorage.setItem(MODE_KEY, "manual");
     setModeState("manual");
@@ -146,7 +147,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemeContext.Provider value={{ theme, mode, toggleTheme, setMode, refreshTheme: applyPreference }}>
-      {mounted ? children : <div style={{ visibility: "hidden" }} />}
+      {children}
     </ThemeContext.Provider>
   );
 }

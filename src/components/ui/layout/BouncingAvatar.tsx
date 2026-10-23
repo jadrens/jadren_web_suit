@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Matter from "matter-js";
+import type MatterJS from "matter-js";
 
 const AVATAR_SIZE = 35;
 const DRAG_RADIUS_MULTIPLIER = 3;
@@ -31,6 +31,7 @@ export default function BouncingAvatar() {
   const lastWallBounceRef = useRef(0);
   const avatarImgRef = useRef<HTMLImageElement | null>(null);
   const squashRef = useRef({ x: 1, y: 1 });
+  const matterRef = useRef<typeof MatterJS | null>(null);
 
   // Start when user clicks footer avatar
   useEffect(() => {
@@ -49,8 +50,12 @@ export default function BouncingAvatar() {
         };
       }
 
-      setVisible(true);
-      avatarEl?.remove();
+      // matter-js is only needed once the easter egg starts, so keep it out of the page bundle.
+      void import("matter-js").then(({ default: Matter }) => {
+        matterRef.current = Matter;
+        setVisible(true);
+        avatarEl?.remove();
+      });
     };
 
     avatarEl?.addEventListener("click", handleClick);
@@ -58,7 +63,8 @@ export default function BouncingAvatar() {
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
+    const Matter = matterRef.current;
+    if (!visible || !Matter) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -130,7 +136,7 @@ export default function BouncingAvatar() {
     let prevVelY = avatar.velocity.y;
 
     const avatarImg = new Image();
-    avatarImg.src = "/avatar.svg";
+    avatarImg.src = "/avatar.webp";
     avatarImgRef.current = avatarImg;
 
     let frameId: number;

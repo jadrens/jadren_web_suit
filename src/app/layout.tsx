@@ -1,19 +1,17 @@
 import type { Metadata } from "next";
+import { cookies, headers } from "next/headers";
+import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 import { Inter, Nunito } from "next/font/google";
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
-import "katex/dist/katex.min.css";
 import "./globals.css";
-import "@styles/content/misans.css";
 import "@styles/app/misans.css";
-import "vditor/dist/index.css";
 import { ThemeProvider } from "@theme/ThemeProvider";
+import { isTheme, RESOLVED_THEME_COOKIE, THEME_INIT_SCRIPT } from "@theme/bootstrap";
 import { ToastProvider } from "@components/ui/feedback/toast";
 import ThemeRegistry from "@components/portal/ThemeRegistry";
-import { I18nProvider as PortalI18nProvider } from "@lib/i18n/portal";
-import { I18nProvider as ContentI18nProvider } from "@lib/i18n/content";
-import { I18nProvider as AppI18nProvider } from "@lib/i18n/app";
-import LocaleHtml from "@lib/i18n/portal/LocaleHtml";
+import { LocaleProvider } from "@lib/i18n/LocaleProvider";
+import { LOCALE_COOKIE, resolveRequestLocale } from "@lib/i18n/locale-preference";
 import AuthLifecycle from "@components/ui/auth/AuthLifecycle";
 import LoadingBar from "@components/ui/layout/LoadingBar";
 import Navbar from "@components/ui/layout/Navbar";
@@ -38,16 +36,25 @@ export const viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [cookieStore, headerList] = await Promise.all([cookies(), headers()]);
+  const locale = resolveRequestLocale(cookieStore.get(LOCALE_COOKIE)?.value, headerList.get("accept-language"));
+  const resolvedTheme = cookieStore.get(RESOLVED_THEME_COOKIE)?.value;
+  const theme = isTheme(resolvedTheme) ? resolvedTheme : "light";
+
   return (
     <html
-      lang="en"
+      lang={locale === "zh" ? "zh-CN" : "en"}
+      data-theme={theme}
       suppressHydrationWarning
       className={`${inter.variable} ${nunito.variable}`}
-      style={{ maxWidth: "100vw", overflowX: "hidden", hyphens: "auto", overflowWrap: "break-word" }}
+      style={{ maxWidth: "100vw", overflowX: "hidden", hyphens: "auto", overflowWrap: "break-word", colorScheme: theme }}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-screen antialiased" suppressHydrationWarning>
-        <ThemeProvider><ThemeRegistry><ToastProvider /><PortalI18nProvider><ContentI18nProvider><AppI18nProvider><AuthLifecycle><NavbarLoginStatusProvider><LocaleHtml /><LoadingBar /><Navbar />{children}</NavbarLoginStatusProvider></AuthLifecycle></AppI18nProvider></ContentI18nProvider></PortalI18nProvider></ThemeRegistry></ThemeProvider>
+        <AppRouterCacheProvider><ThemeProvider initialTheme={theme}><ThemeRegistry><ToastProvider /><LocaleProvider initialLocale={locale}><AuthLifecycle><NavbarLoginStatusProvider><LoadingBar /><Navbar />{children}</NavbarLoginStatusProvider></AuthLifecycle></LocaleProvider></ThemeRegistry></ThemeProvider></AppRouterCacheProvider>
       </body>
     </html>
   );
