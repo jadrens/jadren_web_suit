@@ -166,7 +166,7 @@ bun run start -- -p 3000
 
 应用本身不终止 TLS，生产环境建议使用反向代理。Nginx 示例位于 [`deploy/nginx.conf.example`](deploy/nginx.conf.example)，systemd 单元位于 `deploy/`。
 
-GitHub Actions 会构建应用、同步服务器、应用数据库 schema、依次运行 `scripts/deploy/` 任务、安装服务单元并健康检查。部署默认关闭；设置仓库变量 `DEPLOY_ENABLED=true` 后，在 Actions 里手动运行 **Deploy** 工作流并选择目标：`global` 把 `main` 部署到 jadren.me（环境 `production-global`），`cn` 把 `main-cn` 部署到 jadren.cn（环境 `production-cn`）。每个环境各自保存完整的一套 secrets（应用配置和 `SSH_*`），不再使用仓库级 secrets。日常开发在 `dev` 分支进行；`main-cn` 在 `main` 之上带有 CN 专属补丁（域名、备案号、移除的服务）。部署任务必须可重复执行，最终数据库状态应始终保留在 `database/schema.sql`。
+GitHub Actions 会构建应用，并把一个发布包（受版本控制的源码加构建产物）上传到服务器，由 [`deploy/install-release.sh`](deploy/install-release.sh) 安装依赖、应用数据库 schema、依次运行 `scripts/deploy/` 任务、安装服务单元、切换到新版本（保留 `.data/` 和上一个版本）并健康检查。服务器全程不访问 GitHub：依赖来自 `bun.lock` 里固定的 npm 镜像，Bun 从镜像下载（CN 使用 npmmirror 和 gh.koi.ci GitHub 代理），并用固定的 SHA-256 校验。部署默认关闭；设置仓库变量 `DEPLOY_ENABLED=true` 后，在 Actions 里手动运行 **Deploy** 工作流并选择目标：`global` 把 `main` 部署到 jadren.me（环境 `production-global`），`cn` 把 `main-cn` 部署到 jadren.cn（环境 `production-cn`）。每个环境各自保存完整的一套 secrets（应用配置和 `SSH_*`），不再使用仓库级 secrets。日常开发在 `dev` 分支进行；`main-cn` 在 `main` 之上带有 CN 专属补丁（域名、备案号、移除的服务）。部署任务必须可重复执行，最终数据库状态应始终保留在 `database/schema.sql`。
 
 ## 许可证
 
