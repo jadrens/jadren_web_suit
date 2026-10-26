@@ -16,13 +16,14 @@
         "@mdi/react": "^1.6.1",
         "@mui/icons-material": "^9.0.0",
         "@mui/material": "^9.0.0",
-        "@mui/material-nextjs": "~9.4.0",
+        "@mui/material-nextjs": "^9.4.0",
         "@tailwindcss/typography": "^0.5.19",
         "bcryptjs": "^3.0.3",
         "framer-motion": "^12.38.0",
         "gray-matter": "^4.0.3",
         "jose": "^6.2.8",
         "katex": "^0.16.45",
+        "mathlive": "^0.111.1",
         "matter-js": "^0.20.0",
         "next": "16.2.4",
         "qrcode": "^1.5.4",
@@ -1090,6 +1091,8 @@
     "markdown-table": ["markdown-table@3.0.4", "https://registry.npmmirror.com/markdown-table/-/markdown-table-3.0.4.tgz", {}, "sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw=="],
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "https://registry.npmmirror.com/math-intrinsics/-/math-intrinsics-1.1.0.tgz", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
+
+    "mathlive": ["mathlive@0.111.1", "https://registry.npmmirror.com/mathlive/-/mathlive-0.111.1.tgz", {}, "sha512-RVaC7NO02Lmx3ZNUxOHR2xCRpcvTfBb2BtdgV60cTanAMufaUkWcPPB2VxChcsNeL+0rTQKqOPDYxXLPOXJI+A=="],
 
     "matter-js": ["matter-js@0.20.0", "https://registry.npmmirror.com/matter-js/-/matter-js-0.20.0.tgz", {}, "sha512-iC9fYR7zVT3HppNnsFsp9XOoQdQN2tUyfaKg4CHLH8bN+j6GT4Gw7IH2rP0tflAebrHFw730RR3DkVSZRX8hwA=="],
 
