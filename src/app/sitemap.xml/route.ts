@@ -19,6 +19,7 @@ const STATIC_PATHS = [
   "/tools/english-learner/sentence-practice",
   "/tools/english-learner/vocabulary-practice",
   "/tools/ip",
+  "/tools/latex",
   "/tools/qrcode",
   "/tools/quick-link",
   "/tools/reminder",

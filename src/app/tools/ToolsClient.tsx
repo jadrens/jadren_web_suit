@@ -17,6 +17,7 @@ import NotificationsActiveRoundedIcon from "@mui/icons-material/NotificationsAct
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
+import FunctionsRoundedIcon from "@mui/icons-material/FunctionsRounded";
 
 interface ToolItem {
   key: string;
@@ -57,6 +58,13 @@ export default function ToolsClient() {
       href: "/tools/quick-link",
       icon: <LinkRoundedIcon sx={{ fontSize: 32 }} />,
       requiresLogin: true,
+    },
+    {
+      key: "latex",
+      title: t.tools.latex.title,
+      description: t.tools.latex.description,
+      href: "/tools/latex",
+      icon: <FunctionsRoundedIcon sx={{ fontSize: 32 }} />,
     },
     {
       key: "colourPicker",
