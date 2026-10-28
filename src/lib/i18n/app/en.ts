@@ -526,7 +526,7 @@ export const en = {
       copyFailed: "Failed to copy",
       cleared: "All lines cleared",
       loading: "Loading editor…",
-      tips: "Tips: / makes a fraction, ^ and _ add superscripts and subscripts, type sqrt, sum, int, alpha, pi or -> to convert them. Enter adds a line; Backspace on an empty line removes it.",
+      tips: "Tips: / makes a fraction, ^ and _ add superscripts and subscripts, type sqrt, sum, int, alpha, pi or -> to convert them. Enter adds a line; Backspace on an empty line removes it. On the phone keyboard the top row inserts subscripts, fractions and roots; long-press a key for more, including Greek letters (long-press f for φ).",
     },
     dnsLeak: {
       title: "DNS Leak Test",
