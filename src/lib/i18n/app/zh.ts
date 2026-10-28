@@ -528,7 +528,7 @@ export const zh: TranslationKeys = {
       copyFailed: "复制失败",
       cleared: "已清空所有行",
       loading: "编辑器加载中…",
-      tips: "提示：/ 生成分数，^ 和 _ 输入上下标，输入 sqrt、sum、int、alpha、pi、-> 等会自动转换。回车新增一行，空行按退格删除。",
+      tips: "提示：/ 生成分数，^ 和 _ 输入上下标，输入 sqrt、sum、int、alpha、pi、-> 等会自动转换。回车新增一行，空行按退格删除。手机键盘顶行可直接输入下标、分数、根号等，长按按键有更多选项，包括希腊字母（如长按 f 得 φ）。",
     },
     dnsLeak: {
       title: "DNS 泄露测试",

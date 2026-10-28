@@ -28,6 +28,7 @@ import Footer from "@components/ui/layout/Footer";
 import { toast } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
+import { KEYBOARD_LAYOUTS } from "./keyboard";
 
 type MathfieldClass = typeof MathfieldElement;
 type OutputFormat = "display" | "align" | "plain";
@@ -157,7 +158,13 @@ function MathLine({ Mathfield, id, value, register, ...handlers }: MathLineProps
       }
     };
 
+    // The touch keyboard's return key commits instead of sending Enter; a blur also fires "change", but by then the field has lost focus.
+    const onCommit = () => {
+      if (field.hasFocus()) handlersRef.current.onEnter();
+    };
+
     field.addEventListener("input", onInput);
+    field.addEventListener("change", onCommit);
     field.addEventListener("focus", onFocus);
     field.addEventListener("move-out", onMoveOut);
     field.addEventListener("keydown", onKeyDown, true);
@@ -167,6 +174,7 @@ function MathLine({ Mathfield, id, value, register, ...handlers }: MathLineProps
 
     return () => {
       field.removeEventListener("input", onInput);
+      field.removeEventListener("change", onCommit);
       field.removeEventListener("focus", onFocus);
       field.removeEventListener("move-out", onMoveOut);
       field.removeEventListener("keydown", onKeyDown, true);
@@ -195,6 +203,7 @@ export default function LatexClient() {
   const [lines, setLines] = useState<Line[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [format, setFormat] = useState<OutputFormat>("display");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const fields = useRef(new Map<string, MathfieldElement>());
 
   useEffect(() => {
@@ -204,6 +213,7 @@ export default function LatexClient() {
       // Fonts are served from /public so the editor works without reaching a CDN.
       MathfieldElement.fontsDirectory = "/mathlive/fonts";
       MathfieldElement.soundsDirectory = null;
+      window.mathVirtualKeyboard.layouts = KEYBOARD_LAYOUTS;
       const loaded = loadLines();
       setLines(loaded);
       setActiveId(loaded[0].id);
@@ -213,6 +223,15 @@ export default function LatexClient() {
       cancelled = true;
     };
   }, []);
+
+  // The on-screen keyboard overlays the page, so reserve its height to keep the source and output panels reachable.
+  useEffect(() => {
+    if (!Mathfield) return;
+    const keyboard = window.mathVirtualKeyboard;
+    const sync = () => setKeyboardHeight(keyboard.visible ? Math.ceil(keyboard.boundingRect.height) : 0);
+    keyboard.addEventListener("geometrychange", sync);
+    return () => keyboard.removeEventListener("geometrychange", sync);
+  }, [Mathfield]);
 
   useEffect(() => {
     if (!Mathfield) return;
@@ -364,7 +383,7 @@ export default function LatexClient() {
   } as const;
 
   return (
-    <div className="page-below-navbar flex flex-col">
+    <div className="page-below-navbar flex flex-col" style={{ paddingBottom: keyboardHeight }}>
       <Box component="main" sx={{ flex: 1, display: "flex", justifyContent: "center", px: { xs: 1.5, sm: 3 }, py: { xs: 3, md: 6 } }}>
         <Box sx={{ width: "100%", maxWidth: 1200 }}>
           <Typography variant="h4" sx={{ fontWeight: 700, textAlign: "center", mb: 1, fontFamily: "var(--font-inter)", fontSize: { xs: "1.6rem", sm: "2.125rem" } }}>
