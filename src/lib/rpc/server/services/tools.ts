@@ -9,6 +9,7 @@ import type { JsonObject } from "@bufbuild/protobuf";
 import type { ServiceImpl } from "@connectrpc/connect";
 import type { DictionaryService, ToolsService } from "@gen/jadren/v1/tools_pb";
 import { requestIp } from "@lib/auth/email-send-rate-limit";
+import { sharedLimiter } from "@lib/rate-limit/sqlite-window";
 import {
   lookupChineseDictionaryEntry,
   lookupDictionaryEntry,
@@ -129,8 +130,15 @@ function formatCaa(records: CaaRecord[]) {
  * IPv4: 203.0.113.1 → 1.113.0.203.in-addr.arpa
  * IPv6: 2001:db8::1  → 1.0.0.0.…8.b.d.0.1.0.0.2.ip6.arpa
  */
-function ipToArpa(ip: string): string {
+function ipToArpa(input: string): string {
+  let ip = input;
   if (ip.includes(":")) {
+    // Canonical hex form, e.g. "::ffff:1.2.3.4" -> "::ffff:102:304".
+    try {
+      ip = new URL(`http://[${ip}]/`).hostname.slice(1, -1);
+    } catch {
+      return input;
+    }
     const expanded = (() => {
       const parts = ip.split("::");
       if (parts.length > 2) return ip;
@@ -176,6 +184,14 @@ async function resolveWithNative(hostname: string, rrtype: string): Promise<DnsR
       return [];
   }
 }
+
+// Per client IP. One lookup in the DNS tool sends a request per record type
+// (7–10), so this allows about a dozen full lookups a minute.
+const dnsLookupLimiter = () =>
+  sharedLimiter("dns_lookup_requests", [
+    { windowMs: 60_000, limit: 120 },
+    { windowMs: 60 * 60_000, limit: 1200 },
+  ]);
 
 // Any resolver speaking the Google/Cloudflare DNS-over-HTTPS JSON format works here.
 const DOH_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
@@ -272,11 +288,12 @@ async function generateWav(word: string): Promise<Buffer> {
 
 export const toolsService: ServiceImpl<typeof ToolsService> = {
   async getClientIp(_request, context) {
-    // The real client address comes from the reverse proxy headers.
+    // nginx sets X-Real-IP to the peer address; X-Forwarded-For only appends to
+    // what the client sent, so its first entry can be forged.
     const forwarded = context.requestHeader.get("x-forwarded-for");
     const realIp = context.requestHeader.get("x-real-ip");
     return {
-      ip: forwarded?.split(",")[0]?.trim() || realIp || "unknown",
+      ip: realIp?.trim() || forwarded?.split(",").at(-1)?.trim() || "unknown",
       xForwardedFor: forwarded || undefined,
       xRealIp: realIp || undefined,
     };
@@ -312,10 +329,18 @@ export const toolsService: ServiceImpl<typeof ToolsService> = {
     throw apiFailure(lastError || "All upstream requests failed", 502, "upstream_failed");
   },
 
-  async resolveDns(request) {
-    const domain = request.domain;
+  async resolveDns(request, context) {
+    const domain = request.domain.trim();
     const rrtype = request.type.toUpperCase() || "A";
     if (!domain) throw apiFailure("Missing domain parameter", 400, "missing_domain");
+    // A host name (or an IP for PTR); anything else is not worth a lookup.
+    if (domain.length > 253 || !/^[A-Za-z0-9_.:-]+$/.test(domain)) {
+      throw apiFailure("Invalid domain", 400, "invalid_domain");
+    }
+    if (!dnsLookupLimiter().consume(requestIp(headersOf(context)))) {
+      context.responseHeader.set("Retry-After", "60");
+      throw apiFailure("Too many DNS lookups. Try again in a minute.", 429, "rate_limited");
+    }
     if (!ALLOWED_TYPES.includes(rrtype)) {
       throw apiFailure(`Unsupported record type: ${rrtype}`, 400, "unsupported_type");
     }

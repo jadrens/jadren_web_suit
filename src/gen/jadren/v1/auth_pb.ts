@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file jadren/v1/auth.proto.
  */
 export const file_jadren_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChRqYWRyZW4vdjEvYXV0aC5wcm90bxIJamFkcmVuLnYxIn0KBFVzZXISDwoHdXNlcl9pZBgBIAEoCRIQCghuaWNrbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRISCgVwaG9uZRgEIAEoCUgAiAEBEhUKDXJlZ2lzdGVyZWRfYXQYBSABKAkSDgoGc3RhdHVzGAYgASgFQggKBl9waG9uZSJiCg9SZWdpc3RlclJlcXVlc3QSEAoIbmlja25hbWUYASABKAkSDQoFZW1haWwYAiABKAkSEAoIcGFzc3dvcmQYAyABKAkSEgoFcGhvbmUYBCABKAlIAIgBAUIICgZfcGhvbmUiMQoQUmVnaXN0ZXJSZXNwb25zZRIdCgR1c2VyGAEgASgLMg8uamFkcmVuLnYxLlVzZXIiNAoMTG9naW5SZXF1ZXN0EhIKCmlkZW50aWZpZXIYASABKAkSEAoIcGFzc3dvcmQYAiABKAkiHwoOUmVmcmVzaFJlcXVlc3QSDQoFdG9rZW4YASABKAkihAEKDVRva2VuUmVzcG9uc2USFAoMYWNjZXNzX3Rva2VuGAEgASgJEhIKCnRva2VuX3R5cGUYAiABKAkSEgoKZXhwaXJlc19pbhgDIAEoBRIWCg5yZWZyZXNoX3dpbmRvdxgEIAEoBRIdCgR1c2VyGAUgASgLMg8uamFkcmVuLnYxLlVzZXIiCwoJTWVSZXF1ZXN0IlIKCk1lUmVzcG9uc2USHQoEdXNlchgBIAEoCzIPLmphZHJlbi52MS5Vc2VyEhEKCWlzc3VlZF9hdBgCIAEoAxISCgpleHBpcmVzX2F0GAMgASgDIjwKG1NlbmRWZXJpZmljYXRpb25Db2RlUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIOCgZsb2NhbGUYAiABKAkiaAocU2VuZFZlcmlmaWNhdGlvbkNvZGVSZXNwb25zZRIPCgdtZXNzYWdlGAEgASgJEhIKCmV4cGlyZXNfaW4YAiABKAUSDwoHc2VudF9hdBgDIAEoCRISCgpleHBpcmVzX2F0GAQgASgJIjEKElZlcmlmeUVtYWlsUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIMCgRjb2RlGAIgASgJIkUKE1ZlcmlmeUVtYWlsUmVzcG9uc2USDwoHbWVzc2FnZRgBIAEoCRIdCgR1c2VyGAIgASgLMg8uamFkcmVuLnYxLlVzZXIyuAMKC0F1dGhTZXJ2aWNlEkMKCFJlZ2lzdGVyEhouamFkcmVuLnYxLlJlZ2lzdGVyUmVxdWVzdBobLmphZHJlbi52MS5SZWdpc3RlclJlc3BvbnNlEjoKBUxvZ2luEhcuamFkcmVuLnYxLkxvZ2luUmVxdWVzdBoYLmphZHJlbi52MS5Ub2tlblJlc3BvbnNlEj4KB1JlZnJlc2gSGS5qYWRyZW4udjEuUmVmcmVzaFJlcXVlc3QaGC5qYWRyZW4udjEuVG9rZW5SZXNwb25zZRIxCgJNZRIULmphZHJlbi52MS5NZVJlcXVlc3QaFS5qYWRyZW4udjEuTWVSZXNwb25zZRJnChRTZW5kVmVyaWZpY2F0aW9uQ29kZRImLmphZHJlbi52MS5TZW5kVmVyaWZpY2F0aW9uQ29kZVJlcXVlc3QaJy5qYWRyZW4udjEuU2VuZFZlcmlmaWNhdGlvbkNvZGVSZXNwb25zZRJMCgtWZXJpZnlFbWFpbBIdLmphZHJlbi52MS5WZXJpZnlFbWFpbFJlcXVlc3QaHi5qYWRyZW4udjEuVmVyaWZ5RW1haWxSZXNwb25zZWIGcHJvdG8z");
+  fileDesc("ChRqYWRyZW4vdjEvYXV0aC5wcm90bxIJamFkcmVuLnYxIn0KBFVzZXISDwoHdXNlcl9pZBgBIAEoCRIQCghuaWNrbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRISCgVwaG9uZRgEIAEoCUgAiAEBEhUKDXJlZ2lzdGVyZWRfYXQYBSABKAkSDgoGc3RhdHVzGAYgASgFQggKBl9waG9uZSJwCg9SZWdpc3RlclJlcXVlc3QSEAoIbmlja25hbWUYASABKAkSDQoFZW1haWwYAiABKAkSEAoIcGFzc3dvcmQYAyABKAkSEgoFcGhvbmUYBCABKAlIAIgBARIMCgRjb2RlGAUgASgJQggKBl9waG9uZSI0CgxMb2dpblJlcXVlc3QSEgoKaWRlbnRpZmllchgBIAEoCRIQCghwYXNzd29yZBgCIAEoCSIdCg5SZWZyZXNoUmVxdWVzdEoECAEQAlIFdG9rZW4iDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSJJChRSZXNldFBhc3N3b3JkUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIMCgRjb2RlGAIgASgJEhQKDG5ld19wYXNzd29yZBgDIAEoCSKEAQoNVG9rZW5SZXNwb25zZRIUCgxhY2Nlc3NfdG9rZW4YASABKAkSEgoKdG9rZW5fdHlwZRgCIAEoCRISCgpleHBpcmVzX2luGAMgASgFEhYKDnJlZnJlc2hfd2luZG93GAQgASgFEh0KBHVzZXIYBSABKAsyDy5qYWRyZW4udjEuVXNlciILCglNZVJlcXVlc3QiUgoKTWVSZXNwb25zZRIdCgR1c2VyGAEgASgLMg8uamFkcmVuLnYxLlVzZXISEQoJaXNzdWVkX2F0GAIgASgDEhIKCmV4cGlyZXNfYXQYAyABKAMiPAobU2VuZFZlcmlmaWNhdGlvbkNvZGVSZXF1ZXN0Eg0KBWVtYWlsGAEgASgJEg4KBmxvY2FsZRgCIAEoCSJoChxTZW5kVmVyaWZpY2F0aW9uQ29kZVJlc3BvbnNlEg8KB21lc3NhZ2UYASABKAkSEgoKZXhwaXJlc19pbhgCIAEoBRIPCgdzZW50X2F0GAMgASgJEhIKCmV4cGlyZXNfYXQYBCABKAkiMQoSVmVyaWZ5RW1haWxSZXF1ZXN0Eg0KBWVtYWlsGAEgASgJEgwKBGNvZGUYAiABKAkiRQoTVmVyaWZ5RW1haWxSZXNwb25zZRIPCgdtZXNzYWdlGAEgASgJEh0KBHVzZXIYAiABKAsyDy5qYWRyZW4udjEuVXNlcjKTBgoLQXV0aFNlcnZpY2USZwoUU2VuZFJlZ2lzdHJhdGlvbkNvZGUSJi5qYWRyZW4udjEuU2VuZFZlcmlmaWNhdGlvbkNvZGVSZXF1ZXN0GicuamFkcmVuLnYxLlNlbmRWZXJpZmljYXRpb25Db2RlUmVzcG9uc2USQAoIUmVnaXN0ZXISGi5qYWRyZW4udjEuUmVnaXN0ZXJSZXF1ZXN0GhguamFkcmVuLnYxLlRva2VuUmVzcG9uc2USOgoFTG9naW4SFy5qYWRyZW4udjEuTG9naW5SZXF1ZXN0GhguamFkcmVuLnYxLlRva2VuUmVzcG9uc2USPgoHUmVmcmVzaBIZLmphZHJlbi52MS5SZWZyZXNoUmVxdWVzdBoYLmphZHJlbi52MS5Ub2tlblJlc3BvbnNlEj0KBkxvZ291dBIYLmphZHJlbi52MS5Mb2dvdXRSZXF1ZXN0GhkuamFkcmVuLnYxLkxvZ291dFJlc3BvbnNlEjEKAk1lEhQuamFkcmVuLnYxLk1lUmVxdWVzdBoVLmphZHJlbi52MS5NZVJlc3BvbnNlEmcKFFNlbmRWZXJpZmljYXRpb25Db2RlEiYuamFkcmVuLnYxLlNlbmRWZXJpZmljYXRpb25Db2RlUmVxdWVzdBonLmphZHJlbi52MS5TZW5kVmVyaWZpY2F0aW9uQ29kZVJlc3BvbnNlEkwKC1ZlcmlmeUVtYWlsEh0uamFkcmVuLnYxLlZlcmlmeUVtYWlsUmVxdWVzdBoeLmphZHJlbi52MS5WZXJpZnlFbWFpbFJlc3BvbnNlEmgKFVNlbmRQYXNzd29yZFJlc2V0Q29kZRImLmphZHJlbi52MS5TZW5kVmVyaWZpY2F0aW9uQ29kZVJlcXVlc3QaJy5qYWRyZW4udjEuU2VuZFZlcmlmaWNhdGlvbkNvZGVSZXNwb25zZRJKCg1SZXNldFBhc3N3b3JkEh8uamFkcmVuLnYxLlJlc2V0UGFzc3dvcmRSZXF1ZXN0GhguamFkcmVuLnYxLlRva2VuUmVzcG9uc2ViBnByb3RvMw");
 
 /**
  * @generated from message jadren.v1.User
@@ -61,6 +61,8 @@ export const UserSchema: GenMessage<User> = /*@__PURE__*/
  */
 export type RegisterRequest = Message<"jadren.v1.RegisterRequest"> & {
   /**
+   * Empty: the e-mail's local part is used.
+   *
    * @generated from field: string nickname = 1;
    */
   nickname: string;
@@ -79,6 +81,13 @@ export type RegisterRequest = Message<"jadren.v1.RegisterRequest"> & {
    * @generated from field: optional string phone = 4;
    */
   phone?: string | undefined;
+
+  /**
+   * Six-digit code from SendRegistrationCode.
+   *
+   * @generated from field: string code = 5;
+   */
+  code: string;
 };
 
 /**
@@ -87,23 +96,6 @@ export type RegisterRequest = Message<"jadren.v1.RegisterRequest"> & {
  */
 export const RegisterRequestSchema: GenMessage<RegisterRequest> = /*@__PURE__*/
   messageDesc(file_jadren_v1_auth, 1);
-
-/**
- * @generated from message jadren.v1.RegisterResponse
- */
-export type RegisterResponse = Message<"jadren.v1.RegisterResponse"> & {
-  /**
-   * @generated from field: jadren.v1.User user = 1;
-   */
-  user?: User | undefined;
-};
-
-/**
- * Describes the message jadren.v1.RegisterResponse.
- * Use `create(RegisterResponseSchema)` to create a new message.
- */
-export const RegisterResponseSchema: GenMessage<RegisterResponse> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 2);
 
 /**
  * @generated from message jadren.v1.LoginRequest
@@ -125,16 +117,14 @@ export type LoginRequest = Message<"jadren.v1.LoginRequest"> & {
  * Use `create(LoginRequestSchema)` to create a new message.
  */
 export const LoginRequestSchema: GenMessage<LoginRequest> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 3);
+  messageDesc(file_jadren_v1_auth, 2);
 
 /**
+ * The refresh token travels in the HttpOnly cookie, never in the message.
+ *
  * @generated from message jadren.v1.RefreshRequest
  */
 export type RefreshRequest = Message<"jadren.v1.RefreshRequest"> & {
-  /**
-   * @generated from field: string token = 1;
-   */
-  token: string;
 };
 
 /**
@@ -142,7 +132,60 @@ export type RefreshRequest = Message<"jadren.v1.RefreshRequest"> & {
  * Use `create(RefreshRequestSchema)` to create a new message.
  */
 export const RefreshRequestSchema: GenMessage<RefreshRequest> = /*@__PURE__*/
+  messageDesc(file_jadren_v1_auth, 3);
+
+/**
+ * @generated from message jadren.v1.LogoutRequest
+ */
+export type LogoutRequest = Message<"jadren.v1.LogoutRequest"> & {
+};
+
+/**
+ * Describes the message jadren.v1.LogoutRequest.
+ * Use `create(LogoutRequestSchema)` to create a new message.
+ */
+export const LogoutRequestSchema: GenMessage<LogoutRequest> = /*@__PURE__*/
   messageDesc(file_jadren_v1_auth, 4);
+
+/**
+ * @generated from message jadren.v1.LogoutResponse
+ */
+export type LogoutResponse = Message<"jadren.v1.LogoutResponse"> & {
+};
+
+/**
+ * Describes the message jadren.v1.LogoutResponse.
+ * Use `create(LogoutResponseSchema)` to create a new message.
+ */
+export const LogoutResponseSchema: GenMessage<LogoutResponse> = /*@__PURE__*/
+  messageDesc(file_jadren_v1_auth, 5);
+
+/**
+ * @generated from message jadren.v1.ResetPasswordRequest
+ */
+export type ResetPasswordRequest = Message<"jadren.v1.ResetPasswordRequest"> & {
+  /**
+   * @generated from field: string email = 1;
+   */
+  email: string;
+
+  /**
+   * @generated from field: string code = 2;
+   */
+  code: string;
+
+  /**
+   * @generated from field: string new_password = 3;
+   */
+  newPassword: string;
+};
+
+/**
+ * Describes the message jadren.v1.ResetPasswordRequest.
+ * Use `create(ResetPasswordRequestSchema)` to create a new message.
+ */
+export const ResetPasswordRequestSchema: GenMessage<ResetPasswordRequest> = /*@__PURE__*/
+  messageDesc(file_jadren_v1_auth, 6);
 
 /**
  * @generated from message jadren.v1.TokenResponse
@@ -159,11 +202,15 @@ export type TokenResponse = Message<"jadren.v1.TokenResponse"> & {
   tokenType: string;
 
   /**
+   * Seconds until the access token expires.
+   *
    * @generated from field: int32 expires_in = 3;
    */
   expiresIn: number;
 
   /**
+   * Seconds until the session (refresh cookie) expires.
+   *
    * @generated from field: int32 refresh_window = 4;
    */
   refreshWindow: number;
@@ -179,7 +226,7 @@ export type TokenResponse = Message<"jadren.v1.TokenResponse"> & {
  * Use `create(TokenResponseSchema)` to create a new message.
  */
 export const TokenResponseSchema: GenMessage<TokenResponse> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 5);
+  messageDesc(file_jadren_v1_auth, 7);
 
 /**
  * @generated from message jadren.v1.MeRequest
@@ -192,7 +239,7 @@ export type MeRequest = Message<"jadren.v1.MeRequest"> & {
  * Use `create(MeRequestSchema)` to create a new message.
  */
 export const MeRequestSchema: GenMessage<MeRequest> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 6);
+  messageDesc(file_jadren_v1_auth, 8);
 
 /**
  * @generated from message jadren.v1.MeResponse
@@ -219,7 +266,7 @@ export type MeResponse = Message<"jadren.v1.MeResponse"> & {
  * Use `create(MeResponseSchema)` to create a new message.
  */
 export const MeResponseSchema: GenMessage<MeResponse> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 7);
+  messageDesc(file_jadren_v1_auth, 9);
 
 /**
  * @generated from message jadren.v1.SendVerificationCodeRequest
@@ -243,7 +290,7 @@ export type SendVerificationCodeRequest = Message<"jadren.v1.SendVerificationCod
  * Use `create(SendVerificationCodeRequestSchema)` to create a new message.
  */
 export const SendVerificationCodeRequestSchema: GenMessage<SendVerificationCodeRequest> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 8);
+  messageDesc(file_jadren_v1_auth, 10);
 
 /**
  * @generated from message jadren.v1.SendVerificationCodeResponse
@@ -275,7 +322,7 @@ export type SendVerificationCodeResponse = Message<"jadren.v1.SendVerificationCo
  * Use `create(SendVerificationCodeResponseSchema)` to create a new message.
  */
 export const SendVerificationCodeResponseSchema: GenMessage<SendVerificationCodeResponse> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 9);
+  messageDesc(file_jadren_v1_auth, 11);
 
 /**
  * @generated from message jadren.v1.VerifyEmailRequest
@@ -297,7 +344,7 @@ export type VerifyEmailRequest = Message<"jadren.v1.VerifyEmailRequest"> & {
  * Use `create(VerifyEmailRequestSchema)` to create a new message.
  */
 export const VerifyEmailRequestSchema: GenMessage<VerifyEmailRequest> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 10);
+  messageDesc(file_jadren_v1_auth, 12);
 
 /**
  * @generated from message jadren.v1.VerifyEmailResponse
@@ -319,22 +366,39 @@ export type VerifyEmailResponse = Message<"jadren.v1.VerifyEmailResponse"> & {
  * Use `create(VerifyEmailResponseSchema)` to create a new message.
  */
 export const VerifyEmailResponseSchema: GenMessage<VerifyEmailResponse> = /*@__PURE__*/
-  messageDesc(file_jadren_v1_auth, 11);
+  messageDesc(file_jadren_v1_auth, 13);
 
 /**
- * AuthService handles account registration, e-mail verification and JWT
+ * AuthService handles registration, e-mail codes, password resets and
  * sessions. Authenticated RPCs read "authorization: Bearer <jwt>" metadata.
+ *
+ * Sessions: Register, Login and ResetPassword return a short-lived access
+ * token and set an HttpOnly refresh cookie scoped to this service. Refresh
+ * reads that cookie, rotates it and returns a new access token; Logout revokes
+ * the session on the server.
  *
  * @generated from service jadren.v1.AuthService
  */
 export const AuthService: GenService<{
   /**
+   * Sends a code proving ownership of an e-mail that has no verified account.
+   *
+   * @generated from rpc jadren.v1.AuthService.SendRegistrationCode
+   */
+  sendRegistrationCode: {
+    methodKind: "unary";
+    input: typeof SendVerificationCodeRequestSchema;
+    output: typeof SendVerificationCodeResponseSchema;
+  },
+  /**
+   * Creates a verified account from a registration code and signs it in.
+   *
    * @generated from rpc jadren.v1.AuthService.Register
    */
   register: {
     methodKind: "unary";
     input: typeof RegisterRequestSchema;
-    output: typeof RegisterResponseSchema;
+    output: typeof TokenResponseSchema;
   },
   /**
    * @generated from rpc jadren.v1.AuthService.Login
@@ -345,14 +409,20 @@ export const AuthService: GenService<{
     output: typeof TokenResponseSchema;
   },
   /**
-   * Refresh accepts the token in the request or in the authorization header.
-   *
    * @generated from rpc jadren.v1.AuthService.Refresh
    */
   refresh: {
     methodKind: "unary";
     input: typeof RefreshRequestSchema;
     output: typeof TokenResponseSchema;
+  },
+  /**
+   * @generated from rpc jadren.v1.AuthService.Logout
+   */
+  logout: {
+    methodKind: "unary";
+    input: typeof LogoutRequestSchema;
+    output: typeof LogoutResponseSchema;
   },
   /**
    * @generated from rpc jadren.v1.AuthService.Me
@@ -363,6 +433,8 @@ export const AuthService: GenService<{
     output: typeof MeResponseSchema;
   },
   /**
+   * Verifies the e-mail of an existing unverified account.
+   *
    * @generated from rpc jadren.v1.AuthService.SendVerificationCode
    */
   sendVerificationCode: {
@@ -377,6 +449,26 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof VerifyEmailRequestSchema;
     output: typeof VerifyEmailResponseSchema;
+  },
+  /**
+   * Always reports success, so it does not reveal which e-mails have accounts.
+   *
+   * @generated from rpc jadren.v1.AuthService.SendPasswordResetCode
+   */
+  sendPasswordResetCode: {
+    methodKind: "unary";
+    input: typeof SendVerificationCodeRequestSchema;
+    output: typeof SendVerificationCodeResponseSchema;
+  },
+  /**
+   * Sets a new password, revokes every session of the account and signs in.
+   *
+   * @generated from rpc jadren.v1.AuthService.ResetPassword
+   */
+  resetPassword: {
+    methodKind: "unary";
+    input: typeof ResetPasswordRequestSchema;
+    output: typeof TokenResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_jadren_v1_auth, 0);

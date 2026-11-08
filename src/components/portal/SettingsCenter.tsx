@@ -29,6 +29,7 @@ export default function SettingsCenter() {
   useEffect(() => {
     try {
       const coordinates = JSON.parse(localStorage.getItem(COORDINATES_KEY) || "null") as ThemeCoordinates | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration.
       if (coordinates) { setLatitude(String(coordinates.latitude)); setLongitude(String(coordinates.longitude)); setSource(coordinates.source); }
       setSolar(JSON.parse(localStorage.getItem(SOLAR_KEY) || "null"));
     } catch { /* old invalid local data is ignored */ }

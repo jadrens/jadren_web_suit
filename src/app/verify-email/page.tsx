@@ -3,7 +3,7 @@ import VerifyEmailClient from "../account/components/VerifyEmailClient";
 import AccountProviders from "../account/AccountProviders";
 
 export const metadata: Metadata = {
-  title: "验证邮箱 | jadren",
+  title: "验证邮箱",
   description: "验证 jadren 账户邮箱",
 };
 

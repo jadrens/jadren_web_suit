@@ -4,7 +4,7 @@ import AccountProviders from "../account/AccountProviders";
 import { isSafeAccountReturn } from "@lib/account-url";
 
 export const metadata: Metadata = {
-  title: "登录 | jadren",
+  title: "登录",
   description: "登录 jadren 账户",
 };
 

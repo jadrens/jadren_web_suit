@@ -314,6 +314,8 @@ export default function EditorClient() {
       const pendingId = target.pendingId
         ? await editorApi.forkPending(target.pendingId)
         : await editorApi.forkArticle(target.postId ?? "");
+      // A full load, so the editor starts from the fork instead of the current draft's state.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign(`/editor?pending=${encodeURIComponent(pendingId)}`);
     } catch (error) {
       setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.forkFailed });

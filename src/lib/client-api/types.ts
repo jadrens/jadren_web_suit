@@ -22,10 +22,8 @@ export interface RegisterRequest {
   email: string;
   password: string;
   phone?: string | null;
-}
-
-export interface RegisterResponse {
-  user: UserProfile;
+  /** Six-digit code from sendRegistrationCode. */
+  code: string;
 }
 
 export interface LoginRequest {

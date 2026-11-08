@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import EditorClient from "./EditorClient";
 
 export const metadata: Metadata = {
-  title: "Markdown Editor - jadren's nook",
+  title: "Markdown Editor",
   description: "Write and publish Markdown articles",
 };
 

@@ -15,7 +15,7 @@ function eventUtc(date: Date, latitude: number, longitude: number, sunrise: bool
   const lngHour = longitude / 15;
   const t = day + ((sunrise ? 6 : 18) - lngHour) / 24;
   const anomaly = 0.9856 * t - 3.289;
-  let lng = (anomaly + 1.916 * Math.sin(anomaly * Math.PI / 180) + 0.02 * Math.sin(2 * anomaly * Math.PI / 180) + 282.634 + 360) % 360;
+  const lng = (anomaly + 1.916 * Math.sin(anomaly * Math.PI / 180) + 0.02 * Math.sin(2 * anomaly * Math.PI / 180) + 282.634 + 360) % 360;
   let ascension = (Math.atan(0.91764 * Math.tan(lng * Math.PI / 180)) * 180 / Math.PI + 360) % 360;
   ascension = (ascension + Math.floor(lng / 90) * 90 - Math.floor(ascension / 90) * 90) / 15;
   const sinDec = 0.39782 * Math.sin(lng * Math.PI / 180);

@@ -6,15 +6,18 @@ import type {
   LoginRequest,
   MeResponse,
   RegisterRequest,
-  RegisterResponse,
   SendVerificationCodeResponse,
   TokenResponse,
   UserProfile,
   VerifyEmailResponse,
 } from "./types";
 
+// Holds the short-lived access token and profile so tabs share one session.
+// The long-lived refresh token never reaches script: it is an HttpOnly cookie
+// that only the auth RPCs receive.
 const STORAGE_KEY = "dra-tool-auth-session-v1";
-const COOKIE_KEY = "jadren_auth_session";
+/** Script-readable cookie used by older builds; deleted on sight because it carried the token. */
+const LEGACY_COOKIE_KEY = "jadren_auth_session";
 const STORAGE_VERSION = 1;
 const REFRESH_AHEAD_MS = 60_000;
 const REFRESH_RETRY_MS = 60_000;
@@ -33,29 +36,14 @@ interface JwtTiming {
   expiresAt: number;
 }
 
-function sharedCookieDomain(hostname: string) {
-  for (const domain of ["jadren.me", "jadren.cn"]) {
-    if (hostname === domain || hostname.endsWith(`.${domain}`)) return `.${domain}`;
-  }
-  if (hostname === "jadren.debug" || hostname.endsWith(".jadren.debug")) {
-    return ".jadren.debug";
-  }
-  return null;
-}
-
-function readSessionCookie() {
-  const cookie = document.cookie
-    .split("; ")
-    .find((item) => item.startsWith(`${COOKIE_KEY}=`));
-  if (!cookie) return null;
-
-  try {
-    const value: unknown = JSON.parse(
-      decodeURIComponent(cookie.slice(COOKIE_KEY.length + 1))
-    );
-    return isStoredSession(value) ? value : null;
-  } catch {
-    return null;
+function clearLegacyCookie() {
+  if (!document.cookie.includes(`${LEGACY_COOKIE_KEY}=`)) return;
+  const hostname = window.location.hostname;
+  const domains = ["jadren.me", "jadren.cn", "jadren.debug"].filter(
+    (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+  );
+  for (const domain of [...domains.map((item) => `; Domain=.${item}`), ""]) {
+    document.cookie = `${LEGACY_COOKIE_KEY}=; Path=/; Max-Age=0${domain}`;
   }
 }
 
@@ -166,6 +154,7 @@ export class AuthSessionManager {
     window.addEventListener("storage", this.handleStorage);
     window.addEventListener("online", this.handleOnline);
     document.addEventListener("visibilitychange", this.handleVisibility);
+    clearLegacyCookie();
 
     const stored = this.readStoredSession();
     if (!stored) {
@@ -205,9 +194,43 @@ export class AuthSessionManager {
     return this.session.accessToken;
   };
 
-  register = async (input: RegisterRequest): Promise<RegisterResponse> => {
-    const response = await (await this.authClient()).register({ ...input, phone: input.phone ?? undefined });
-    return { user: toUserProfile(response.user) };
+  /** Sends the code that proves the e-mail before an account is created. */
+  sendRegistrationCode = async (
+    email: string,
+    locale: "en" | "zh" = "en"
+  ): Promise<SendVerificationCodeResponse> => {
+    const { message, expiresIn, sentAt, expiresAt } =
+      await (await this.authClient()).sendRegistrationCode({ email, locale });
+    return { message, expiresIn, sentAt, expiresAt };
+  };
+
+  /** Creates a verified account and signs it in. */
+  register = async (input: RegisterRequest) => {
+    await this.initialize();
+    const response = tokenResponse(
+      await (await this.authClient()).register({ ...input, phone: input.phone ?? undefined })
+    );
+    this.acceptToken(response);
+    return response.user;
+  };
+
+  sendPasswordResetCode = async (
+    email: string,
+    locale: "en" | "zh" = "en"
+  ): Promise<SendVerificationCodeResponse> => {
+    const { message, expiresIn, sentAt, expiresAt } =
+      await (await this.authClient()).sendPasswordResetCode({ email, locale });
+    return { message, expiresIn, sentAt, expiresAt };
+  };
+
+  /** Sets a new password (signing out every other session) and signs in. */
+  resetPassword = async (email: string, code: string, newPassword: string) => {
+    await this.initialize();
+    const response = tokenResponse(
+      await (await this.authClient()).resetPassword({ email, code, newPassword })
+    );
+    this.acceptToken(response);
+    return response.user;
   };
 
   login = async (input: LoginRequest) => {
@@ -236,7 +259,15 @@ export class AuthSessionManager {
     }
   };
 
-  logout = () => this.clearSession();
+  /** Revokes the session on the server, then forgets it locally even if that fails. */
+  logout = async () => {
+    try {
+      await (await this.authClient()).logout({});
+    } catch {
+      // Offline or already expired: the local session is cleared regardless.
+    }
+    this.clearSession();
+  };
 
   sendVerificationCode = async (
     email: string,
@@ -301,7 +332,8 @@ export class AuthSessionManager {
     this.publish("refreshing", current.user, current.expiresAt);
     try {
       const response = tokenResponse(
-        await (await this.authClient()).refresh({ token: current.accessToken })
+        // The refresh token travels in the HttpOnly cookie.
+        await (await this.authClient()).refresh({})
       );
       this.acceptToken(response);
       return response.accessToken;
@@ -334,7 +366,8 @@ export class AuthSessionManager {
       user: response.user,
       issuedAt,
       expiresAt,
-      refreshUntil: issuedAt + response.refreshWindow * 1000,
+      // refreshWindow counts from now: it is the remaining session lifetime.
+      refreshUntil: now + response.refreshWindow * 1000,
     };
     this.persistSession();
     this.publish("authenticated", response.user, expiresAt);
@@ -380,33 +413,11 @@ export class AuthSessionManager {
     } catch {
       // The in-memory session remains usable if storage is unavailable.
     }
-    const domain = sharedCookieDomain(window.location.hostname);
-    if (domain) {
-      const maxAge = Math.max(
-        0,
-        Math.floor((this.session.refreshUntil - Date.now()) / 1000)
-      );
-      document.cookie = `${COOKIE_KEY}=${encodeURIComponent(JSON.stringify(this.session))}; Path=/; Domain=${domain}; Max-Age=${maxAge}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
-    }
   }
 
   private readStoredSession() {
     if (typeof window === "undefined") return null;
     try {
-      const cookieSession = readSessionCookie();
-      if (cookieSession) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cookieSession));
-        return cookieSession;
-      }
-
-      // On shared-domain deployments the cookie is canonical. Falling back to
-      // per-origin storage here would resurrect a session removed on another
-      // subdomain.
-      if (sharedCookieDomain(window.location.hostname)) {
-        localStorage.removeItem(STORAGE_KEY);
-        return null;
-      }
-
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       const value: unknown = JSON.parse(raw);
@@ -430,10 +441,6 @@ export class AuthSessionManager {
         localStorage.removeItem(STORAGE_KEY);
       } catch {
         // The in-memory session is already cleared.
-      }
-      const domain = sharedCookieDomain(window.location.hostname);
-      if (domain) {
-        document.cookie = `${COOKIE_KEY}=; Path=/; Domain=${domain}; Max-Age=0; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
       }
     }
     this.publish("anonymous", null, null);
@@ -468,24 +475,6 @@ export class AuthSessionManager {
 
   private handleVisibility = () => {
     if (document.visibilityState !== "visible") return;
-
-    if (sharedCookieDomain(window.location.hostname)) {
-      const sharedSession = readSessionCookie();
-      if (!sharedSession) {
-        if (this.session) this.clearSession(false);
-        return;
-      }
-      if (!this.session || sharedSession.accessToken !== this.session.accessToken) {
-        this.session = sharedSession;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sharedSession));
-        if (Date.now() < sharedSession.expiresAt) {
-          this.publish("authenticated", sharedSession.user, sharedSession.expiresAt);
-          this.scheduleRefresh();
-          return;
-        }
-      }
-    }
-
     if (!this.session) return;
     if (Date.now() >= this.session.expiresAt - REFRESH_AHEAD_MS) {
       void this.refreshAccessToken();

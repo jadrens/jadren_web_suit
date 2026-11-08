@@ -91,6 +91,8 @@ function statusColor(status: Reminder["status"]) {
 function isDueSoon(reminder: Reminder, now: number) {
   return reminder.status === "active" &&
     reminder.nextRemindAt !== null &&
+    // Already past: the dispatcher is about to send it; that is not "due soon".
+    new Date(reminder.nextRemindAt).getTime() - now >= 0 &&
     new Date(reminder.nextRemindAt).getTime() - now < URGENT_WINDOW_MS;
 }
 
@@ -136,7 +138,9 @@ export default function ReminderClient() {
 
   const loadReminders = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
-    setError(null);
+    // Background refreshes run every 30 s; only clear a previous load failure,
+    // never the error of an action the user has not seen yet.
+    setError((current) => (current === copy.loadFailed ? null : current));
     try {
       const response = await remindersApi.list();
       setReminders(response.reminders);
@@ -424,10 +428,10 @@ export default function ReminderClient() {
                             {reminder.lastDeliveryStatus === "rate_limited" ? <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 0.5 }}>{copy.rateLimited}</Typography> : null}
                           </Box>
                           <Stack direction="row">
-                            {reminder.scheduleType !== "never" && reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
-                            <Tooltip title={copy.editContent}><IconButton onClick={() => openContentEditor(reminder)}><EditRoundedIcon /></IconButton></Tooltip>
-                            <Tooltip title={copy.editSchedule}><IconButton color="primary" onClick={() => openScheduleEditor(reminder)}><EditNotificationsRoundedIcon /></IconButton></Tooltip>
-                            <Tooltip title={copy.delete}><IconButton color="error" onClick={() => void deleteReminder(reminder)}><DeleteOutlineRoundedIcon /></IconButton></Tooltip>
+                            {reminder.scheduleType !== "never" && reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton aria-label={reminder.status === "active" ? copy.pause : copy.resume} onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
+                            <Tooltip title={copy.editContent}><IconButton aria-label={copy.editContent} onClick={() => openContentEditor(reminder)}><EditRoundedIcon /></IconButton></Tooltip>
+                            <Tooltip title={copy.editSchedule}><IconButton aria-label={copy.editSchedule} color="primary" onClick={() => openScheduleEditor(reminder)}><EditNotificationsRoundedIcon /></IconButton></Tooltip>
+                            <Tooltip title={copy.delete}><IconButton aria-label={copy.delete} color="error" onClick={() => void deleteReminder(reminder)}><DeleteOutlineRoundedIcon /></IconButton></Tooltip>
                           </Stack>
                         </Stack>
                       </CardContent>
@@ -516,6 +520,7 @@ export default function ReminderClient() {
           <DialogContent>
             <Stack spacing={1.5} sx={{ pt: 1 }}>
               <Typography variant="body2" color="text.secondary">{copy.editScheduleDescription}</Typography>
+              {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
               <FormControl fullWidth>
                 <InputLabel>{copy.scheduleType}</InputLabel>
                 <Select label={copy.scheduleType} value={editScheduleType} onChange={(event) => setEditScheduleType(event.target.value as ReminderScheduleType)}>

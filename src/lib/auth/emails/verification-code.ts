@@ -1,4 +1,5 @@
 export type VerificationEmailLocale = "en" | "zh";
+export type VerificationEmailPurpose = "register" | "verify" | "reset";
 
 const EMAIL_COPY = {
   en: {
@@ -12,8 +13,6 @@ const EMAIL_COPY = {
     ignore: "If you did not request this code, you can safely ignore this email.",
     footer: "This is an automated message from jadren tools. Please do not reply.",
     subject: "Your jadren tools verification code",
-    text: (code: string, minutes: number) =>
-      `Your jadren tools verification code is ${code}. It expires in ${minutes} minutes. Do not share it with anyone.`,
   },
   zh: {
     htmlLang: "zh-CN",
@@ -26,10 +25,55 @@ const EMAIL_COPY = {
     ignore: "如果这不是你的操作，可以安全地忽略此邮件。",
     footer: "此邮件由 jadren tools 自动发送，请勿直接回复。",
     subject: "你的 jadren tools 邮箱验证码",
-    text: (code: string, minutes: number) =>
-      `你的 jadren tools 邮箱验证码是 ${code}。验证码将在 ${minutes} 分钟后失效，请勿向任何人透露。`,
   },
 } as const;
+
+// What the code is for changes the wording; the layout stays the same.
+const PURPOSE_COPY: Record<
+  VerificationEmailLocale,
+  Record<VerificationEmailPurpose, { header: string; instruction: string; subject: string; textLead: string }>
+> = {
+  en: {
+    register: {
+      header: "Create your account",
+      instruction: "Enter this code on the sign-up page to confirm your email:",
+      subject: "Confirm your email for jadren tools",
+      textLead: "Your jadren tools sign-up code is",
+    },
+    verify: {
+      header: EMAIL_COPY.en.header,
+      instruction: EMAIL_COPY.en.instruction,
+      subject: EMAIL_COPY.en.subject,
+      textLead: "Your jadren tools verification code is",
+    },
+    reset: {
+      header: "Password reset",
+      instruction: "Enter this code on the password reset page to choose a new password:",
+      subject: "Reset your jadren tools password",
+      textLead: "Your jadren tools password reset code is",
+    },
+  },
+  zh: {
+    register: {
+      header: "注册账户",
+      instruction: "请在注册页面输入以下验证码以确认你的邮箱：",
+      subject: "确认你的 jadren tools 注册邮箱",
+      textLead: "你的 jadren tools 注册验证码是",
+    },
+    verify: {
+      header: EMAIL_COPY.zh.header,
+      instruction: EMAIL_COPY.zh.instruction,
+      subject: EMAIL_COPY.zh.subject,
+      textLead: "你的 jadren tools 邮箱验证码是",
+    },
+    reset: {
+      header: "重置密码",
+      instruction: "请在重置密码页面输入以下验证码以设置新密码：",
+      subject: "重置你的 jadren tools 密码",
+      textLead: "你的 jadren tools 密码重置验证码是",
+    },
+  },
+};
 
 function escapeHtml(value: string) {
   return value.replace(
@@ -48,9 +92,10 @@ function escapeHtml(value: string) {
 export function verificationCodeEmail(
   code: string,
   locale: VerificationEmailLocale,
-  expiresInMinutes = 10
+  expiresInMinutes = 10,
+  purpose: VerificationEmailPurpose = "verify"
 ) {
-  const copy = EMAIL_COPY[locale];
+  const copy = { ...EMAIL_COPY[locale], ...PURPOSE_COPY[locale][purpose] };
   const safeCode = escapeHtml(code);
   const html = `<!doctype html>
 <html lang="${copy.htmlLang}">
@@ -91,7 +136,7 @@ export function verificationCodeEmail(
 
   return {
     subject: copy.subject,
-    text: copy.text(code, expiresInMinutes),
+    text: `${copy.textLead} ${code}${locale === "zh" ? "。" : ". "}${copy.expiry(expiresInMinutes)}`,
     html,
   };
 }

@@ -51,8 +51,8 @@ export const CONTACT_CONFIG: Record<string, ContactConfigItem> = {
     enabled: true,
     name: "Telegram",
     icon: "telegram",
-    url: "https://t.me/jadrens",
-    username: "@jadrens",
+    url: "https://t.me/calicoie",
+    username: "@calicoie",
     color: "#26A5E4",
   },
   email: {
@@ -126,14 +126,6 @@ export const CONTACT_CONFIG: Record<string, ContactConfigItem> = {
     url: "",
     username: "",
     color: "#25D366",
-  },
-  qq: {
-    enabled: true,
-    name: "QQ",
-    icon: "qq",
-    url: "https://qm.qq.com/q/UsebOGxquY",
-    username: "Caliconix",
-    color: "#12B7F5",
   },
   wechat: {
     enabled: true,

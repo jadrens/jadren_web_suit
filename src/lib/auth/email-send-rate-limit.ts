@@ -106,14 +106,16 @@ export function validateEmailSend(sendToEmail: string, ip: string) {
   return rateLimiter().validate(sendToEmail, ip);
 }
 
+/**
+ * The client address for rate limiting. Only X-Real-IP is trusted: nginx sets
+ * it from the connection's peer address, overwriting anything the client sent.
+ * CF-Connecting-IP and the first X-Forwarded-For entry are client-controlled,
+ * so trusting them would let every request pick its own rate-limit bucket.
+ * Behind Cloudflare, configure nginx's real_ip module (set_real_ip_from the
+ * Cloudflare ranges, real_ip_header CF-Connecting-IP) so X-Real-IP stays right.
+ */
 export function requestIp(request: { headers: Headers }) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0];
-  const candidate =
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-real-ip") ||
-    forwarded ||
-    "unknown";
-  return normalizeIp(candidate) || "unknown";
+  return normalizeIp(request.headers.get("x-real-ip") ?? "") || "unknown";
 }
 
 function normalizeIp(value: string) {

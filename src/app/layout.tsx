@@ -24,7 +24,8 @@ const nunito = Nunito({ variable: "--font-nunito", subsets: ["latin"], weight: [
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_CONFIG.baseUrl),
-  title: "Dragonren",
+  // Pages set only their own name; the site name is appended here.
+  title: { default: SITE_CONFIG.siteName, template: `%s | ${SITE_CONFIG.siteName}` },
   description: SITE_CONFIG.description,
   icons: SHARED_SITE_ICONS,
 };
@@ -32,8 +33,6 @@ export const metadata: Metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

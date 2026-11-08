@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useHydrated } from "@hooks/app/useHydrated";
 import { Box, Breadcrumbs, Chip, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import Link from "next/link";
@@ -44,7 +45,7 @@ interface PostClientProps {
   next: PostMeta | null;
 }
 
-function getRelativeTime(dateStr: string, t: any): string {
+function getRelativeTime(dateStr: string, t: ReturnType<typeof useI18n>["t"]): string {
   const now = new Date();
   const date = new Date(dateStr);
   const diff = Math.abs(now.getTime() - date.getTime());
@@ -100,20 +101,14 @@ function PostContent({ post, views, slug, incrementView, locale, allPosts, title
   const theme = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useBrowserConfig(BrowserConfigKeys.sidebarOpen, true);
-  const [localViews, setLocalViews] = useState(views);
-  const [mounted, setMounted] = useState(false);
-
-  
+  const mounted = useHydrated();
+  // `views` is the count before this visit, which the effect below records.
+  const localViews = views + 1;
 
   useScrollProgress();
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
     incrementView(slug);
-    setLocalViews((v) => v + 1);
   }, [slug, incrementView]);
 
   return (

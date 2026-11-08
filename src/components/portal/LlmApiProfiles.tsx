@@ -15,6 +15,7 @@ import { useI18n } from "@lib/i18n/portal";
 import { resolveLlmEndpoint } from "@lib/llm";
 import { useUnsavedChanges } from "@hooks/useUnsavedChanges";
 import { useAuth } from "@lib/client-api/use-auth";
+import { toast } from "@components/ui/feedback/toast";
 import { llmSettingsApi } from "@lib/client-api";
 import { decryptLlmSettings, encryptLlmSettings } from "@lib/llm/cloud-backup";
 
@@ -61,7 +62,6 @@ export default function LlmApiProfiles() {
   const auth = useAuth();
   const [profiles, setProfiles] = useState<LlmProfile[]>([]);
   const [visibleTokens, setVisibleTokens] = useState<Record<string, boolean>>({});
-  const [saved, setSaved] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [models, setModels] = useState<LlmModel[]>([]);
   const [directory, setDirectory] = useState<"providers" | "models">("providers");
@@ -82,6 +82,7 @@ export default function LlmApiProfiles() {
     try {
       const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       const nextProfiles = Array.isArray(value) ? value : [];
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration.
       if (Array.isArray(value)) setProfiles(value);
       const modelValue = JSON.parse(localStorage.getItem(MODELS_STORAGE_KEY) || "[]");
       const nextModels = Array.isArray(modelValue) ? modelValue : [];
@@ -92,7 +93,6 @@ export default function LlmApiProfiles() {
   }, []);
 
   useEffect(() => {
-    if (isDirty) setSaved(false);
     const cleanTitle = document.title.replace(/^\*\s*/, "");
     document.title = isDirty ? `* ${cleanTitle}` : cleanTitle;
     return () => { document.title = cleanTitle; };
@@ -114,7 +114,7 @@ export default function LlmApiProfiles() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
     localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(models));
     setSavedSnapshot(JSON.stringify({ profiles, models }));
-    setSaved(true);
+    toast.success(copy.saved);
   };
   const closeCloud = () => { if (!cloudBusy) { setCloudMode(null); setCloudPassphrase(""); } };
   const syncCloud = async () => {
@@ -133,7 +133,7 @@ export default function LlmApiProfiles() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(restored.profiles));
         localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(restored.models));
         setProfiles(restored.profiles); setModels(restored.models);
-        setSavedSnapshot(JSON.stringify(restored)); setSaved(true);
+        setSavedSnapshot(JSON.stringify(restored)); toast.success(copy.saved);
         setCloudNotice({ error: false, text: copy.cloudDownloaded });
       }
       setCloudMode(null); setCloudPassphrase("");
@@ -214,7 +214,7 @@ export default function LlmApiProfiles() {
       </Stack>
       </AccordionDetails>
     </Accordion>)}
-    <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={() => { setProfiles((items) => [...items, emptyProfile()]); setSaved(false); }}>{copy.add}</Button>
+    <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={() => { setProfiles((items) => [...items, emptyProfile()]); }}>{copy.add}</Button>
     </>}
     {directory === "models" && <>
       {models.length === 0 && <Box sx={{ py: 3, textAlign: "center", color: "text.secondary" }}><Typography>{copy.emptyModels}</Typography></Box>}
@@ -247,7 +247,7 @@ export default function LlmApiProfiles() {
         </Stack>
         </AccordionDetails>
       </Accordion>)}
-      <Button variant="outlined" startIcon={<AddRoundedIcon />} disabled={profiles.length === 0} onClick={() => { const model = emptyModel(); model.providerId = profiles[0]?.id || ""; setModels((items) => [...items, model]); setSaved(false); }}>{copy.addModel}</Button>
+      <Button variant="outlined" startIcon={<AddRoundedIcon />} disabled={profiles.length === 0} onClick={() => { const model = emptyModel(); model.providerId = profiles[0]?.id || ""; setModels((items) => [...items, model]); }}>{copy.addModel}</Button>
       {profiles.length === 0 && <Alert severity="warning">{copy.providerRequired}</Alert>}
     </>}
     {directory === "models" && hasInvalidModels && <Alert severity="warning">{copy.incompleteModel}</Alert>}
@@ -257,7 +257,6 @@ export default function LlmApiProfiles() {
       <Button variant="outlined" startIcon={<CloudDownloadRoundedIcon />} disabled={!auth.isAuthenticated || cloudBusy} onClick={() => setCloudMode("download")}>{copy.cloudDownload}</Button>
     </Stack>
     {!auth.isAuthenticated && <Alert severity="info">{copy.cloudLoginRequired}</Alert>}
-    {saved && <Alert severity="success" onClose={() => setSaved(false)}>{copy.saved}</Alert>}
     {cloudNotice && <Alert severity={cloudNotice.error ? "error" : "success"} onClose={() => setCloudNotice(null)}>{cloudNotice.text}</Alert>}
     <Dialog open={cloudMode !== null} onClose={closeCloud} fullWidth maxWidth="sm">
       <DialogTitle>{cloudMode === "upload" ? copy.cloudTitleUpload : copy.cloudTitleDownload}</DialogTitle>

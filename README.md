@@ -36,7 +36,7 @@ The application uses a single-origin design. The portal is served at `/`, with t
 | Database | PostgreSQL |
 | Content | react-markdown, remark-gfm, KaTeX, rehype-highlight |
 | HTML security | rehype-raw with a rehype-sanitize allowlist |
-| Authentication and email | bcrypt, JWT (jose), Resend |
+| Authentication and email | bcrypt, JWT (jose), send-api (Gmail API) |
 | Animation | Framer Motion and Matter.js |
 
 ## Quick start
@@ -59,9 +59,11 @@ POSTGRES_SSL=false
 JWT_SECRET=replace-with-a-long-random-secret
 
 # Verification, moderation, and reminder email
-RESEND_API_KEY=re_xxxxxxxxx
-AUTH_FROM_EMAIL=Jadren <account@example.com>
-REMINDER_FROM_EMAIL=Jadren Reminder <reminder@example.com>
+# Token for the send-api mail service (send.koi.ci)
+MAIL_API_TOKEN=replace-with-send-api-token
+# MAIL_API_URL=https://send.koi.ci
+AUTH_FROM_EMAIL=Jadren <no-reply@example.com>
+REMINDER_FROM_EMAIL=Jadren Reminder <auto@example.com>
 
 # Only required by the DNS manager/leak backend
 DNS_MANAGER_TOKEN=optional-token

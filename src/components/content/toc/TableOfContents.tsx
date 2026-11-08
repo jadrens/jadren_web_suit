@@ -25,13 +25,6 @@ function TocItem({ heading, expandedIds, onToggle }: TocItemProps) {
   const isActive = activeHeadingId === heading.id;
   const isExpanded = expandedIds.has(heading.id);
 
-  const isDescendantActive = (h: Heading): boolean => {
-    if (h.id === activeHeadingId) return true;
-    return h.children.some(isDescendantActive);
-  };
-
-  const isActiveOrAncestor = isActive || (hasChildren && heading.children.some(isDescendantActive));
-
   const handleClick = () => {
     if (hasChildren) {
       onToggle(heading.id);
@@ -157,6 +150,7 @@ export default function TableOfContents() {
     };
 
     tryAdd(headings);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- depends on the measured viewport height.
     setExpandedIds(tryExpanded);
   }, [headings]);
 

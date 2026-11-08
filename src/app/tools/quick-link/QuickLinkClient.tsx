@@ -106,7 +106,9 @@ export default function QuickLinkClient() {
 
   const loadLinks = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
-    setError(null);
+    // Background refreshes run every 30 s; only clear a previous load failure,
+    // never the error of an action the user has not seen yet.
+    setError((current) => (current === copy.loadFailed ? null : current));
     try {
       const response = await quickLinksApi.list();
       setLinks(response.links);

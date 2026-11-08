@@ -37,10 +37,13 @@ application code such as `invalid_credentials`), and `url`.
 ```ts
 import { authSession } from "@/lib/client-api";
 
+// Sign-up proves the email first; register() then signs the new user in.
+await authSession.sendRegistrationCode("user@example.com", "en");
 await authSession.register({
-  nickname: "dragonren",
+  nickname: "", // optional: defaults to the email's local part
   email: "user@example.com",
   password: "a-secure-password",
+  code: "123456",
 });
 
 await authSession.login({
@@ -48,10 +51,13 @@ await authSession.login({
   password: "a-secure-password",
 });
 
+await authSession.sendPasswordResetCode("user@example.com", "en");
+await authSession.resetPassword("user@example.com", "123456", "a-new-password");
+
 await authSession.sendVerificationCode("user@example.com", "en");
 await authSession.verifyEmail("user@example.com", "123456");
 await authSession.loadCurrentUser();
-authSession.logout();
+await authSession.logout();
 ```
 
 All existing auth endpoints have request and response types in `types.ts`.
@@ -74,25 +80,31 @@ export function AccountButton() {
 
 ## Lifecycle behavior
 
-- The access token and public user profile are persisted in `localStorage`.
-- The token is refreshed one minute before its one-day expiration.
-- Expired access tokens remain refreshable inside the server-provided 16-day
-  window.
+- The 15-minute access token and the public user profile are kept in
+  `localStorage`. The refresh token is an `HttpOnly` cookie that scripts cannot
+  read; only the auth service receives it.
+- The access token is refreshed one minute before it expires, and again on
+  demand after an expired token.
+- Refreshing is possible until the session ends, 30 days after sign-in
+  (`refreshWindow`). After that the user signs in again.
 - Concurrent refresh requests share one promise.
 - Browser tabs synchronize login and logout through the `storage` event.
 - Returning online or foregrounding the page triggers a refresh when needed.
 - An `UNAUTHENTICATED` response refreshes and retries only once, preventing retry loops.
 - A refresh rejected with `401` or `403` clears the session immediately.
+- `logout()` revokes the session on the server before clearing local state.
 
-Because the backend deliberately uses stateless Bearer JWTs instead of secure
-cookies, persistent login uses `localStorage`. Client code must avoid unsafe
-HTML injection because any XSS vulnerability could expose that token.
+An XSS bug could still read the short-lived access token, but not the refresh
+token, so a stolen session ends within 15 minutes of the attacker losing
+access. Client code must still avoid unsafe HTML injection.
 
 ## Standalone account pages
 
-- `/register` creates an account, attempts to send the first verification code,
-  and continues to `/verify-email`.
-- `/verify-email` sends and verifies six-digit email codes, with a client-side
+- `/register` collects the account details, sends a code to the email, and
+  creates the verified account once the code is entered.
+- `/reset-password` sends a reset code and sets a new password; it signs out
+  every other session. `/login` links to it.
+- `/verify-email` verifies accounts created before sign-up required a code, with a client-side
   resend cooldown in addition to the server SQLite rate limiter.
 - `/login` accepts nickname or email and supports a safe same-origin `next`
   query parameter.

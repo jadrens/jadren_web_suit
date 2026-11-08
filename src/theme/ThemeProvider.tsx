@@ -78,6 +78,21 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
   const preferenceApplied = useRef(false);
   const hasExplicitTheme = useRef(false);
 
+  const applyPreference = () => {
+    const savedMode = localStorage.getItem(MODE_KEY);
+    const nextMode: ThemeMode = savedMode === "automatic" || savedMode === "manual" || savedMode === "system" ? savedMode : "system";
+    setModeState(nextMode);
+    if (nextMode === "system") setTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    else if (nextMode === "manual") setTheme(getInitialTheme());
+    else {
+      try {
+        const coordinates = JSON.parse(localStorage.getItem(COORDINATES_KEY) || "null") as ThemeCoordinates | null;
+        const automatic = coordinates && currentAutomaticTheme(coordinates);
+        if (automatic) setTheme(automatic);
+      } catch { /* keep current theme */ }
+    }
+  };
+
   // Declared before the mount effect: on the first commit the DOM already carries the theme
   // set by the server / THEME_INIT_SCRIPT, so only sync once the stored preference is resolved.
   useEffect(() => {
@@ -88,6 +103,7 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
   }, [theme]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the stored preference is only readable after hydration.
     applyPreference();
     preferenceApplied.current = true;
 
@@ -111,21 +127,6 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
       window.removeEventListener("storage", handleStorage);
     };
   }, []);
-
-  const applyPreference = () => {
-    const savedMode = localStorage.getItem(MODE_KEY);
-    const nextMode: ThemeMode = savedMode === "automatic" || savedMode === "manual" || savedMode === "system" ? savedMode : "system";
-    setModeState(nextMode);
-    if (nextMode === "system") setTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    else if (nextMode === "manual") setTheme(getInitialTheme());
-    else {
-      try {
-        const coordinates = JSON.parse(localStorage.getItem(COORDINATES_KEY) || "null") as ThemeCoordinates | null;
-        const automatic = coordinates && currentAutomaticTheme(coordinates);
-        if (automatic) setTheme(automatic);
-      } catch { /* keep current theme */ }
-    }
-  };
 
   const toggleTheme = () => {
     localStorage.setItem(MODE_KEY, "manual");

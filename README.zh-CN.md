@@ -36,7 +36,7 @@ Jadren Web Suit 不只是一个静态博客。它将内容发布、实用工具�
 | 数据库 | PostgreSQL |
 | 内容渲染 | react-markdown、remark-gfm、KaTeX、rehype-highlight |
 | HTML 安全 | rehype-raw + rehype-sanitize 白名单 |
-| 认证与邮件 | bcrypt、JWT（jose）、Resend |
+| 认证与邮件 | bcrypt、JWT（jose）、send-api（Gmail API）|
 | 动画 | Framer Motion、Matter.js |
 
 ## 快速开始
@@ -59,9 +59,11 @@ POSTGRES_SSL=false
 JWT_SECRET=replace-with-a-long-random-secret
 
 # 邮箱验证、审核通知和提醒
-RESEND_API_KEY=re_xxxxxxxxx
-AUTH_FROM_EMAIL=Jadren <account@example.com>
-REMINDER_FROM_EMAIL=Jadren Reminder <reminder@example.com>
+# Token for the send-api mail service (send.koi.ci)
+MAIL_API_TOKEN=replace-with-send-api-token
+# MAIL_API_URL=https://send.koi.ci
+AUTH_FROM_EMAIL=Jadren <no-reply@example.com>
+REMINDER_FROM_EMAIL=Jadren Reminder <auto@example.com>
 
 # 仅 DNS 管理器/泄漏检测后端需要
 DNS_MANAGER_TOKEN=optional-token

@@ -11,6 +11,8 @@ interface VditorEditorProps {
   onChange: (value: string) => void;
 }
 
+const VDITOR_CDN = "/vditor";
+
 export default function VditorEditor({
   value,
   locale,
@@ -41,6 +43,8 @@ export default function VditorEditor({
       if (cancelled || !containerRef.current) return;
       const editor = new Vditor(containerRef.current, {
         value: valueRef.current,
+        // Self-hosted copy made by scripts/sync-vditor.ts, instead of unpkg.
+        cdn: VDITOR_CDN,
         mode: "wysiwyg",
         height: "100%",
         minHeight: 480,

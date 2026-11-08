@@ -113,6 +113,14 @@ export default function LoginClient({ nextPath }: { nextPath: string }) {
             },
           }}
         />
+        <MuiLink
+          href={identifier.includes("@") ? `/reset-password?email=${encodeURIComponent(identifier.trim())}` : "/reset-password"}
+          variant="body2"
+          underline="hover"
+          sx={{ alignSelf: "flex-end", fontWeight: 600 }}
+        >
+          {t.auth.reset.forgot}
+        </MuiLink>
         <Button
           type="submit"
           variant="contained"

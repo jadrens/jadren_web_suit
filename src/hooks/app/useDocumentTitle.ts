@@ -12,7 +12,7 @@ import SITE_CONFIG from "@config/app/config";
  */
 export function useDocumentTitle(title: string, suffix: string = SITE_CONFIG.siteName) {
   useEffect(() => {
-    const full = title && suffix ? `${title} - ${suffix}` : title || suffix;
+    const full = title && suffix ? `${title} | ${suffix}` : title || suffix;
     document.title = full;
     return () => {
       document.title = SITE_CONFIG.siteName;

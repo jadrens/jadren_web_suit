@@ -1,8 +1,8 @@
-import { Resend } from "resend";
 import { createHash, randomUUID } from "node:crypto";
 import {
   verificationCodeEmail,
   type VerificationEmailLocale,
+  type VerificationEmailPurpose,
 } from "./emails/verification-code";
 import AUTH_CONFIG from "@config/app/auth";
 import { reminderEmail } from "./emails/reminder";
@@ -12,6 +12,47 @@ import { blogDeletionEmail } from "./emails/blog-deletion";
 import { db, firstRow } from "./db";
 
 const CODE_LIFETIME_MINUTES = 10;
+const DEFAULT_MAIL_API_URL = "https://send.koi.ci";
+const MAIL_API_TIMEOUT_MS = 30_000;
+
+/** Sends one message through send-api (send.koi.ci) and returns its provider message ID. */
+async function sendViaMailApi(message: {
+  from: string;
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+  idempotency_key: string;
+}): Promise<string> {
+  const token = process.env.MAIL_API_TOKEN?.trim();
+  if (!token) throw new Error("MAIL_API_TOKEN is not configured");
+  const baseUrl = (process.env.MAIL_API_URL?.trim() || DEFAULT_MAIL_API_URL).replace(/\/+$/, "");
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/v1/send`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(message),
+      signal: AbortSignal.timeout(MAIL_API_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Mail API request failed: ${reason}`);
+  }
+
+  const result = await response.json().catch(() => null) as
+    | { ok?: boolean; id?: string; error?: string }
+    | null;
+  if (!response.ok || !result?.ok) {
+    throw new Error(`Mail API failed to send email (HTTP ${response.status}): ${result?.error ?? "no details"}`);
+  }
+  if (!result.id) throw new Error("Mail API returned no email ID");
+  return result.id;
+}
 
 interface AuditRow {
   audit_id: string;
@@ -77,30 +118,23 @@ async function sendAuditedEmail(input: {
   );
 
   try {
-    const apiKey = process.env.RESEND_API_KEY?.trim();
-    if (!apiKey) throw new Error("RESEND_API_KEY is not configured");
-    const resend = new Resend(apiKey);
-    const { data, error } = await resend.emails.send(
-      {
-        from: senderEmail,
-        to: [input.recipient],
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-      },
-      { idempotencyKey: input.idempotencyKey }
-    );
-    if (error) throw new Error(`Resend failed to send email: ${error.message}`);
-    if (!data?.id) throw new Error("Resend returned no email ID");
+    const emailId = await sendViaMailApi({
+      from: senderEmail,
+      to: [input.recipient],
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      idempotency_key: input.idempotencyKey,
+    });
 
     await db.query(
       `UPDATE email_audit_log
           SET status = 'sent', provider_email_id = $2, sent_at = NOW(),
               failure_message = NULL, updated_at = NOW()
         WHERE audit_id = $1`,
-      [audit.audit_id, data.id]
+      [audit.audit_id, emailId]
     );
-    return data.id;
+    return emailId;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown email error";
     await db.query(
@@ -114,12 +148,13 @@ async function sendAuditedEmail(input: {
 }
 
 export async function sendVerificationEmail(
-  userId: string,
+  userId: string | null,
   email: string,
   code: string,
-  locale: VerificationEmailLocale
+  locale: VerificationEmailLocale,
+  purpose: VerificationEmailPurpose = "verify"
 ) {
-  const content = verificationCodeEmail(code, locale, CODE_LIFETIME_MINUTES);
+  const content = verificationCodeEmail(code, locale, CODE_LIFETIME_MINUTES, purpose);
   await sendAuditedEmail({
     userId,
     reminderId: null,
@@ -129,7 +164,7 @@ export async function sendVerificationEmail(
     html: content.html,
     text: content.text,
     idempotencyKey: `verification/${randomUUID()}`,
-    metadata: { locale, expiresInMinutes: CODE_LIFETIME_MINUTES },
+    metadata: { locale, purpose, expiresInMinutes: CODE_LIFETIME_MINUTES },
   });
 }
 

@@ -4,7 +4,7 @@ import { Box, Drawer, List, ListItem, ListItemButton, ListItemText, Collapse, Ty
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useReadingProgress, Heading } from "../reading/ReadingProgressContext";
 import { useI18n } from "@lib/i18n/content";
 import { tocMobileWidth } from "@config/publishing/toc";
@@ -28,17 +28,13 @@ function TocItem({ heading, onSelect }: TocItemProps) {
   };
 
   const shouldBeOpen = isH1 || isActive || (hasChildren && heading.children.some(isDescendantActive));
-  const [open, setOpen] = useState(shouldBeOpen);
-
-  useEffect(() => {
-    if (shouldBeOpen && !open) {
-      setOpen(true);
-    }
-  }, [shouldBeOpen, open]);
+  const [expanded, setExpanded] = useState(false);
+  // The branch holding the active heading is always open.
+  const open = expanded || shouldBeOpen;
 
   const handleClick = () => {
     if (hasChildren && !open) {
-      setOpen(true);
+      setExpanded(true);
     } else {
       const element = document.getElementById(heading.id);
       if (element) {
@@ -47,7 +43,7 @@ function TocItem({ heading, onSelect }: TocItemProps) {
       }
       onSelect();
       if (hasChildren) {
-        setOpen(!open);
+        setExpanded(!open);
       }
     }
   };

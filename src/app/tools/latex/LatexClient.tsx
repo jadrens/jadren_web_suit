@@ -204,6 +204,9 @@ export default function LatexClient() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [format, setFormat] = useState<OutputFormat>("display");
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Bumped by the retry button after the editor chunk failed to load.
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
   const fields = useRef(new Map<string, MathfieldElement>());
 
   useEffect(() => {
@@ -218,11 +221,13 @@ export default function LatexClient() {
       setLines(loaded);
       setActiveId(loaded[0].id);
       setMathfield(() => MathfieldElement);
+    }).catch(() => {
+      if (!cancelled) setLoadFailed(true);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
   // The on-screen keyboard overlays the page, so reserve its height to keep the source and output panels reachable.
   useEffect(() => {
@@ -235,7 +240,11 @@ export default function LatexClient() {
 
   useEffect(() => {
     if (!Mathfield) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(lines.map((line) => line.latex)));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(lines.map((line) => line.latex)));
+    } catch {
+      // Private mode or a full quota: keep editing in memory only.
+    }
   }, [Mathfield, lines]);
 
   const focusLine = useCallback((id: string, atEnd = true) => {
@@ -343,13 +352,34 @@ export default function LatexClient() {
   };
 
   const clearAll = () => {
+    const previous = lines;
+    const previousActive = activeId;
     const line = { id: newId(), latex: "" };
     flushSync(() => {
       setLines([line]);
       setActiveId(line.id);
     });
     focusLine(line.id);
-    toast.info(text.cleared);
+    // Clearing is one tap away from losing the whole document, so offer an undo instead of asking first.
+    const toastId = toast.show(
+      <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
+        {text.cleared}
+        <Button
+          size="small"
+          color="inherit"
+          variant="outlined"
+          sx={{ py: 0, minWidth: 0 }}
+          onClick={() => {
+            setLines(previous);
+            setActiveId(previousActive ?? previous[0]?.id ?? null);
+            toast.dismiss(toastId);
+          }}
+        >
+          {text.undo}
+        </Button>
+      </Box>,
+      { severity: "info", duration: 8000 }
+    );
   };
 
   const structureLabels = useMemo(() => STRUCTURES.map((item) => renderLabel(item.label)), []);
@@ -428,7 +458,23 @@ export default function LatexClient() {
                 </Box>
 
                 {!Mathfield ? (
-                  <Typography sx={{ p: 3, color: "text.secondary" }}>{text.loading}</Typography>
+                  loadFailed ? (
+                    <Box sx={{ p: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+                      <Typography color="error">{text.loadFailed}</Typography>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setLoadFailed(false);
+                          setLoadAttempt((n) => n + 1);
+                        }}
+                      >
+                        {text.retry}
+                      </Button>
+                    </Box>
+                  ) : (
+                    <Typography sx={{ p: 3, color: "text.secondary" }}>{text.loading}</Typography>
+                  )
                 ) : (
                   lines.map((line, index) => {
                     const active = line.id === activeLine?.id;

@@ -14,9 +14,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, locale } = await params;
   const post = await getPostBySlug(slug, locale);
   if (!post) return {};
+  const description = post.description?.trim() || post.title;
   return {
     title: post.title,
-    description: `Post: ${post.title}`,
+    description,
+    alternates: { canonical: `/blog/${locale}/${slug}` },
+    openGraph: { type: "article", title: post.title, description, locale: locale === "zh" ? "zh_CN" : "en_US" },
   };
 }
 
