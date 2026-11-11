@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { once } from "node:events";
 import { WebSocket as NodeWebSocket } from "ws";
 import { Code, ConnectError, createClient, createConnectRouter } from "@connectrpc/connect";
@@ -20,6 +20,22 @@ function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => { resolve = done; });
   return { promise, resolve };
+}
+
+/** Assert the server's HTTP status independently of runtime-specific WS error messages. */
+function upgradeStatus(origin: string, headers: Record<string, string>) {
+  return new Promise<number | undefined>((resolve, reject) => {
+    const request = httpRequest(`${origin}/rpc/ws`, { headers: {
+      connection: "Upgrade", upgrade: "websocket", origin,
+      "sec-websocket-version": "13",
+      "sec-websocket-key": Buffer.alloc(16).toString("base64"),
+      "sec-websocket-protocol": RPC_WEBSOCKET_PROTOCOL,
+      ...headers,
+    } }, (response) => { response.resume(); resolve(response.statusCode); });
+    request.on("upgrade", (_response, socket) => { socket.destroy(); reject(new Error("Unexpected successful WebSocket upgrade")); });
+    request.on("error", reject);
+    request.end();
+  });
 }
 
 async function fixture() {
@@ -201,8 +217,9 @@ describe("WebSocket RPC transport", () => {
 
   test("rejects cross-origin upgrades and unsupported protocols", async () => {
     const f = await fixture();
-    await expect(f.raw({ origin: "https://evil.example" })).rejects.toThrow("403");
-    await expect(f.raw({}, "unsupported")).rejects.toThrow("400");
+    expect(await upgradeStatus(f.origin, { origin: "https://evil.example" })).toBe(403);
+    expect(await upgradeStatus(f.origin, { "sec-websocket-protocol": "unsupported" })).toBe(400);
+    expect(f.calls()).toBe(0);
   });
 
   test("rejects malformed frames before dispatch", async () => {
