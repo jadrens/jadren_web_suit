@@ -6,8 +6,11 @@ hydrates.
 
 ## RPC clients
 
-The browser talks to the server with [Connect](https://connectrpc.com/) RPCs
-over `/rpc` (see [`rpc-api.md`](rpc-api.md)). `src/lib/client-api/rpc.ts`
+The browser sends binary Protobuf RPCs over one multiplexed WebSocket at
+`/rpc/ws` (see [`rpc-api.md`](rpc-api.md)). The Connect client handles schemas,
+interceptors, and errors; `websocket-fetch.ts` carries calls over the socket.
+The five auth methods that set or clear HttpOnly cookies retain HTTP transport.
+`src/lib/client-api/rpc.ts`
 builds the typed service clients; `index.ts` wraps them in the per-feature
 objects the UI uses (`quickLinksApi`, `remindersApi`, `vocabularyDrillApi`,
 `dictionaryApi`, `toolsApi`, `editorApi`, ...) and `mappers.ts` converts
@@ -31,6 +34,9 @@ Calls time out after 15 seconds. Pass `{ signal }` (where a wrapper accepts
 call options) to cancel. Failed calls throw `ApiError`, which contains
 `status` (the HTTP status equivalent of the RPC status code), `code` (the
 application code such as `invalid_credentials`), and `url`.
+Canceled calls also cancel server dispatch. A dropped socket fails its pending
+calls without replay; a subsequent call reconnects. Existing account guards
+continue to reject responses and retries belonging to a previous account.
 
 ## Authentication methods
 
@@ -92,7 +98,7 @@ export function AccountButton() {
 - Returning online or foregrounding the page triggers a refresh when needed.
 - An `UNAUTHENTICATED` response refreshes and retries only once, preventing retry loops.
 - A refresh rejected with `401` or `403` clears the session immediately.
-- `logout()` revokes the session on the server before clearing local state.
+- `logout()` clears local state immediately, then revokes the session on the server.
 
 An XSS bug could still read the short-lived access token, but not the refresh
 token, so a stolen session ends within 15 minutes of the attacker losing

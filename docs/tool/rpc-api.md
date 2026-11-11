@@ -5,20 +5,67 @@ All server interfaces are Protobuf services. The schema lives in
 
 ## Transport
 
-Next.js route handlers cannot expose HTTP/2 trailers, so native gRPC (the
-`application/grpc` wire format) is not served. Every service is available on
-one endpoint through the protocols that work over plain HTTP:
+The browser multiplexes binary Protobuf RPCs over a single same-origin
+WebSocket at `/rpc/ws`, using the `jadren.rpc.v1` subprotocol. Authentication
+metadata, method paths, and request IDs travel in each call. Tokens remain
+per-call, so a refreshed token or account change does not require a new socket.
+
+`Login`, `Register`, `ResetPassword`, `Refresh`, and `Logout` use HTTP because
+they set or clear the HttpOnly refresh cookie. The WebSocket endpoint rejects
+these methods and never accepts or returns cookies in frames. Other auth methods,
+including `Me` and email-code requests, use the WebSocket.
+
+The client connects lazily, supports concurrent calls and cancellation, and
+retains the 15-second per-call deadline. Disconnects fail pending calls without
+replaying them; the next call opens a fresh socket. An `UNAUTHENTICATED` response
+can still trigger the existing single refresh/retry.
+
+### Server and deployment
+
+Start with `bun run dev` or `bun run start` (production). These run
+`scripts/server.ts`, which hosts Next.js and the WebSocket gateway on the same
+port. Running `next dev` or `next start` directly bypasses the gateway.
+The gateway dispatches over HTTP/1.1 loopback to the existing Next route handlers,
+preserving Next's request context, caching, and publishing revalidation.
+No extra public port or service is needed.
+
+The nginx proxy must forward `Upgrade` and `Connection` headers; both supplied
+nginx examples support this. The gateway sends pings every 25 seconds and rejects
+origins that do not match the public scheme and Host. Behind TLS termination,
+forward the public scheme as `X-Forwarded-Proto`. Client IP headers are copied
+from the upgrade request, never from frame metadata.
+
+### WebSocket framing
+
+Each binary WebSocket message contains a four-byte big-endian JSON-header length,
+that many UTF-8 JSON bytes, and the raw Protobuf body. Headers are limited to
+16 KiB, bodies to 8 MiB, and concurrent calls to 64 per socket.
+
+```json
+{"type":"request","id":"1","path":"/rpc/jadren.v1.ToolsService/GetClientIp","headers":[["content-type","application/proto"],["connect-protocol-version","1"]]}
+{"type":"response","id":"1","status":200,"headers":[["content-type","application/proto"]]}
+{"type":"cancel","id":"1"}
+```
+
+Cancel messages have no body. Success responses carry Protobuf bytes; failures
+carry the usual Connect JSON error body and status. Unsupported streaming methods
+are not part of this unary transport; all current service methods are unary.
+
+### HTTP compatibility
+
+Every service remains available to external clients at:
 
 ```
 POST /rpc/<package.Service>/<Method>
 ```
 
-- **Connect** (default for the browser client): binary Protobuf
+- **Connect**: binary Protobuf
   (`application/proto`) or JSON (`application/json`). Methods marked
   `NO_SIDE_EFFECTS` also accept `GET`.
 - **gRPC-Web**: `application/grpc-web+proto`. Clients that need native gRPC can
   put an Envoy/`grpcwebproxy` in front.
 
+Native gRPC (`application/grpc`, requiring HTTP/2 trailers) is not served.
 The handlers are assembled in `src/lib/rpc/server/router.ts` and mounted by
 `src/app/rpc/[service]/[method]/route.ts`.
 

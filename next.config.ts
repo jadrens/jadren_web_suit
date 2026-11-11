@@ -12,7 +12,7 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   // The LLM tools call user-configured HTTPS endpoints, or a local model server.
-  `connect-src 'self' https: http://localhost:* http://127.0.0.1:*${isDev ? " ws: wss:" : ""}`,
+  `connect-src 'self' wss: https: http://localhost:* http://127.0.0.1:*${isDev ? " ws:" : ""}`,
   // Dictionary pronunciations come from third-party HTTPS hosts.
   "media-src 'self' data: blob: https:",
   "worker-src 'self' blob:",

@@ -25,7 +25,8 @@ function createHandlers() {
   const router = createConnectRouter({
     interceptors: [errorBoundary],
     // Next.js route handlers cannot expose HTTP trailers, so native gRPC is
-    // unavailable; browsers and gRPC-Web proxies use the Connect or gRPC-Web protocols.
+    // unavailable. The WebSocket gateway dispatches Connect on loopback;
+    // external HTTP clients can use Connect or gRPC-Web directly.
     grpc: false,
   });
   router.service(AuthService, authService);

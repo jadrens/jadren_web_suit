@@ -7,6 +7,7 @@ import { AuthService } from "@gen/jadren/v1/auth_pb";
 import { ErrorDetailSchema } from "@gen/jadren/v1/common_pb";
 import { httpStatusOfCode } from "@lib/rpc/status";
 import { ApiError } from "./http";
+import { rpcWebSocketFetch } from "./websocket-fetch";
 
 const RPC_BASE_URL = "/rpc";
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -89,6 +90,7 @@ export function createTransport(interceptors: Interceptor[]) {
     useBinaryFormat: true,
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
     interceptors,
+    fetch: rpcWebSocketFetch,
   });
 }
 

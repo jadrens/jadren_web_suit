@@ -11,7 +11,7 @@ WorkingDirectory=/home/dragonren/service/web/jadren_web_suit
 Environment=NODE_ENV=production
 Environment=PORT=3000
 EnvironmentFile=/home/dragonren/service/web/jadren_web_suit/.env
-ExecStart=/home/dragonren/.bun/bin/bun --bun next start -p 3000
+ExecStart=/home/dragonren/.bun/bin/bun scripts/server.ts -p 3000
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
