@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Alert,
@@ -17,6 +17,7 @@ import LockResetRoundedIcon from "@mui/icons-material/LockResetRounded";
 import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
+import { createRequestGate } from "@components/ui/auth/request-gate";
 import AuthPageShell from "@components/ui/auth/AuthPageShell";
 import CodeField, { useResendCooldown } from "@components/ui/auth/CodeField";
 import { authErrorMessage, validEmail, validPassword } from "@components/ui/auth/form-utils";
@@ -39,6 +40,7 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
   const [sending, setSending] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const cooldown = useResendCooldown();
+  const requestGate = useRef(createRequestGate());
   const normalizedEmail = email.trim().toLowerCase();
 
   async function sendCode() {
@@ -47,6 +49,8 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
       setError(t.auth.register.emailInvalid);
       return false;
     }
+    const release = requestGate.current.acquire();
+    if (!release) return false;
     setSending(true);
     try {
       await authSession.sendPasswordResetCode(normalizedEmail, locale);
@@ -57,6 +61,7 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
       return false;
     } finally {
       setSending(false);
+      release();
     }
   }
 
@@ -75,6 +80,8 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
     if (!validPassword(password)) return setError(t.auth.register.passwordInvalid);
     if (password !== confirmPassword) return setError(t.auth.register.passwordMismatch);
 
+    const release = requestGate.current.acquire();
+    if (!release) return;
     setSubmitting(true);
     try {
       await authSession.resetPassword(normalizedEmail, code, password);
@@ -82,6 +89,8 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
     } catch (requestError) {
       setError(authErrorMessage(requestError, t.auth.errors));
       setSubmitting(false);
+    } finally {
+      release();
     }
   }
 
@@ -117,6 +126,7 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
           {error ? <Alert severity="error">{error}</Alert> : null}
           <TextField
             label={copy.email}
+            disabled={sending}
             type="email"
             autoComplete="email"
             value={email}
@@ -140,6 +150,7 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
             onChange={setCode}
             onResend={() => void sendCode()}
             sending={sending}
+            disabled={sending || submitting}
             cooldown={cooldown.seconds}
             autoFocus
             labels={{
@@ -151,6 +162,7 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
           />
           <TextField
             label={copy.newPassword}
+            disabled={sending || submitting}
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             value={password}
@@ -162,6 +174,7 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
           />
           <TextField
             label={copy.confirmPassword}
+            disabled={sending || submitting}
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             value={confirmPassword}
@@ -169,10 +182,10 @@ export default function ResetPasswordClient({ initialEmail }: { initialEmail: st
             required
             fullWidth
           />
-          <Button type="submit" variant="contained" size="large" disabled={submitting || code.length !== 6} disableElevation sx={{ minHeight: 48, fontWeight: 700, borderRadius: 2.5 }}>
+          <Button type="submit" variant="contained" size="large" disabled={sending || submitting || code.length !== 6} disableElevation sx={{ minHeight: 48, fontWeight: 700, borderRadius: 2.5 }}>
             {submitting ? <CircularProgress size={23} color="inherit" /> : copy.submit}
           </Button>
-          <Button type="button" variant="text" onClick={() => { setError(null); setStep("email"); }}>
+          <Button type="button" variant="text" disabled={sending || submitting} onClick={() => { setError(null); setStep("email"); }}>
             {copy.changeEmail}
           </Button>
         </Stack>

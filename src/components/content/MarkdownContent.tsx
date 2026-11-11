@@ -10,15 +10,26 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { Box, Paper } from "@mui/material";
 import CodeBlock from "./CodeBlock";
-import { useEffect, useRef, useCallback } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import TagIcon from "@mui/icons-material/Tag";
-import { extractHeadings, useReadingProgress, slugify } from "./reading/ReadingProgressContext";
+import { useReadingProgressActions } from "./reading/ReadingProgressContext";
+import { parseHeadings, slugify } from "./reading/headings";
 import React from "react";
-import { tocDesktopWidth } from "@config/publishing/toc";
 import { blogMarkdownSchema } from "./markdown-sanitize";
+import { findActiveHeading } from "./reading/active-heading";
 
 interface MarkdownContentProps {
   content: string;
+}
+
+function textContent(children: React.ReactNode): string {
+  return React.Children.toArray(children).map((child) => {
+    if (typeof child === "string" || typeof child === "number") return String(child);
+    if (React.isValidElement<{ children?: React.ReactNode; alt?: string }>(child)) {
+      return child.props.alt ?? textContent(child.props.children);
+    }
+    return "";
+  }).join("");
 }
 
 function HeadingWithAnchor({
@@ -36,8 +47,8 @@ function HeadingWithAnchor({
     e.preventDefault();
     const element = document.getElementById(id);
     if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-      window.history.pushState(null, "", `#${id}`);
+      element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
+      window.history.pushState(window.history.state, "", `#${encodeURIComponent(id)}`);
     }
   };
 
@@ -61,7 +72,6 @@ function HeadingWithAnchor({
       <Paper
         component="span"
         elevation={0}
-        onClick={handleClick}
         sx={{
           position: "relative",
           maxWidth: "100%",
@@ -74,7 +84,8 @@ function HeadingWithAnchor({
           px: 1,
           py: 0.25,
           borderRadius: 1,
-          cursor: "pointer",
+          color: "inherit",
+          textDecoration: "none",
           fontWeight: "inherit",
           fontSize: "inherit",
           lineHeight: "inherit",
@@ -85,70 +96,66 @@ function HeadingWithAnchor({
           "&:hover": { bgcolor: "action.selected", transform: "translateX(2px)" },
           "&:hover .heading-hash": { opacity: 0 },
           "&:hover .heading-label": { opacity: 1 },
+          "& a:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2, borderRadius: 1 },
           ...sx,
         }}
       >
-        <span className="heading-hash">
-          <TagIcon sx={{ fontSize: "0.9em", color: "text.secondary" }} />
-        </span>
-        <span className="heading-label">
-          {levelIndicator}
-        </span>
+        <a href={`#${encodeURIComponent(id)}`} aria-label={`# ${textContent(children)}`} onClick={handleClick} style={{ display: "inline-flex", alignItems: "center", color: "inherit" }}>
+          <span className="heading-hash" aria-hidden="true">
+            <TagIcon sx={{ fontSize: "0.9em", color: "text.secondary" }} />
+          </span>
+          <span className="heading-label" aria-hidden="true">
+            {levelIndicator}
+          </span>
+        </a>
         <span style={{ fontWeight: "inherit", fontSize: "inherit", padding: "0 5px", margin: 0, borderRadius: "4px", position: "relative", zIndex: 1 }}>{children}</span>
       </Paper>
     </Tag>
   );
 }
 
-export default function MarkdownContent({ content }: MarkdownContentProps) {
-  const { headings, setHeadings, setActiveHeadingId } = useReadingProgress();
+function MarkdownContent({ content }: MarkdownContentProps) {
+  const { setHeadings, setActiveHeadingId } = useReadingProgressActions();
+  const { headings, idsByLine } = useMemo(() => parseHeadings(content), [content]);
+  const headingId = (node: { position?: { start: { line: number } } } | undefined, children: React.ReactNode) =>
+    idsByLine.get(node?.position?.start.line ?? -1) ?? (slugify(textContent(children)) || "section");
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const updateActiveHeading = useCallback(() => {
-    if (!contentRef.current) return;
-
-    const headingEls = contentRef.current.querySelectorAll("h1, h2, h3");
-    if (headingEls.length === 0) return;
-
-    const scrollY = window.scrollY;
-    const viewportHeight = window.innerHeight;
-    const triggerPoint = scrollY + viewportHeight * 0.3;
-
-    let activeId: string | null = null;
-    let lastTop = -Infinity;
-
-    headingEls.forEach((heading) => {
-      const rect = heading.getBoundingClientRect();
-      const absoluteTop = rect.top + scrollY;
-
-      if (absoluteTop <= triggerPoint && absoluteTop > lastTop) {
-        lastTop = absoluteTop;
-        activeId = heading.getAttribute("data-heading-id");
-      }
-    });
-
-    if (activeId && activeId !== window.location.hash.slice(1)) {
-      setActiveHeadingId(activeId);
-    }
-  }, [setActiveHeadingId]);
-
   useEffect(() => {
-    window.addEventListener("scroll", updateActiveHeading, { passive: true });
-    // Skip on mount if there's a hash fragment — let the fragment scroll effect go first
-    if (!window.location.hash) {
-      updateActiveHeading();
-    }
+    const headingEls = Array.from(contentRef.current?.querySelectorAll("h1, h2, h3") ?? []);
+    let frame: number | null = null;
+    const updateActiveHeading = () => {
+      frame = null;
+      setActiveHeadingId(findActiveHeading(headingEls, window.innerHeight * 0.3));
+    };
+    const scheduleUpdate = () => {
+      if (frame === null) frame = requestAnimationFrame(updateActiveHeading);
+    };
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    // Images and math can change the article height after the initial render.
+    const observer = new ResizeObserver(scheduleUpdate);
+    if (contentRef.current) observer.observe(contentRef.current);
+    if (!window.location.hash) scheduleUpdate();
 
     return () => {
-      window.removeEventListener("scroll", updateActiveHeading);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      observer.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
     };
-  }, [updateActiveHeading]);
+  }, [content, setActiveHeadingId]);
 
   useEffect(() => {
     const hash = window.location.hash;
     if (!hash || headings.length === 0) return;
 
-    const targetId = decodeURIComponent(hash.slice(1));
+    let targetId: string;
+    try {
+      targetId = decodeURIComponent(hash.slice(1));
+    } catch {
+      return;
+    }
     const flatten = (hs: typeof headings): typeof headings =>
       hs.flatMap((h) => [h, ...flatten(h.children)]);
     const match = flatten(headings).find((h) => h.id === targetId);
@@ -156,30 +163,30 @@ export default function MarkdownContent({ content }: MarkdownContentProps) {
 
     let attempts = 0;
     const maxAttempts = 10;
+    let frame: number;
     const tryScroll = () => {
       const element = document.getElementById(match.id);
       if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
+        element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
       } else if (attempts < maxAttempts) {
         attempts++;
-        requestAnimationFrame(tryScroll);
+        frame = requestAnimationFrame(tryScroll);
       }
     };
-    requestAnimationFrame(tryScroll);
+    frame = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(frame);
   }, [headings]);
 
   useEffect(() => {
-    setHeadings(extractHeadings(content));
-  }, [content, setHeadings]);
+    setHeadings(headings);
+  }, [headings, setHeadings]);
 
   return (
     <Box
       ref={contentRef}
       sx={{
-        maxWidth: {
-          xs: "100vw",
-          sm: `calc(100vw - ${tocDesktopWidth}px)`,
-        },
+        minWidth: 0,
+        maxWidth: "100%",
         "& h1": {
           mt: 4, mb: 2, mx: { xs: 3, sm: 2 }, fontWeight: "bold", fontSize: "2rem",
           transition: 'all 0.3s ease',
@@ -246,54 +253,54 @@ export default function MarkdownContent({ content }: MarkdownContentProps) {
             });
             return <CodeBlock className={className}>{children}</CodeBlock>;
           },
-          h1: ({ children }) => (
+          h1: ({ node, children }) => (
             <HeadingWithAnchor
-              id={slugify(String(children))}
+              id={headingId(node, children)}
               sx={{ fontSize: "2rem", fontWeight: "bold", mt: 4, mb: 2}}
               level={1}
             >
               {children}
             </HeadingWithAnchor>
           ),
-          h2: ({ children }) => (
+          h2: ({ node, children }) => (
             <HeadingWithAnchor
-              id={slugify(String(children))}
+              id={headingId(node, children)}
               sx={{ fontSize: "1.5rem", fontWeight: "bold", mt: 4, mb: 2}}
               level={2}
             >
               {children}
             </HeadingWithAnchor>
           ),
-          h3: ({ children }) => (
+          h3: ({ node, children }) => (
             <HeadingWithAnchor
-              id={slugify(String(children))}
+              id={headingId(node, children)}
               sx={{ fontSize: "1.25rem", fontWeight: "bold", mt: 3, mb: 1}}
               level={3}
             >
               {children}
             </HeadingWithAnchor>
           ),
-          h4: ({ children }) => (
+          h4: ({ node, children }) => (
             <HeadingWithAnchor
-              id={slugify(String(children))}
+              id={headingId(node, children)}
               sx={{ fontSize: "1.1rem", fontWeight: "bold", mt: 2, mb: 1}}
               level={4}
             >
               {children}
             </HeadingWithAnchor>
           ),
-          h5: ({ children }) => (
+          h5: ({ node, children }) => (
             <HeadingWithAnchor
-              id={slugify(String(children))}
+              id={headingId(node, children)}
               sx={{ fontSize: "1rem", fontWeight: "bold", mt: 2, mb: 1}}
               level={5}
             >
               {children}
             </HeadingWithAnchor>
           ),
-          h6: ({ children }) => (
+          h6: ({ node, children }) => (
             <HeadingWithAnchor
-              id={slugify(String(children))}
+              id={headingId(node, children)}
               sx={{ fontSize: "0.9rem", fontWeight: "bold", mt: 2, mb: 1}}
               level={6}
             >
@@ -307,3 +314,5 @@ export default function MarkdownContent({ content }: MarkdownContentProps) {
     </Box>
   );
 }
+
+export default memo(MarkdownContent);

@@ -112,7 +112,13 @@ export async function revokeUserSessions(userId: string) {
 export function readRefreshCookie(headers: Headers) {
   for (const part of (headers.get("cookie") ?? "").split(";")) {
     const [name, ...value] = part.trim().split("=");
-    if (name === REFRESH_COOKIE) return decodeURIComponent(value.join("=")) || null;
+    if (name === REFRESH_COOKIE) {
+      try {
+        return decodeURIComponent(value.join("=")) || null;
+      } catch {
+        return null;
+      }
+    }
   }
   return null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -49,6 +49,8 @@ import type {
 import { useI18n, type Locale } from "@lib/i18n/content";
 import { editorApi } from "@lib/client-api";
 import { useAuth } from "@lib/client-api/use-auth";
+import { authSession } from "@lib/client-api/session";
+import { isEditorAccountCurrent, shouldInitializeEditor } from "./session-guard";
 import Link from "next/link";
 import VditorEditor from "./VditorEditor";
 import { useUnsavedChanges } from "@hooks/useUnsavedChanges";
@@ -91,8 +93,20 @@ function articleFingerprint(
 }
 
 export default function EditorClient() {
-  const { locale, t } = useI18n();
   const auth = useAuth();
+  return <EditorSession key={auth.user?.userId ?? "anonymous"} auth={auth} />;
+}
+
+function EditorSession({ auth }: { auth: ReturnType<typeof useAuth> }) {
+  const { locale, t } = useI18n();
+  const accountId = auth.user?.userId;
+  const mounted = useRef(false);
+  const initialized = useRef(false);
+  const isCurrent = useCallback(() => Boolean(mounted.current && accountId && isEditorAccountCurrent(accountId, authSession.getSnapshot())), [accountId]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const copy = t.editor;
   const [articles, setArticles] = useState<EditorArticleSummary[]>([]);
   const [articleTab, setArticleTab] = useState<"drafts" | "published">("drafts");
@@ -130,26 +144,29 @@ export default function EditorClient() {
     setMessage(null);
     try {
       const content = await editorApi.articleContent(next);
+      if (!isCurrent()) return false;
       const loaded = { ...next, content };
       setArticle(loaded);
       setSavedFingerprint(articleFingerprint(loaded));
       setTagsText(next.tags.join(", "));
       return true;
     } catch (error) {
-      setMessage({
+      if (isCurrent()) setMessage({
         severity: "error",
         text: error instanceof Error ? error.message : copy.loadFailed,
       });
       return false;
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
-  }, [copy.loadFailed]);
+  }, [copy.loadFailed, isCurrent]);
 
-  const loadArticles = useCallback(async () => {
+  const loadArticles = useCallback(async (selectRequested = false) => {
     const data = await editorApi.listArticles();
+    if (!isCurrent()) return;
     setArticles(data.articles);
     setIsAdmin(data.isAdmin);
+    if (!selectRequested) return;
     const searchParams = new URLSearchParams(window.location.search);
     const requestedPendingId = searchParams.get("pending");
     const requestedLocale = searchParams.get("locale");
@@ -168,7 +185,7 @@ export default function EditorClient() {
       setArticleTab(requestedArticle.pendingId ? "drafts" : "published");
       await selectArticle(requestedArticle);
     }
-  }, [selectArticle]);
+  }, [isCurrent, selectArticle]);
 
   const refreshArticles = useCallback(async () => {
     setBusy(true);
@@ -176,31 +193,28 @@ export default function EditorClient() {
     try {
       await loadArticles();
     } catch (error) {
-      setMessage({
+      if (isCurrent()) setMessage({
         severity: "error",
         text: error instanceof Error ? error.message : copy.loadFailed,
       });
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
-  }, [copy.loadFailed, loadArticles]);
+  }, [copy.loadFailed, isCurrent, loadArticles]);
 
   useEffect(() => {
-    if (auth.status === "uninitialized" || auth.status === "refreshing") return;
-    if (auth.status !== "authenticated") {
-      const timer = window.setTimeout(() => setLoading(false), 0);
-      return () => window.clearTimeout(timer);
+    if (shouldInitializeEditor(initialized.current, auth)) {
+      initialized.current = true;
+      void loadArticles(true)
+        .catch((error) => {
+          if (isCurrent()) setMessage({
+            severity: "error",
+            text: error instanceof Error ? error.message : copy.loginFailed,
+          });
+        })
+        .finally(() => { if (isCurrent()) setLoading(false); });
     }
-    const timer = window.setTimeout(() => {
-      void loadArticles()
-        .catch((error) => setMessage({
-          severity: "error",
-          text: error instanceof Error ? error.message : copy.loginFailed,
-        }))
-        .finally(() => setLoading(false));
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [auth.status, copy.loginFailed, loadArticles]);
+  }, [auth, copy.loginFailed, isCurrent, loadArticles]);
 
   const normalizedTags = useMemo(
     () => [...new Set(tagsText.split(",").map((tag) => tag.trim()).filter(Boolean))],
@@ -211,6 +225,11 @@ export default function EditorClient() {
     [article, normalizedTags, savedFingerprint]
   );
   useUnsavedChanges(isDirty, copy.unsavedChanges);
+  const confirmDiscard = () => !isDirty || window.confirm(copy.unsavedChanges);
+  const selectWithConfirmation = (next: EditorArticle | EditorArticleSummary) => {
+    if (busy || !confirmDiscard()) return Promise.resolve(false);
+    return selectArticle(next);
+  };
   const draftArticles = useMemo(
     () => articles.filter((item) => item.pendingId !== null),
     [articles]
@@ -240,6 +259,7 @@ export default function EditorClient() {
     setMessage(null);
     try {
       const result = { pendingId: await editorApi.saveDraft({ ...article, tags: normalizedTags }) };
+      if (!isCurrent()) return null;
       const next = {
         ...article,
         pendingId: result.pendingId,
@@ -253,22 +273,27 @@ export default function EditorClient() {
         severity: "success",
         text: isAdmin ? copy.savedAdmin : copy.submitted,
       });
-      await loadArticles();
+      try {
+        await loadArticles();
+      } catch {
+        if (isCurrent()) setMessage({ severity: "error", text: `${isAdmin ? copy.savedAdmin : copy.submitted} — ${copy.loadFailed}` });
+      }
       return result.pendingId;
     } catch (error) {
-      setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.saveFailed });
+      if (isCurrent()) setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.saveFailed });
       return null;
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
 
   const publish = async () => {
     const pendingId = await save();
-    if (!pendingId) return;
+    if (!pendingId || !isCurrent()) return;
     setBusy(true);
     try {
       const result = await editorApi.publishDraft(pendingId, approvalMessage);
+      if (!isCurrent()) return;
       const publishedArticle = {
         ...article,
         postId: result.postId,
@@ -287,11 +312,15 @@ export default function EditorClient() {
           ? `${copy.publishedNotified}: /blog/${result.locale}/${result.slug}`
           : `${copy.publishedMailFailed}: /blog/${result.locale}/${result.slug}`,
       });
-      await loadArticles();
+      try {
+        await loadArticles();
+      } catch {
+        if (isCurrent()) setMessage({ severity: "error", text: `${copy.published} — ${copy.loadFailed}` });
+      }
     } catch (error) {
-      setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.publishFailed });
+      if (isCurrent()) setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.publishFailed });
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
 
@@ -307,6 +336,7 @@ export default function EditorClient() {
   };
 
   const forkArticle = async (target: EditorArticleSummary) => {
+    if (!confirmDiscard()) return;
     setBusy(true);
     setMessage(null);
     closeArticleMenu();
@@ -314,12 +344,13 @@ export default function EditorClient() {
       const pendingId = target.pendingId
         ? await editorApi.forkPending(target.pendingId)
         : await editorApi.forkArticle(target.postId ?? "");
+      if (!isCurrent()) return;
       // A full load, so the editor starts from the fork instead of the current draft's state.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign(`/editor?pending=${encodeURIComponent(pendingId)}`);
     } catch (error) {
-      setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.forkFailed });
-      setBusy(false);
+      if (isCurrent()) setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.forkFailed });
+      if (isCurrent()) setBusy(false);
     }
   };
 
@@ -331,11 +362,12 @@ export default function EditorClient() {
       const result = deleteTarget.pendingId
         ? await editorApi.rejectPending(deleteTarget.pendingId, deleteReason)
         : await editorApi.deleteArticle(deleteTarget.postId ?? "", deleteReason);
+      if (!isCurrent()) return;
       const deletedPostId = deleteTarget.postId;
       const deletedPendingId = deleteTarget.pendingId;
       setDeleteTarget(null);
       setDeleteReason("");
-      if (article.pendingId === deletedPendingId || (deletedPostId && article.postId === deletedPostId)) {
+      if (deletedPendingId ? article.pendingId === deletedPendingId : Boolean(deletedPostId && article.postId === deletedPostId)) {
         void selectArticle(blankArticle(locale));
       }
       await loadArticles();
@@ -348,9 +380,9 @@ export default function EditorClient() {
             : copy.deletedNoEmail,
       });
     } catch (error) {
-      setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.deleteFailed });
+      if (isCurrent()) setMessage({ severity: "error", text: error instanceof Error ? error.message : copy.deleteFailed });
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
 
@@ -361,7 +393,8 @@ export default function EditorClient() {
     >
       <ListItemButton
         selected={(article.pendingId ?? article.postId) === (item.pendingId ?? item.postId)}
-        onClick={() => void selectArticle(item)}
+        disabled={busy}
+        onClick={() => void selectWithConfirmation(item)}
         sx={{ borderRadius: 1, gap: 1, minWidth: 0, py: 0.75 }}
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -384,18 +417,18 @@ export default function EditorClient() {
         />
       </ListItemButton>
       <Tooltip title={copy.moreActions}>
-        <IconButton size="small" onClick={(event) => openArticleMenu(event, item)}>
+        <IconButton size="small" disabled={busy} onClick={(event) => openArticleMenu(event, item)}>
           <MoreVertRoundedIcon fontSize="small" />
         </IconButton>
       </Tooltip>
     </Box>
   );
 
-  if (loading) {
+  if (loading && (auth.isAuthenticated || auth.status === "uninitialized" || auth.status === "authenticating")) {
     return <Box sx={{ display: "grid", placeItems: "center", flex: 1, py: 10 }}><CircularProgress /></Box>;
   }
 
-  if (auth.status !== "authenticated") {
+  if (!auth.isAuthenticated) {
     return (
       <Paper sx={{ width: "min(420px, calc(100% - 32px))", mx: "auto", mt: 8, p: 4 }}>
         <Stack spacing={2}>
@@ -433,9 +466,11 @@ export default function EditorClient() {
             <Button
               size="small"
               startIcon={<AddRoundedIcon />}
+              disabled={busy}
               onClick={() => {
-                setArticleTab("drafts");
-                void selectArticle(blankArticle(locale));
+                void selectWithConfirmation(blankArticle(locale)).then((selected) => {
+                  if (selected) setArticleTab("drafts");
+                });
               }}
             >
               {copy.create}
@@ -506,7 +541,7 @@ export default function EditorClient() {
         <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeArticleMenu}>
           <MenuItem
             onClick={() => {
-              if (menuArticle) void selectArticle(menuArticle);
+              if (menuArticle) void selectWithConfirmation(menuArticle);
               closeArticleMenu();
             }}
           >
@@ -527,7 +562,7 @@ export default function EditorClient() {
               onClick={() => {
                 const target = menuArticle;
                 closeArticleMenu();
-                void selectArticle(target).then((loaded) => {
+                void selectWithConfirmation(target).then((loaded) => {
                   if (loaded) setApproveOpen(true);
                 });
               }}
@@ -553,7 +588,7 @@ export default function EditorClient() {
           )}
         </Menu>
         <Divider sx={{ my: 2 }} />
-        <Button color="inherit" size="small" onClick={auth.logout}>{copy.logout}</Button>
+        <Button color="inherit" size="small" disabled={busy} onClick={() => { if (confirmDiscard()) void auth.logout(); }}>{copy.logout}</Button>
       </Paper>
 
       <Box sx={{ p: { xs: 2, sm: 3 }, minWidth: 0 }}>
@@ -611,7 +646,10 @@ export default function EditorClient() {
           <DialogTitle>{copy.properties}</DialogTitle>
           <DialogContent>
             <Box
+              component="fieldset"
+              disabled={busy}
               sx={{
+                border: 0, m: 0, p: 0, minWidth: 0,
                 display: "grid",
                 gridTemplateColumns: { xs: "1fr", sm: "120px minmax(0, 1fr)" },
                 gap: 2,
@@ -620,6 +658,7 @@ export default function EditorClient() {
             >
               <TextField
                 select
+                disabled={busy}
                 label={copy.language}
                 value={article.locale}
                 onChange={(event) => setArticle({ ...article, locale: event.target.value as "en" | "zh" })}
@@ -857,6 +896,7 @@ export default function EditorClient() {
 
         <VditorEditor
           value={article.content}
+          disabled={busy}
           locale={locale}
           onChange={(content) => setArticle((current) => ({ ...current, content }))}
         />

@@ -24,7 +24,15 @@ export default function ThemeToggle() {
 
   return (
     <IconButton
-      onClick={toggleTheme}
+      onClick={(event) => {
+        // Keyboard activation reports (0, 0); spread from the button's center instead.
+        const rect = event.currentTarget.getBoundingClientRect();
+        const fromPointer = event.clientX !== 0 || event.clientY !== 0;
+        toggleTheme({
+          x: fromPointer ? event.clientX : rect.left + rect.width / 2,
+          y: fromPointer ? event.clientY : rect.top + rect.height / 2,
+        });
+      }}
       sx={{
         position: "relative",
         width: 40,
@@ -37,10 +45,10 @@ export default function ThemeToggle() {
       aria-label="Toggle theme"
     >
       {/* CSS swap instead of framer-motion: keeps the animation library out of every page's bundle. */}
-      <Box sx={iconSx(theme === "dark", -180)}>
+      <Box className="theme-toggle-icon" sx={iconSx(theme === "dark", -180)}>
         <WbSunnyIcon sx={{ color: "#fbbf24", fontSize: 22 }} />
       </Box>
-      <Box sx={iconSx(theme !== "dark", 180)}>
+      <Box className="theme-toggle-icon" sx={iconSx(theme !== "dark", 180)}>
         <NightsStayIcon sx={{ color: "#6366f1", fontSize: 22 }} />
       </Box>
     </IconButton>

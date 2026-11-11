@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   Alert,
@@ -38,6 +38,9 @@ import Footer from "@components/ui/layout/Footer";
 import { ShowNavbarLoginStatus } from "@components/ui/layout/NavbarLoginStatus";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import { useAutoRefresh } from "@hooks/app/useAutoRefresh";
+import { createRequestGate } from "@components/ui/auth/request-gate";
+import { createListRequestGuard } from "@hooks/app/list-request-guard";
+import { authSession } from "@lib/client-api/session";
 import {
   ApiError,
   remindersApi,
@@ -104,9 +107,31 @@ function toDateTimeLocal(value: string | null) {
 }
 
 export default function ReminderClient() {
+  const auth = useAuth();
+  return <AccountView key={`${auth.user?.userId ?? "anonymous"}:${auth.user?.status ?? "none"}`} auth={auth} />;
+}
+
+function AccountView({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const { t, locale } = useI18n();
   const copy = t.tools.reminder;
-  const { status, isAuthenticated, user } = useAuth();
+  const { status, isAuthenticated, user } = auth;
+  const accountId = user?.userId;
+  const mounted = useRef(false);
+  const initialized = useRef(false);
+  const mutationGate = useRef(createRequestGate());
+  const [mutationPending, setMutationPending] = useState(false);
+  const beginMutation = useCallback(() => {
+    const release = mutationGate.current.acquire();
+    if (!release) return null;
+    setMutationPending(true);
+    return () => { release(); if (mounted.current) setMutationPending(false); };
+  }, []);
+  const listGuard = useRef(createListRequestGuard(accountId, () => authSession.getSnapshot().user?.userId));
+  const isCurrent = useCallback(() => mounted.current && !!accountId && authSession.getSnapshot().user?.userId === accountId, [accountId]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   useDocumentTitle(copy.title);
 
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -137,39 +162,47 @@ export default function ReminderClient() {
   const [message, setMessage] = useState<string | null>(null);
 
   const loadReminders = useCallback(async (showLoading = true) => {
+    const request = listGuard.current.begin();
+    const foregroundRequest = showLoading ? listGuard.current.beginForeground() : null;
     if (showLoading) setLoading(true);
     // Background refreshes run every 30 s; only clear a previous load failure,
     // never the error of an action the user has not seen yet.
     setError((current) => (current === copy.loadFailed ? null : current));
     try {
       const response = await remindersApi.list();
+      if (!isCurrent() || !listGuard.current.isCurrent(request)) return;
       setReminders(response.reminders);
       setRefreshedAt(Date.now());
     } catch {
-      setError(copy.loadFailed);
+      if (isCurrent() && listGuard.current.isCurrent(request)) setError(copy.loadFailed);
     } finally {
-      if (showLoading) setLoading(false);
+      if (foregroundRequest !== null && isCurrent() && listGuard.current.isLatestForeground(foregroundRequest)) setLoading(false);
     }
-  }, [copy.loadFailed]);
+  }, [copy.loadFailed, isCurrent]);
 
   const loadAudits = useCallback(async (showLoading = true) => {
     if (showLoading) setAuditLoading(true);
     try {
       const response = await remindersApi.audit();
+      if (!isCurrent()) return;
       setAudits(response.audits);
     } catch {
-      setError(copy.loadFailed);
+      if (isCurrent()) setError(copy.loadFailed);
     } finally {
-      if (showLoading) setAuditLoading(false);
+      if (showLoading && isCurrent()) setAuditLoading(false);
     }
-  }, [copy.loadFailed]);
+  }, [copy.loadFailed, isCurrent]);
 
+  const initialLoad = useRef(loadReminders);
+  useEffect(() => { initialLoad.current = loadReminders; }, [loadReminders]);
   useEffect(() => {
-    if (status === "authenticated" && user?.status === 1) {
-      const timer = window.setTimeout(() => void loadReminders(), 0);
-      return () => window.clearTimeout(timer);
-    }
-  }, [isAuthenticated, loadReminders, status, user?.status, user?.userId]);
+    if (!(isAuthenticated && user?.status === 1) || initialized.current) return;
+    const timer = window.setTimeout(() => {
+      initialized.current = true;
+      void initialLoad.current();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, user?.status]);
 
   useAutoRefresh(
     async () => {
@@ -178,7 +211,7 @@ export default function ReminderClient() {
         auditOpen ? loadAudits(false) : Promise.resolve(),
       ]);
     },
-    status === "authenticated" && user?.status === 1
+    isAuthenticated && user?.status === 1
   );
 
   async function createReminder(event: FormEvent<HTMLFormElement>) {
@@ -206,6 +239,8 @@ export default function ReminderClient() {
       return;
     }
 
+    const release = beginMutation();
+    if (!release) return;
     setCreating(true);
     try {
       const response = await remindersApi.create({
@@ -215,7 +250,9 @@ export default function ReminderClient() {
         scheduleType,
         repeatIntervalMinutes: scheduleType === "repeat" ? interval : null,
       });
-      setReminders((current) => [response.reminder, ...current]);
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
+      setReminders((current) => [response.reminder, ...current.filter((item) => item.reminderId !== response.reminder.reminderId)]);
       setTitle("");
       setNote("");
       setRemindAt("");
@@ -225,7 +262,7 @@ export default function ReminderClient() {
       setCreateOpen(false);
       setMessage(copy.created);
     } catch (requestError) {
-      setError(
+      if (isCurrent()) setError(
         requestError instanceof ApiError && requestError.code === "invalid_repeat_interval"
           ? copy.invalidInterval
           : requestError instanceof ApiError && requestError.code === "remind_at_not_future"
@@ -233,15 +270,20 @@ export default function ReminderClient() {
             : copy.createFailed
       );
     } finally {
-      setCreating(false);
+      if (isCurrent()) setCreating(false);
+      release();
     }
   }
 
   async function setReminderStatus(reminder: Reminder) {
+    const release = beginMutation();
+    if (!release) return;
     const nextStatus = reminder.status === "active" ? "paused" : "active";
     setError(null);
     try {
       const response = await remindersApi.setStatus(reminder.reminderId, nextStatus);
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
       setReminders((current) =>
         current.map((item) =>
           item.reminderId === reminder.reminderId ? response.reminder : item
@@ -249,22 +291,26 @@ export default function ReminderClient() {
       );
       setMessage(copy.updated);
     } catch {
-      setError(copy.updateFailed);
-    }
+      if (isCurrent()) setError(copy.updateFailed);
+    } finally { release(); }
   }
 
   async function deleteReminder(reminder: Reminder) {
     if (!window.confirm(copy.deleteConfirm)) return;
+    const release = beginMutation();
+    if (!release) return;
     setError(null);
     try {
       await remindersApi.delete(reminder.reminderId);
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
       setReminders((current) =>
         current.filter((item) => item.reminderId !== reminder.reminderId)
       );
       setMessage(copy.deleted);
     } catch {
-      setError(copy.deleteFailed);
-    }
+      if (isCurrent()) setError(copy.deleteFailed);
+    } finally { release(); }
   }
 
   function openContentEditor(reminder: Reminder) {
@@ -288,6 +334,8 @@ export default function ReminderClient() {
       return;
     }
 
+    const release = beginMutation();
+    if (!release) return;
     setContentSaving(true);
     setError(null);
     try {
@@ -295,6 +343,8 @@ export default function ReminderClient() {
         title: normalizedTitle,
         note: normalizedNote,
       });
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
       setReminders((current) =>
         current.map((item) =>
           item.reminderId === response.reminder.reminderId
@@ -305,7 +355,7 @@ export default function ReminderClient() {
       setEditingContent(null);
       setMessage(copy.contentUpdated);
     } catch (requestError) {
-      setError(
+      if (isCurrent()) setError(
         requestError instanceof ApiError && requestError.code === "invalid_title"
           ? copy.invalidTitle
           : requestError instanceof ApiError && requestError.code === "invalid_note"
@@ -313,7 +363,8 @@ export default function ReminderClient() {
             : copy.updateFailed
       );
     } finally {
-      setContentSaving(false);
+      if (isCurrent()) setContentSaving(false);
+      release();
     }
   }
 
@@ -341,6 +392,8 @@ export default function ReminderClient() {
       return;
     }
 
+    const release = beginMutation();
+    if (!release) return;
     setScheduleSaving(true);
     setError(null);
     try {
@@ -349,6 +402,8 @@ export default function ReminderClient() {
         remindAt: date?.toISOString() ?? null,
         repeatIntervalMinutes: editScheduleType === "repeat" ? interval : null,
       });
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
       setReminders((current) =>
         current.map((item) =>
           item.reminderId === response.reminder.reminderId
@@ -359,9 +414,10 @@ export default function ReminderClient() {
       setEditingSchedule(null);
       setMessage(copy.scheduleUpdated);
     } catch {
-      setError(copy.updateFailed);
+      if (isCurrent()) setError(copy.updateFailed);
     } finally {
-      setScheduleSaving(false);
+      if (isCurrent()) setScheduleSaving(false);
+      release();
     }
   }
 
@@ -407,7 +463,7 @@ export default function ReminderClient() {
             {message ? <Alert severity="success" onClose={() => setMessage(null)}>{message}</Alert> : null}
             <Alert severity="info">{copy.quotaInfo}</Alert>
 
-            <Button startIcon={<AddAlertRoundedIcon />} variant="contained" onClick={() => { setError(null); setCreateOpen(true); }} sx={{ alignSelf: "flex-start" }}>{copy.addReminder}</Button>
+            <Button disabled={mutationPending} startIcon={<AddAlertRoundedIcon />} variant="contained" onClick={() => { setError(null); setCreateOpen(true); }} sx={{ alignSelf: "flex-start" }}>{copy.addReminder}</Button>
 
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{copy.listTitle}</Typography>
@@ -428,10 +484,10 @@ export default function ReminderClient() {
                             {reminder.lastDeliveryStatus === "rate_limited" ? <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 0.5 }}>{copy.rateLimited}</Typography> : null}
                           </Box>
                           <Stack direction="row">
-                            {reminder.scheduleType !== "never" && reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton aria-label={reminder.status === "active" ? copy.pause : copy.resume} onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
-                            <Tooltip title={copy.editContent}><IconButton aria-label={copy.editContent} onClick={() => openContentEditor(reminder)}><EditRoundedIcon /></IconButton></Tooltip>
-                            <Tooltip title={copy.editSchedule}><IconButton aria-label={copy.editSchedule} color="primary" onClick={() => openScheduleEditor(reminder)}><EditNotificationsRoundedIcon /></IconButton></Tooltip>
-                            <Tooltip title={copy.delete}><IconButton aria-label={copy.delete} color="error" onClick={() => void deleteReminder(reminder)}><DeleteOutlineRoundedIcon /></IconButton></Tooltip>
+                            {reminder.scheduleType !== "never" && reminder.status !== "completed" ? <Tooltip title={reminder.status === "active" ? copy.pause : copy.resume}><IconButton disabled={mutationPending} aria-label={reminder.status === "active" ? copy.pause : copy.resume} onClick={() => void setReminderStatus(reminder)}>{reminder.status === "active" ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}</IconButton></Tooltip> : null}
+                            <Tooltip title={copy.editContent}><IconButton disabled={mutationPending} aria-label={copy.editContent} onClick={() => openContentEditor(reminder)}><EditRoundedIcon /></IconButton></Tooltip>
+                            <Tooltip title={copy.editSchedule}><IconButton disabled={mutationPending} aria-label={copy.editSchedule} color="primary" onClick={() => openScheduleEditor(reminder)}><EditNotificationsRoundedIcon /></IconButton></Tooltip>
+                            <Tooltip title={copy.delete}><IconButton disabled={mutationPending} aria-label={copy.delete} color="error" onClick={() => void deleteReminder(reminder)}><DeleteOutlineRoundedIcon /></IconButton></Tooltip>
                           </Stack>
                         </Stack>
                       </CardContent>
@@ -465,7 +521,8 @@ export default function ReminderClient() {
       <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={createReminder} noValidate>
           <DialogTitle>{copy.createTitle}</DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ pointerEvents: mutationPending ? "none" : undefined }}>
+            <fieldset disabled={mutationPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
               <TextField label={copy.reminderTitle} value={title} onChange={(event) => setTitle(event.target.value.slice(0, 160))} helperText={copy.titleHint} required autoFocus slotProps={{ htmlInput: { maxLength: 160 } }} />
@@ -491,7 +548,7 @@ export default function ReminderClient() {
                 </FormControl>
               </Stack> : null}
             </Stack>
-          </DialogContent>
+          </fieldset></DialogContent>
           <DialogActions>
             <Button onClick={() => setCreateOpen(false)} disabled={creating}>{copy.cancel}</Button>
             <Button type="submit" variant="contained" disabled={creating}>{creating ? copy.creating : copy.create}</Button>
@@ -501,13 +558,14 @@ export default function ReminderClient() {
       <Dialog open={Boolean(editingContent)} onClose={() => !contentSaving && setEditingContent(null)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={updateReminderContent} noValidate>
           <DialogTitle>{copy.editContent}</DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ pointerEvents: mutationPending ? "none" : undefined }}>
+            <fieldset disabled={mutationPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
               <TextField label={copy.reminderTitle} value={editTitle} onChange={(event) => setEditTitle(event.target.value.slice(0, 160))} helperText={copy.titleHint} required autoFocus slotProps={{ htmlInput: { maxLength: 160 } }} />
               <TextField label={copy.note} value={editNote} onChange={(event) => setEditNote(event.target.value.slice(0, 5000))} helperText={copy.noteHint} required multiline minRows={5} slotProps={{ htmlInput: { maxLength: 5000 } }} />
             </Stack>
-          </DialogContent>
+          </fieldset></DialogContent>
           <DialogActions>
             <Button onClick={() => setEditingContent(null)} disabled={contentSaving}>{copy.cancel}</Button>
             <Button type="submit" variant="contained" disabled={contentSaving}>{contentSaving ? copy.saving : copy.save}</Button>
@@ -517,7 +575,8 @@ export default function ReminderClient() {
       <Dialog open={Boolean(editingSchedule)} onClose={() => !scheduleSaving && setEditingSchedule(null)} fullWidth maxWidth="xs">
         <Box component="form" onSubmit={updateReminderSchedule}>
           <DialogTitle>{copy.editSchedule}</DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ pointerEvents: mutationPending ? "none" : undefined }}>
+            <fieldset disabled={mutationPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <Stack spacing={1.5} sx={{ pt: 1 }}>
               <Typography variant="body2" color="text.secondary">{copy.editScheduleDescription}</Typography>
               {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
@@ -542,7 +601,7 @@ export default function ReminderClient() {
                 </FormControl>
               </Stack> : null}
             </Stack>
-          </DialogContent>
+          </fieldset></DialogContent>
           <DialogActions>
             <Button onClick={() => setEditingSchedule(null)} disabled={scheduleSaving}>{copy.cancel}</Button>
             <Button type="submit" variant="contained" disabled={scheduleSaving}>{scheduleSaving ? copy.saving : copy.save}</Button>

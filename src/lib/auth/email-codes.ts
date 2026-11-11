@@ -70,8 +70,8 @@ export async function consumeEmailCode(
   code: string
 ) {
   if (!attemptLimiter().consume(attemptKey(email, purpose))) {
-    // Outside the caller's transaction: it is about to roll back.
-    await db.query("DELETE FROM email_code WHERE email = $1 AND purpose = $2", [email, purpose]);
+    // The limiter keeps this code unusable until its lifetime has elapsed.
+    // Deleting here could instead remove a concurrently issued replacement.
     throw new EmailCodeError("verification_attempts_exceeded");
   }
 

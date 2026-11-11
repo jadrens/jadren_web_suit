@@ -15,7 +15,7 @@ export default function DnsManagerHost({ path }: { path: string }) {
     path={path}
     enable_theme_switch_button={false}
     enable_i18n_switch_button={false}
-    theme_data={{ mode: theme, theme: muiTheme, onChange: toggleTheme }}
+    theme_data={{ mode: theme, theme: muiTheme, onChange: () => toggleTheme() }}
     i18n_data={{ locale }}
   />;
 }

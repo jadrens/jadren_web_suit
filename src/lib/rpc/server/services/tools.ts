@@ -17,7 +17,7 @@ import {
   suggestDictionaryEntries,
 } from "@lib/dictionary/server";
 import type { Locale } from "@lib/publishing/posts";
-import { getAllTags, getSearchIndex } from "@lib/publishing/search-index";
+import { getSearchIndex } from "@lib/publishing/search-index";
 import { consumeTtsRequest } from "@lib/tts/rate-limit";
 import { apiFailure } from "../errors";
 import { headersOf } from "../context";
@@ -424,12 +424,11 @@ export const toolsService: ServiceImpl<typeof ToolsService> = {
   },
 
   async searchPosts(request) {
-    const query = request.query;
+    const query = request.query.trim();
     const locale = (request.locale || "en") as Locale;
-    const tags = await getAllTags(locale);
-    if (!query.trim()) return { results: [], tags };
-
     const index = await getSearchIndex(locale);
+    const tags = Object.keys(index.postsByTag);
+    if (!query) return { results: [], tags };
     const keyword = query.toLowerCase();
     const results = index.postsByDate.filter(
       (post) =>

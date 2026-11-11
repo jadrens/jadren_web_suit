@@ -4,9 +4,14 @@ export function mainSiteOrigin(host: string, protocol = "https") {
 }
 
 export function isSafeAccountReturn(value: string | undefined) {
-  if (!value) return false;
-  if (value.startsWith("/") && !value.startsWith("//")) return true;
+  // Browsers strip control characters and treat backslashes as URL separators.
+  // Reject these before parsing so a local-looking path cannot become a host.
+  if (!value || value !== value.trim() || /[\u0000-\u001f\u007f\\]/.test(value)) return false;
   try {
+    if (value.startsWith("/")) {
+      const base = "https://account-return.invalid";
+      return !value.startsWith("//") && new URL(value, base).origin === base;
+    }
     const url = new URL(value);
     return (
       (url.protocol === "https:" || url.protocol === "http:") &&

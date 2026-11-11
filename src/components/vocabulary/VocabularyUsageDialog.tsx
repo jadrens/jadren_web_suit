@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Autocomplete, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from "@mui/material";
 import { ApiError, vocabularyPracticeApi, type VocabularyCollectionSummary, type VocabularyUsage } from "@lib/client-api";
 import CollectionDialog from "./CollectionDialog";
+import { useDialogOperation, useDialogAccountKey } from "./use-dialog-operation";
 
-export default function VocabularyUsageDialog({ open, locale, collections, initialCollectionId, onClose, onCollectionCreated, onSaved }: {
+function VocabularyUsageDialogContent({ open, locale, collections, initialCollectionId, onClose, onCollectionCreated, onSaved }: {
   open: boolean;
   locale: "en" | "zh";
   collections: VocabularyCollectionSummary[];
@@ -14,6 +15,7 @@ export default function VocabularyUsageDialog({ open, locale, collections, initi
   onCollectionCreated: (collection: VocabularyCollectionSummary) => void;
   onSaved: (usage: VocabularyUsage) => void;
 }) {
+  const startOperation = useDialogOperation(open);
   const zh = locale === "zh";
   const [collectionId, setCollectionId] = useState("");
   const [word, setWord] = useState("");
@@ -22,6 +24,7 @@ export default function VocabularyUsageDialog({ open, locale, collections, initi
   const [error, setError] = useState("");
   const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
   const wasOpen = useRef(false);
+  const pending = useRef<symbol | null>(null);
   const selectedCollection = collections.find(item => item.collectionId === collectionId) || null;
 
   useEffect(() => {
@@ -30,22 +33,25 @@ export default function VocabularyUsageDialog({ open, locale, collections, initi
     wasOpen.current = true;
     const timer = window.setTimeout(() => {
       setCollectionId(collections.some(item => item.collectionId === initialCollectionId) ? initialCollectionId! : (collections[0]?.collectionId || ""));
-      setWord(""); setUsage(""); setError("");
+      setWord(""); setUsage(""); setError(""); setSaving(false); setCollectionDialogOpen(false); pending.current = null;
     }, 0);
     return () => window.clearTimeout(timer);
   }, [collections, initialCollectionId, open]);
 
   async function save() {
-    if (!collectionId || !word.trim() || !usage.trim()) return;
+    if (pending.current || !collectionId || !word.trim() || !usage.trim()) return;
+    const token = Symbol(); pending.current = token;
+    const isCurrent = startOperation();
     setSaving(true); setError("");
     try {
       const response = await vocabularyPracticeApi.createUsage({ collectionId, word: word.trim(), prompt: usage.trim() });
+      if (!isCurrent()) return;
       onSaved(response.usage); onClose();
     } catch (cause) {
-      setError(cause instanceof ApiError && cause.code === "usage_exists"
+      if (isCurrent()) setError(cause instanceof ApiError && cause.code === "usage_exists"
         ? (zh ? "这个收藏夹中已经有相同的单词用法。" : "This collection already contains that word usage.")
         : (zh ? "无法保存单词用法。" : "Unable to save the word usage."));
-    } finally { setSaving(false); }
+    } finally { if (pending.current === token) pending.current = null; if (isCurrent()) setSaving(false); }
   }
 
   return <>
@@ -61,4 +67,9 @@ export default function VocabularyUsageDialog({ open, locale, collections, initi
     </Dialog>
     <CollectionDialog open={collectionDialogOpen} locale={locale} onClose={() => setCollectionDialogOpen(false)} onCreated={collection => { const summary = { collectionId: collection.collectionId, name: collection.name }; onCollectionCreated(summary); setCollectionId(summary.collectionId); }} />
   </>;
+}
+
+export default function VocabularyUsageDialog(props: Parameters<typeof VocabularyUsageDialogContent>[0]) {
+  const key = useDialogAccountKey();
+  return <VocabularyUsageDialogContent key={key} {...props} />;
 }

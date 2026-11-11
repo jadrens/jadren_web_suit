@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ServiceImpl } from "@connectrpc/connect";
 import type { LlmSettingsService, QuickLinkService, ReminderService } from "@gen/jadren/v1/account_pb";
-import { db, firstRow } from "@lib/auth/db";
+import { db, firstRow, withTransaction } from "@lib/auth/db";
 import { bearerToken, verifyAccessToken } from "@lib/auth/jwt";
 import {
   reminderSelect,
@@ -129,66 +129,68 @@ export const quickLinkService: ServiceImpl<typeof QuickLinkService> = {
     const user = await quickLinkUser(headersOf(context));
     const { shortName } = request;
 
-    const currentResult = await db.query<QuickLinkRow>(
-      `SELECT ${QUICK_LINK_COLUMNS}
-         FROM quick_link
-        WHERE short_name = $1 AND user_id = $2
-        LIMIT 1`,
-      [shortName, user.sub]
-    );
-    const current = firstRow(currentResult.rows);
-    if (!current) throw apiFailure("Quick link was not found", 404, "quick_link_not_found");
+    return withTransaction(async (client) => {
+      const currentResult = await client.query<QuickLinkRow>(
+        `SELECT ${QUICK_LINK_COLUMNS}
+           FROM quick_link
+          WHERE short_name = $1 AND user_id = $2
+          LIMIT 1 FOR UPDATE`,
+        [shortName, user.sub]
+      );
+      const current = firstRow(currentResult.rows);
+      if (!current) throw apiFailure("Quick link was not found", 404, "quick_link_not_found");
 
-    let targetUrl = current.target_url;
-    let note = current.note;
-    let expiresAt = new Date(current.expire_at);
-    let changed = false;
+      let targetUrl = current.target_url;
+      let note = current.note;
+      let expiresAt = new Date(current.expire_at);
+      let changed = false;
 
-    if (request.targetUrl !== undefined) {
-      const normalized = normalizeTargetUrl(request.targetUrl);
-      if (!normalized) {
-        throw apiFailure("Target URL must be a valid HTTP or HTTPS URL", 400, "invalid_target_url");
+      if (request.targetUrl !== undefined) {
+        const normalized = normalizeTargetUrl(request.targetUrl);
+        if (!normalized) {
+          throw apiFailure("Target URL must be a valid HTTP or HTTPS URL", 400, "invalid_target_url");
+        }
+        targetUrl = normalized;
+        changed = true;
       }
-      targetUrl = normalized;
-      changed = true;
-    }
-    if (request.note !== undefined) {
-      const normalized = normalizeNote(request.note);
-      if (normalized === undefined) {
-        throw apiFailure("Note must contain no more than 255 characters", 400, "invalid_note");
+      if (request.note !== undefined) {
+        const normalized = normalizeNote(request.note);
+        if (normalized === undefined) {
+          throw apiFailure("Note must contain no more than 255 characters", 400, "invalid_note");
+        }
+        note = normalized;
+        changed = true;
       }
-      note = normalized;
-      changed = true;
-    }
-    if (request.disable === true) {
-      expiresAt = new Date();
-      changed = true;
-    } else if (request.expiresAt !== undefined) {
-      const nextExpiration = new Date(request.expiresAt);
-      if (!Number.isFinite(nextExpiration.getTime())) {
-        throw apiFailure("Expiration date is invalid", 400, "invalid_expiration");
+      if (request.disable === true) {
+        expiresAt = new Date();
+        changed = true;
+      } else if (request.expiresAt !== undefined) {
+        const nextExpiration = new Date(request.expiresAt);
+        if (!Number.isFinite(nextExpiration.getTime())) {
+          throw apiFailure("Expiration date is invalid", 400, "invalid_expiration");
+        }
+        if (
+          nextExpiration.getTime() <= Date.now() ||
+          nextExpiration.getTime() <= new Date(current.expire_at).getTime()
+        ) {
+          throw apiFailure("Expiration date must extend the current expiration", 400, "expiration_not_extended");
+        }
+        expiresAt = nextExpiration;
+        changed = true;
       }
-      if (
-        nextExpiration.getTime() <= Date.now() ||
-        nextExpiration.getTime() <= new Date(current.expire_at).getTime()
-      ) {
-        throw apiFailure("Expiration date must extend the current expiration", 400, "expiration_not_extended");
-      }
-      expiresAt = nextExpiration;
-      changed = true;
-    }
-    if (!changed) throw apiFailure("No supported changes were provided", 400, "empty_update");
+      if (!changed) throw apiFailure("No supported changes were provided", 400, "empty_update");
 
-    const result = await db.query<QuickLinkRow>(
-      `UPDATE quick_link
-          SET target_url = $3, note = $4, expire_at = $5
-        WHERE short_name = $1 AND user_id = $2
-        RETURNING ${QUICK_LINK_COLUMNS}`,
-      [shortName, user.sub, targetUrl, note, expiresAt]
-    );
-    const link = firstRow(result.rows);
-    if (!link) throw apiFailure("Quick link was not found", 404, "quick_link_not_found");
-    return { link: toQuickLink(link) };
+      const result = await client.query<QuickLinkRow>(
+        `UPDATE quick_link
+            SET target_url = $3, note = $4, expire_at = $5
+          WHERE short_name = $1 AND user_id = $2
+          RETURNING ${QUICK_LINK_COLUMNS}`,
+        [shortName, user.sub, targetUrl, note, expiresAt]
+      );
+      const link = firstRow(result.rows);
+      if (!link) throw apiFailure("Quick link was not found", 404, "quick_link_not_found");
+      return { link: toQuickLink(link) };
+    });
   },
 
   async deleteQuickLink(request, context) {

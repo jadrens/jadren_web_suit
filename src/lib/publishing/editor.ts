@@ -1,6 +1,7 @@
-import { db, withTransaction, type QueryClient } from "@lib/auth/db";
+import { db, withTransaction } from "@lib/auth/db";
 import { bearerToken, verifyAccessToken } from "@lib/auth/jwt";
 import type { Locale } from "./posts";
+import { replaceTags } from "./replace-tags";
 
 export interface EditorArticle {
   pendingId: string | null;
@@ -264,14 +265,6 @@ export async function getEditorArticleContent(
     return result.rows[0]?.content ?? null;
   }
   return null;
-}
-
-async function replaceTags(client: QueryClient, table: "blog_post_tag" | "blog_post_pending_tag", id: string, tags: string[]) {
-  const idColumn = table === "blog_post_tag" ? "post_id" : "pending_id";
-  await client.query(`DELETE FROM ${table} WHERE ${idColumn} = $1`, [id]);
-  for (const tag of tags) {
-    await client.query(`INSERT INTO ${table} (${idColumn}, tag) VALUES ($1, $2)`, [id, tag]);
-  }
 }
 
 export async function saveDraft(userId: string, isAdmin: boolean, input: ArticleInput) {

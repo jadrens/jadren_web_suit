@@ -14,6 +14,8 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 export interface RpcAuthOptions {
   getAccessToken?: () => string | null;
   refreshAccessToken?: () => Promise<string | null>;
+  /** Keeps a delayed request or retry bound to the account that started it. */
+  getSessionIdentity?: () => string | null;
 }
 
 /** Surface RPC failures as ApiError so UI code can read status and application code. */
@@ -49,16 +51,29 @@ export function createApiClient<T extends DescService>(service: T, transport: Tr
 }
 
 /** Attach the bearer token and retry once after a refresh when the server rejects it. */
-export function authInterceptor({ getAccessToken, refreshAccessToken }: RpcAuthOptions): Interceptor {
+export function authInterceptor({ getAccessToken, refreshAccessToken, getSessionIdentity }: RpcAuthOptions): Interceptor {
   return (next) => async (request) => {
+    const identity = getSessionIdentity?.();
+    const requireCurrentAccount = () => {
+      if (request.signal.aborted || (getSessionIdentity && getSessionIdentity() !== identity)) {
+        throw new ConnectError("The request's account is no longer active", Code.Canceled);
+      }
+    };
     const send = async (retry: boolean): Promise<Awaited<ReturnType<typeof next>>> => {
+      requireCurrentAccount();
       const token = getAccessToken?.();
       if (token) request.header.set("Authorization", `Bearer ${token}`);
+      else if (getAccessToken) request.header.delete("Authorization");
       try {
-        return await next(request);
+        const response = await next(request);
+        requireCurrentAccount();
+        return response;
       } catch (error) {
+        requireCurrentAccount();
         if (retry && refreshAccessToken && error instanceof ConnectError && error.code === Code.Unauthenticated) {
+          requireCurrentAccount();
           const refreshed = await refreshAccessToken();
+          requireCurrentAccount();
           if (refreshed) return send(false);
         }
         throw error;

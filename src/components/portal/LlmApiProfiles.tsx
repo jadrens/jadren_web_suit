@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Autocomplete, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, IconButton, InputAdornment, InputLabel, MenuItem, Select, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
@@ -15,6 +15,7 @@ import { useI18n } from "@lib/i18n/portal";
 import { resolveLlmEndpoint } from "@lib/llm";
 import { useUnsavedChanges } from "@hooks/useUnsavedChanges";
 import { useAuth } from "@lib/client-api/use-auth";
+import { authSession } from "@lib/client-api/session";
 import { toast } from "@components/ui/feedback/toast";
 import { llmSettingsApi } from "@lib/client-api";
 import { decryptLlmSettings, encryptLlmSettings } from "@lib/llm/cloud-backup";
@@ -57,7 +58,7 @@ const emptyProfile = (): LlmProfile => ({ id: createProfileId(), name: "OpenAI",
 const emptyModel = (): LlmModel => ({ id: createProfileId(), name: "", modelId: "", providerId: "" });
 
 export default function LlmApiProfiles() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const copy = t.settings.llm;
   const auth = useAuth();
   const [profiles, setProfiles] = useState<LlmProfile[]>([]);
@@ -72,6 +73,22 @@ export default function LlmApiProfiles() {
   const [cloudPassphrase, setCloudPassphrase] = useState("");
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudNotice, setCloudNotice] = useState<{ error: boolean; text: string } | null>(null);
+  const cloudOperation = useRef(0);
+  const cloudPending = useRef(false);
+  const mounted = useRef(false);
+  const cloudAccount = auth.isAuthenticated ? `${auth.user?.userId}:${auth.user?.status}` : null;
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => {
+    cloudOperation.current++;
+    cloudPending.current = false;
+    const timer = window.setTimeout(() => {
+      setCloudMode(null); setCloudPassphrase(""); setCloudBusy(false); setCloudNotice(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [cloudAccount]);
 
   const snapshot = JSON.stringify({ profiles, models });
   const isDirty = loaded && snapshot !== savedSnapshot;
@@ -111,25 +128,44 @@ export default function LlmApiProfiles() {
     update(profile.id, { baseUrl, type, ...(nameWasAutomatic ? { name: suggestedProfileName(baseUrl, type) } : {}) });
   };
   const save = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
-    localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(models));
-    setSavedSnapshot(JSON.stringify({ profiles, models }));
-    toast.success(copy.saved);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+      localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(models));
+      setSavedSnapshot(JSON.stringify({ profiles, models }));
+      toast.success(copy.saved);
+    } catch {
+      toast.error(locale === "zh" ? "无法保存设置，请检查浏览器存储权限。" : "Could not save settings. Check browser storage permissions.");
+    }
   };
   const closeCloud = () => { if (!cloudBusy) { setCloudMode(null); setCloudPassphrase(""); } };
   const syncCloud = async () => {
-    if (!cloudMode || cloudPassphrase.length < 6) return;
+    if (!cloudMode || cloudPassphrase.length < 6 || cloudPending.current) return;
+    const account = authSession.getSnapshot();
+    const userId = account.user?.userId;
+    if (!account.isAuthenticated || !userId || account.user?.status !== 1) return;
+    const operation = ++cloudOperation.current;
+    const isCurrent = () => {
+      const current = authSession.getSnapshot();
+      return mounted.current && operation === cloudOperation.current && current.isAuthenticated && current.user?.userId === userId && current.user.status === 1;
+    };
+    cloudPending.current = true;
     setCloudBusy(true); setCloudNotice(null);
     try {
       if (cloudMode === "upload") {
         const encrypted = await encryptLlmSettings({ profiles, models }, cloudPassphrase);
+        // Encryption is asynchronous too: an account change can happen before
+        // the RPC interceptor ever sees this upload.
+        if (!isCurrent()) return;
         await llmSettingsApi.upload(encrypted);
+        if (!isCurrent()) return;
         setCloudNotice({ error: false, text: copy.cloudUploaded });
       } else {
         const { backup } = await llmSettingsApi.download();
+        if (!isCurrent()) return;
         let restored;
         try { restored = await decryptLlmSettings(backup, cloudPassphrase); }
         catch { throw new Error(copy.cloudWrongPassphrase); }
+        if (!isCurrent()) return;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(restored.profiles));
         localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(restored.models));
         setProfiles(restored.profiles); setModels(restored.models);
@@ -138,9 +174,10 @@ export default function LlmApiProfiles() {
       }
       setCloudMode(null); setCloudPassphrase("");
     } catch (cause) {
+      if (!isCurrent()) return;
       const detail = cause instanceof Error ? cause.message : String(cause);
       setCloudNotice({ error: true, text: copy.cloudFailed.replace("{error}", detail) });
-    } finally { setCloudBusy(false); }
+    } finally { if (operation === cloudOperation.current) { cloudPending.current = false; if (mounted.current) setCloudBusy(false); } }
   };
   const updateModel = (id: string, patch: Partial<LlmModel>) => setModels((items) => items.map((item) => item.id === id ? { ...item, ...patch } : item));
   const loadModels = async (provider: LlmProfile) => {
@@ -253,17 +290,17 @@ export default function LlmApiProfiles() {
     {directory === "models" && hasInvalidModels && <Alert severity="warning">{copy.incompleteModel}</Alert>}
     <Button variant="contained" onClick={save}>{copy.save}</Button>
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-      <Button variant="outlined" startIcon={<CloudUploadRoundedIcon />} disabled={!auth.isAuthenticated || cloudBusy} onClick={() => setCloudMode("upload")}>{copy.cloudUpload}</Button>
-      <Button variant="outlined" startIcon={<CloudDownloadRoundedIcon />} disabled={!auth.isAuthenticated || cloudBusy} onClick={() => setCloudMode("download")}>{copy.cloudDownload}</Button>
+      <Button variant="outlined" startIcon={<CloudUploadRoundedIcon />} disabled={!auth.isAuthenticated || auth.user?.status !== 1 || cloudBusy} onClick={() => setCloudMode("upload")}>{copy.cloudUpload}</Button>
+      <Button variant="outlined" startIcon={<CloudDownloadRoundedIcon />} disabled={!auth.isAuthenticated || auth.user?.status !== 1 || cloudBusy} onClick={() => setCloudMode("download")}>{copy.cloudDownload}</Button>
     </Stack>
-    {!auth.isAuthenticated && <Alert severity="info">{copy.cloudLoginRequired}</Alert>}
+    {(!auth.isAuthenticated || auth.user?.status !== 1) && <Alert severity="info">{copy.cloudLoginRequired}</Alert>}
     {cloudNotice && <Alert severity={cloudNotice.error ? "error" : "success"} onClose={() => setCloudNotice(null)}>{cloudNotice.text}</Alert>}
     <Dialog open={cloudMode !== null} onClose={closeCloud} fullWidth maxWidth="sm">
       <DialogTitle>{cloudMode === "upload" ? copy.cloudTitleUpload : copy.cloudTitleDownload}</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>
         <Alert severity="warning">{copy.cloudWarning}</Alert>
         {cloudMode === "download" && <Alert severity="error">{copy.cloudReplaceWarning}</Alert>}
-        <TextField autoFocus fullWidth type="password" label={copy.cloudPassphrase} helperText={copy.cloudPassphraseHelp} value={cloudPassphrase} onChange={(event) => setCloudPassphrase(event.target.value)} autoComplete="new-password" />
+        <TextField autoFocus fullWidth disabled={cloudBusy} type="password" label={copy.cloudPassphrase} helperText={copy.cloudPassphraseHelp} value={cloudPassphrase} onChange={(event) => setCloudPassphrase(event.target.value)} autoComplete="new-password" />
       </Stack></DialogContent>
       <DialogActions><Button onClick={closeCloud} disabled={cloudBusy}>{copy.cancel}</Button><Button variant="contained" color={cloudMode === "download" ? "warning" : "primary"} disabled={cloudBusy || cloudPassphrase.length < 6} onClick={() => void syncCloud()} startIcon={cloudBusy ? <CircularProgress size={16} /> : cloudMode === "upload" ? <CloudUploadRoundedIcon /> : <CloudDownloadRoundedIcon />}>{cloudMode === "upload" ? copy.cloudUploadConfirm : copy.cloudDownloadConfirm}</Button></DialogActions>
     </Dialog>

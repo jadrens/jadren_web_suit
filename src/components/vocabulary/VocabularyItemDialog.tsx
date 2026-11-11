@@ -6,6 +6,7 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import CollectionDialog from "@components/vocabulary/CollectionDialog";
+import { useDialogOperation, useDialogAccountKey } from "./use-dialog-operation";
 import { toast } from "@components/ui/feedback/toast";
 import { ApiError, dictionaryApi, vocabularyDrillApi, type DrillMeaning, type DrillPartOfSpeech, type VocabularyCollection, type VocabularyCollectionItem, type VocabularyPhonetic } from "@lib/client-api";
 import { getLlmModels, getLlmProfiles, LlmClient } from "@lib/llm";
@@ -41,9 +42,11 @@ interface GeneratedDetails {
   definition?: string;
 }
 
-export default function VocabularyItemDialog({ open, locale, collections, initialCollectionId, onClose, onSaved, onCollectionCreated }: Props) {
+function VocabularyItemDialogContent({ open, locale, collections, initialCollectionId, onClose, onSaved, onCollectionCreated }: Props) {
+  const startOperation = useDialogOperation(open);
   const zh = locale === "zh";
   const wasOpenRef = useRef(false);
+  const pending = useRef<symbol | null>(null);
   const lookupRequestRef = useRef(0);
   const lookedUpWordRef = useRef("");
   const [collectionId, setCollectionId] = useState(""); const [word, setWord] = useState(""); const [meanings, setMeanings] = useState<DrillMeaning[]>([emptyMeaning()]);
@@ -55,7 +58,7 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
     if (!open) { wasOpenRef.current = false; lookupRequestRef.current++; lookedUpWordRef.current = ""; return; }
     if (wasOpenRef.current) return;
     wasOpenRef.current = true;
-    const timer = window.setTimeout(() => { setCollectionId(initialCollectionId || collections[0]?.collectionId || ""); setWord(""); setMeanings([emptyMeaning()]); setPhonetics([]); setPluralForms(""); setPastTense(""); setPastParticiple(""); setExample(""); setDefinition(""); setLookingUp(false); }, 0);
+    const timer = window.setTimeout(() => { setCollectionId(initialCollectionId || collections[0]?.collectionId || ""); setWord(""); setMeanings([emptyMeaning()]); setPhonetics([]); setPluralForms(""); setPastTense(""); setPastParticiple(""); setExample(""); setDefinition(""); setLookingUp(false); setSaving(false); setCollectionDialogOpen(false); pending.current = null; }, 0);
     return () => window.clearTimeout(timer);
   }, [collections, initialCollectionId, open]);
 
@@ -74,6 +77,7 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
   async function lookUpWord() {
     const normalizedWord = word.trim();
     if (!normalizedWord) return;
+    const isCurrent = startOperation();
     const requestId = ++lookupRequestRef.current;
     setLookingUp(true);
     try {
@@ -81,12 +85,12 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
       try {
         ({ entry } = await dictionaryApi.lookup(normalizedWord) as unknown as DictionaryResult);
       } catch (error) {
-        if (requestId !== lookupRequestRef.current) return;
+        if (!isCurrent() || requestId !== lookupRequestRef.current) return;
         const notFound = error instanceof ApiError && error.status === 404;
         toast[notFound ? "info" : "error"](notFound ? (zh ? "词典中没有找到该单词，请手动填写。" : "Word not found in the dictionary. Enter it manually.") : (zh ? "词典查询失败，请稍后重试。" : "Dictionary lookup failed. Please try again."));
         return;
       }
-      if (requestId !== lookupRequestRef.current) return;
+      if (!isCurrent() || requestId !== lookupRequestRef.current) return;
       lookedUpWordRef.current = normalizedWord;
       const seenParts = new Set<DrillPartOfSpeech>();
       const dictionaryMeanings = entry.senses.flatMap(sense => {
@@ -96,7 +100,7 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
         seenParts.add(partOfSpeech);
         return [{ partOfSpeech, text }];
       }).slice(0, 3);
-      if (dictionaryMeanings.length) setMeanings(dictionaryMeanings);
+      if (dictionaryMeanings.length) setMeanings(current => current.some(item => item.text.trim()) ? current : dictionaryMeanings);
       const foundPhonetics: VocabularyPhonetic[] = [
         ...(entry.pronunciation?.br ? [{ accent: "uk" as const, text: entry.pronunciation.br }] : []),
         ...(entry.pronunciation?.us ? [{ accent: "us" as const, text: entry.pronunciation.us }] : []),
@@ -137,7 +141,7 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
         maxTokens: 800, temperature: .1, isComplete: () => generated !== null, incompletePrompt: "Call complete_vocabulary with every requested field now.", maxIncompleteRetries: 1,
         tools: [{ name: "complete_vocabulary", description: "Provide only the missing vocabulary details", parameters: { type: "object", properties, required, additionalProperties: false }, execute: args => { generated = args as GeneratedDetails; return { accepted: true }; } }],
       })) { if (event.type === "done") break; }
-      if (requestId !== lookupRequestRef.current) return;
+      if (!isCurrent() || requestId !== lookupRequestRef.current) return;
       if (!generated) throw new Error("Incomplete vocabulary details");
       const details = generated as GeneratedDetails;
       if (missing.meanings && Array.isArray(details.meanings)) {
@@ -154,17 +158,21 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
       if (missing.example && typeof details.example === "string") setExample(current => current || details.example!.trim());
       if (missing.definition && typeof details.definition === "string") setDefinition(current => current || details.definition!.trim());
     } catch {
-      if (requestId === lookupRequestRef.current) toast.error(zh ? "词典查询或补全失败；可手动填写缺失信息。" : "Dictionary lookup or completion failed. Enter any missing details manually.");
-    } finally { if (requestId === lookupRequestRef.current) setLookingUp(false); }
+      if (isCurrent() && requestId === lookupRequestRef.current) toast.error(zh ? "词典查询或补全失败；可手动填写缺失信息。" : "Dictionary lookup or completion failed. Enter any missing details manually.");
+    } finally { if (isCurrent() && requestId === lookupRequestRef.current) setLookingUp(false); }
   }
 
   async function save() {
     const validMeanings = meanings.map(item => ({ ...item, text: item.text.trim() })).filter(item => item.text); if (!collectionId || !word.trim() || !validMeanings.length) { toast.warning(zh ? "请选择收藏夹，并填写单词和至少一个释义。" : "Choose a collection and enter a word with at least one meaning."); return; }
+    if (pending.current) return;
+    const token = Symbol(); pending.current = token;
+    const isCurrent = startOperation();
     setSaving(true);
     try {
       const response = await vocabularyDrillApi.addItem({ collectionId, dataset: "custom", word: word.trim(), phonetic: phonetics[0]?.text || "", phonetics, meanings: validMeanings, pluralForms: pluralForms.trim(), pastForms: [pastTense.trim(), pastParticiple.trim()].filter(Boolean).join("/"), example: example.trim(), definition: definition.trim() });
+      if (!isCurrent()) return;
       if (!response.item) throw new Error("Missing saved item"); onSaved(collectionId, response.item); onClose();
-    } catch { toast.error(zh ? "保存词条失败，可能已经存在。" : "Unable to save the word; it may already exist."); } finally { setSaving(false); }
+    } catch { if (isCurrent()) toast.error(zh ? "保存词条失败，可能已经存在。" : "Unable to save the word; it may already exist."); } finally { if (pending.current === token) pending.current = null; if (isCurrent()) setSaving(false); }
   }
 
   const hasVerbMeaning = meanings.some(item => ["vt", "vi", "v"].includes(item.partOfSpeech)); const hasNounMeaning = meanings.some(item => item.partOfSpeech === "n");
@@ -186,4 +194,9 @@ export default function VocabularyItemDialog({ open, locale, collections, initia
     </Stack></DialogContent>
     <DialogActions><Button disabled={saving} onClick={onClose}>{zh ? "取消" : "Cancel"}</Button><Button variant="contained" disabled={saving || lookingUp} onClick={() => void save()}>{saving ? <CircularProgress size={20} /> : (zh ? "保存到收藏" : "Save to collection")}</Button></DialogActions>
   </Dialog><CollectionDialog open={collectionDialogOpen} locale={locale} onClose={() => setCollectionDialogOpen(false)} onCreated={collection => { setCollectionId(collection.collectionId); onCollectionCreated(collection); }} /></>;
+}
+
+export default function VocabularyItemDialog(props: Parameters<typeof VocabularyItemDialogContent>[0]) {
+  const key = useDialogAccountKey();
+  return <VocabularyItemDialogContent key={key} {...props} />;
 }

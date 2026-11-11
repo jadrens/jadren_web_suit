@@ -5,7 +5,7 @@ export interface SolarCache { date: string; latitude: number; longitude: number;
 
 export const MODE_KEY = "theme-mode";
 export const COORDINATES_KEY = "theme-coordinates";
-export const SOLAR_KEY = "theme-solar-cache";
+export const SOLAR_KEY = "theme-solar-cache-v2";
 
 const dateKey = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -24,7 +24,10 @@ function eventUtc(date: Date, latitude: number, longitude: number, sunrise: bool
   if (cosH < -1 || cosH > 1) return null;
   const hour = (sunrise ? 360 - Math.acos(cosH) * 180 / Math.PI : Math.acos(cosH) * 180 / Math.PI) / 15;
   const utcHours = ((hour + ascension - 0.06571 * t - 6.622 - lngHour) % 24 + 24) % 24;
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) + utcHours * 3600000;
+  // The normalized UTC hour can belong to an adjacent UTC day at this longitude.
+  const solarHour = utcHours + lngHour;
+  const utcDayOffset = solarHour >= 24 ? -1 : solarHour < 0 ? 1 : 0;
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + utcDayOffset) + utcHours * 3600000;
 }
 
 export function calculateSolar(coordinates: ThemeCoordinates, now = new Date()): SolarCache | null {
@@ -39,7 +42,7 @@ export function currentAutomaticTheme(coordinates: ThemeCoordinates): "light" | 
   try { cache = JSON.parse(localStorage.getItem(SOLAR_KEY) || "null"); } catch { /* recalculate */ }
   if (!cache || cache.date !== dateKey() || cache.latitude !== coordinates.latitude || cache.longitude !== coordinates.longitude) {
     cache = calculateSolar(coordinates);
-    if (cache) localStorage.setItem(SOLAR_KEY, JSON.stringify(cache));
+    if (cache) { try { localStorage.setItem(SOLAR_KEY, JSON.stringify(cache)); } catch { /* cache is optional */ } }
   }
   return cache ? (Date.now() >= cache.sunrise && Date.now() < cache.sunset ? "light" : "dark") : null;
 }

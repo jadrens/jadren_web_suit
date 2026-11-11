@@ -7,6 +7,7 @@ import { useTheme } from "@theme/ThemeProvider";
 
 interface VditorEditorProps {
   value: string;
+  disabled?: boolean;
   locale: "en" | "zh";
   onChange: (value: string) => void;
 }
@@ -15,14 +16,22 @@ const VDITOR_CDN = "/vditor";
 
 export default function VditorEditor({
   value,
+  disabled = false,
   locale,
   onChange,
 }: VditorEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<import("vditor").default | null>(null);
   const valueRef = useRef(value);
+  const disabledRef = useRef(disabled);
   const onChangeRef = useRef(onChange);
   const { theme } = useTheme();
+
+  useEffect(() => {
+    disabledRef.current = disabled;
+    if (disabled) editorRef.current?.disabled();
+    else editorRef.current?.enable();
+  }, [disabled]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -86,6 +95,7 @@ export default function VditorEditor({
         },
         after: () => {
           editorRef.current = editor;
+          if (disabledRef.current) editor.disabled();
           editor.setTheme(
             theme === "dark" ? "dark" : "classic",
             theme === "dark" ? "dark" : "light"

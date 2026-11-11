@@ -1,32 +1,44 @@
 "use client";
 
-import { RefObject, useEffect, useRef, useState } from "react";
+import { RefObject, useLayoutEffect, useState } from "react";
 
 /** Collapse a navigation row when its actual content no longer fits. */
 export function useResponsiveNav(
   containerRef: RefObject<HTMLElement | null>,
   contentRef: RefObject<HTMLElement | null>,
+  leadingRef: RefObject<HTMLElement | null>,
 ) {
   const [collapsed, setCollapsed] = useState(false);
-  const requiredWidth = useRef(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current;
     const content = contentRef.current;
-    if (!container || !content) return;
+    const leading = leadingRef.current;
+    if (!container || !content || !leading) return;
+    let disposed = false;
 
     const update = () => {
-      requiredWidth.current = Math.max(requiredWidth.current, content.scrollWidth);
-      setCollapsed(container.clientWidth < requiredWidth.current + 16);
+      if (disposed) return;
+      const style = getComputedStyle(container);
+      const padding = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const gap = parseFloat(style.columnGap) || 0;
+      // The desktop row stays mounted at its natural width, even while hidden.
+      // Measure its siblings too, rather than remembering a past viewport width.
+      const requiredWidth = content.scrollWidth + leading.getBoundingClientRect().width + gap + padding;
+      setCollapsed(container.clientWidth < Math.ceil(requiredWidth));
     };
 
     const observer = new ResizeObserver(update);
     observer.observe(container);
     observer.observe(content);
+    observer.observe(leading);
     document.fonts?.ready.then(update).catch(() => undefined);
     update();
-    return () => observer.disconnect();
-  }, [containerRef, contentRef]);
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
+  }, [containerRef, contentRef, leadingRef]);
 
   return collapsed;
 }

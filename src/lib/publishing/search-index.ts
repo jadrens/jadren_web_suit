@@ -1,4 +1,6 @@
 import { getAllPostMetas, type Locale } from "./posts";
+import { cache } from "react";
+import { indexPostsByTag } from "./post-tags";
 
 export interface PostMeta {
   slug: string;
@@ -16,17 +18,14 @@ export interface SearchIndex {
   postsByTag: Record<string, PostMeta[]>;
 }
 
-export async function getSearchIndex(locale: Locale): Promise<SearchIndex> {
+export const getSearchIndex = cache(async (locale: Locale): Promise<SearchIndex> => {
   const postsByDate = await getAllPostMetas(locale);
-  const postsByTag: Record<string, PostMeta[]> = {};
-  for (const post of postsByDate) {
-    for (const tag of post.tags) (postsByTag[tag] ??= []).push(post);
-  }
+  const postsByTag = indexPostsByTag(postsByDate);
   return { version: 2, generatedAt: new Date().toISOString(), postsByDate, postsByTag };
-}
+});
 
 export async function getPostMeta(slug: string, locale: Locale) {
-  return (await getSearchIndex(locale)).postsByDate.find((post) => post.slug === slug) ?? null;
+  return (await getAllPostMetas(locale)).find((post) => post.slug === slug) ?? null;
 }
 
 export async function getPostsByTag(tag: string, locale: Locale) {
@@ -38,5 +37,5 @@ export async function getAllTags(locale: Locale) {
 }
 
 export async function getAllPostsMeta(locale: Locale) {
-  return (await getSearchIndex(locale)).postsByDate;
+  return getAllPostMetas(locale);
 }

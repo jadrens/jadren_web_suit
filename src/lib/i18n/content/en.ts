@@ -49,6 +49,8 @@ export const en = {
   toc: {
     contents: "Contents",
     noHeadings: "No headings found",
+    toggleSection: "Expand or collapse section",
+    close: "Close contents",
   },
   sidebar: {
     toggle: "Toggle posts sidebar",
@@ -56,7 +58,11 @@ export const en = {
   },
   blogPage: {
     posts: "Posts",
-    noPosts: "No posts yet. Add markdown files to content/posts/",
+    noPosts: "No posts yet.",
+    noMatches: "No posts match your search or selected tags.",
+    results: "posts",
+    pagination: "Post pages",
+    clearSearch: "Clear search",
     search: "Search posts...",
     sortDesc: "Newest first",
     sortAsc: "Oldest first",

@@ -97,9 +97,9 @@ function isStoredSession(value: unknown): value is StoredSession {
     session.version === STORAGE_VERSION &&
     typeof session.accessToken === "string" &&
     isUserProfile(session.user) &&
-    typeof session.issuedAt === "number" &&
-    typeof session.expiresAt === "number" &&
-    typeof session.refreshUntil === "number"
+    typeof session.issuedAt === "number" && Number.isFinite(session.issuedAt) &&
+    typeof session.expiresAt === "number" && Number.isFinite(session.expiresAt) &&
+    typeof session.refreshUntil === "number" && Number.isFinite(session.refreshUntil)
   );
 }
 
@@ -132,7 +132,14 @@ export class AuthSessionManager {
   private snapshot: AuthSnapshot = SERVER_SNAPSHOT;
   private session: StoredSession | null = null;
   private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
+  // Invalidates replies belonging to a signed-out or replaced account.
+  private sessionRevision = 0;
+  // Cookie mutations must finish in order: logout must revoke the cookie left
+  // by an in-flight rotation, and a later sign-in must own the final cookie.
+  private sessionRequest: Promise<unknown> = Promise.resolve();
   private refreshPromise: Promise<string | null> | null = null;
+  private refreshRevision = -1;
   private refreshTimer: number | null = null;
 
   private authClient = async () => {
@@ -148,8 +155,13 @@ export class AuthSessionManager {
     return () => this.listeners.delete(listener);
   };
 
-  initialize = async () => {
-    if (this.initialized || typeof window === "undefined") return;
+  initialize = (): Promise<void> => {
+    if (typeof window === "undefined") return Promise.resolve();
+    this.initializationPromise ??= this.initializeSession();
+    return this.initializationPromise;
+  };
+
+  private async initializeSession() {
     this.initialized = true;
     window.addEventListener("storage", this.handleStorage);
     window.addEventListener("online", this.handleOnline);
@@ -176,7 +188,7 @@ export class AuthSessionManager {
 
     this.publish("refreshing", stored.user, stored.expiresAt);
     await this.refreshAccessToken();
-  };
+  }
 
   destroy = () => {
     if (typeof window !== "undefined" && this.initialized) {
@@ -185,6 +197,8 @@ export class AuthSessionManager {
       document.removeEventListener("visibilitychange", this.handleVisibility);
     }
     this.initialized = false;
+    this.initializationPromise = null;
+    this.sessionRevision++;
     this.clearRefreshTimer();
     this.listeners.clear();
   };
@@ -207,11 +221,17 @@ export class AuthSessionManager {
   /** Creates a verified account and signs it in. */
   register = async (input: RegisterRequest) => {
     await this.initialize();
-    const response = tokenResponse(
-      await (await this.authClient()).register({ ...input, phone: input.phone ?? undefined })
-    );
-    this.acceptToken(response);
-    return response.user;
+    const revision = this.beginSessionChange();
+    return this.runSessionRequest(async () => {
+      const response = tokenResponse(
+        await (await this.authClient()).register({ ...input, phone: input.phone ?? undefined })
+      );
+      if (revision === this.sessionRevision) this.acceptToken(response);
+      return response.user;
+    }).catch((error: unknown) => {
+      if (revision === this.sessionRevision) this.scheduleRefresh();
+      throw error;
+    });
   };
 
   sendPasswordResetCode = async (
@@ -226,23 +246,33 @@ export class AuthSessionManager {
   /** Sets a new password (signing out every other session) and signs in. */
   resetPassword = async (email: string, code: string, newPassword: string) => {
     await this.initialize();
-    const response = tokenResponse(
-      await (await this.authClient()).resetPassword({ email, code, newPassword })
-    );
-    this.acceptToken(response);
-    return response.user;
+    const revision = this.beginSessionChange();
+    return this.runSessionRequest(async () => {
+      const response = tokenResponse(
+        await (await this.authClient()).resetPassword({ email, code, newPassword })
+      );
+      if (revision === this.sessionRevision) this.acceptToken(response);
+      return response.user;
+    }).catch((error: unknown) => {
+      if (revision === this.sessionRevision) this.scheduleRefresh();
+      throw error;
+    });
   };
 
   login = async (input: LoginRequest) => {
     await this.initialize();
     const previousSession = this.session;
+    const revision = this.beginSessionChange();
     this.publish("authenticating", null, null);
     try {
-      const response = tokenResponse(await (await this.authClient()).login(input));
-      this.acceptToken(response);
-      return response.user;
+      return await this.runSessionRequest(async () => {
+        const response = tokenResponse(await (await this.authClient()).login(input));
+        if (revision === this.sessionRevision) this.acceptToken(response);
+        return response.user;
+      });
     } catch (error) {
-      if (previousSession) {
+      if (revision !== this.sessionRevision) throw error;
+      if (previousSession && Date.now() < previousSession.expiresAt) {
         this.session = previousSession;
         this.publish(
           "authenticated",
@@ -259,14 +289,14 @@ export class AuthSessionManager {
     }
   };
 
-  /** Revokes the session on the server, then forgets it locally even if that fails. */
+  /** Forgets the session immediately, then revokes the final refresh cookie. */
   logout = async () => {
-    try {
-      await (await this.authClient()).logout({});
-    } catch {
-      // Offline or already expired: the local session is cleared regardless.
-    }
     this.clearSession();
+    try {
+      await this.runSessionRequest(async () => (await this.authClient()).logout({}));
+    } catch {
+      // Offline or already expired: the local session is already cleared.
+    }
   };
 
   sendVerificationCode = async (
@@ -279,13 +309,14 @@ export class AuthSessionManager {
   };
 
   verifyEmail = async (email: string, code: string) => {
+    const revision = this.sessionRevision;
     const verified = await (await this.authClient()).verifyEmail({ email, code });
     const response: VerifyEmailResponse = {
       message: verified.message,
       user: toUserProfile(verified.user),
     };
 
-    if (this.session?.user.email.toLowerCase() === email.trim().toLowerCase()) {
+    if (revision === this.sessionRevision && this.session?.user.email.toLowerCase() === email.trim().toLowerCase()) {
       this.session = { ...this.session, user: response.user };
       this.persistSession();
       this.publish("authenticated", response.user, this.session.expiresAt);
@@ -295,6 +326,7 @@ export class AuthSessionManager {
   };
 
   loadCurrentUser = async () => {
+    const revision = this.sessionRevision;
     const token = this.getAccessToken();
     if (!token) return null;
     const me = await (await this.authClient()).me(
@@ -306,6 +338,7 @@ export class AuthSessionManager {
       issuedAt: Number(me.issuedAt),
       expiresAt: Number(me.expiresAt),
     };
+    if (revision !== this.sessionRevision) return this.snapshot.user;
     if (this.session) {
       this.session = { ...this.session, user: response.user };
       this.persistSession();
@@ -315,47 +348,69 @@ export class AuthSessionManager {
   };
 
   refreshAccessToken = async (): Promise<string | null> => {
-    if (this.refreshPromise) return this.refreshPromise;
-    this.refreshPromise = this.performRefresh().finally(() => {
-      this.refreshPromise = null;
+    if (this.refreshPromise && this.refreshRevision === this.sessionRevision) return this.refreshPromise;
+    const revision = this.sessionRevision;
+    const pending = this.performRefresh().finally(() => {
+      if (this.refreshPromise === pending) this.refreshPromise = null;
     });
-    return this.refreshPromise;
+    this.refreshRevision = revision;
+    this.refreshPromise = pending;
+    return pending;
   };
 
   private async performRefresh() {
     const current = this.session;
-    if (!current || Date.now() >= current.refreshUntil) {
+    const revision = this.sessionRevision;
+    if (!current) return null;
+    if (Date.now() >= current.refreshUntil) {
       this.clearSession();
       return null;
     }
 
     this.publish("refreshing", current.user, current.expiresAt);
     try {
-      const response = tokenResponse(
+      return await this.runSessionRequest(async () => {
+        if (revision !== this.sessionRevision) return this.getAccessToken();
         // The refresh token travels in the HttpOnly cookie.
-        await (await this.authClient()).refresh({})
-      );
-      this.acceptToken(response);
-      return response.accessToken;
+        const response = tokenResponse(await (await this.authClient()).refresh({}));
+        if (revision !== this.sessionRevision) return this.getAccessToken();
+        this.acceptToken(response);
+        return response.accessToken;
+      });
     } catch (error) {
+      if (revision !== this.sessionRevision) return this.getAccessToken();
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         this.clearSession();
-      } else if (Date.now() < current.expiresAt) {
+      } else {
+        const usable = Date.now() < current.expiresAt;
         this.publish(
-          "authenticated",
-          current.user,
-          current.expiresAt,
+          usable ? "authenticated" : "anonymous",
+          usable ? current.user : null,
+          usable ? current.expiresAt : null,
           errorMessage(error)
         );
+        // Keep trying after temporary outages even when the access token expired.
         this.scheduleRefresh(REFRESH_RETRY_MS);
-      } else {
-        this.publish("anonymous", null, null, errorMessage(error));
       }
       return null;
     }
   }
 
+  private beginSessionChange() {
+    this.clearRefreshTimer();
+    return ++this.sessionRevision;
+  }
+
+  private runSessionRequest<T>(request: () => Promise<T>): Promise<T> {
+    const pending = this.sessionRequest.then(request, request);
+    this.sessionRequest = pending;
+    return pending;
+  }
+
   private acceptToken(response: TokenResponse) {
+    // Also invalidate work queued against the old account while sign-in was
+    // pending, before its new cookie and user became available.
+    this.sessionRevision++;
     const now = Date.now();
     const timing = decodeJwtTiming(response.accessToken);
     const issuedAt = timing?.issuedAt ?? now;
@@ -394,7 +449,10 @@ export class AuthSessionManager {
     this.clearRefreshTimer();
     if (!this.session || typeof window === "undefined") return;
     const wait =
-      delay ?? Math.max(0, this.session.expiresAt - Date.now() - REFRESH_AHEAD_MS);
+      Math.min(
+        delay ?? Math.max(0, this.session.expiresAt - Date.now() - REFRESH_AHEAD_MS),
+        Math.max(0, this.session.refreshUntil - Date.now())
+      );
     this.refreshTimer = window.setTimeout(
       () => void this.refreshAccessToken(),
       wait
@@ -402,7 +460,7 @@ export class AuthSessionManager {
   }
 
   private clearRefreshTimer() {
-    if (this.refreshTimer !== null) clearTimeout(this.refreshTimer);
+    if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
     this.refreshTimer = null;
   }
 
@@ -434,6 +492,7 @@ export class AuthSessionManager {
   }
 
   private clearSession(persist = true) {
+    this.sessionRevision++;
     this.session = null;
     this.clearRefreshTimer();
     if (persist && typeof window !== "undefined") {
@@ -447,16 +506,19 @@ export class AuthSessionManager {
   }
 
   private handleStorage = (event: StorageEvent) => {
-    if (event.key !== STORAGE_KEY) return;
+    if (event.key !== STORAGE_KEY && event.key !== null) return;
     if (!event.newValue) {
-      this.session = null;
-      this.clearRefreshTimer();
-      this.publish("anonymous", null, null);
+      this.clearSession(false);
       return;
     }
     try {
       const value: unknown = JSON.parse(event.newValue);
       if (!isStoredSession(value)) return;
+      if (Date.now() >= value.refreshUntil) {
+        this.clearSession(false);
+        return;
+      }
+      this.sessionRevision++;
       this.session = value;
       if (Date.now() < value.expiresAt) {
         this.publish("authenticated", value.user, value.expiresAt);

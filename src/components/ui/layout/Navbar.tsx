@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   AppBar,
   Toolbar,
@@ -36,11 +37,13 @@ export default function Navbar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const navContentRef = useRef<HTMLDivElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
 
   const theme = useTheme();
   const { t, locale } = useI18n();
   const settingsUrl = useSiteUrl("main", "/settings");
-  const collapsed = useResponsiveNav(toolbarRef, navContentRef);
+  const collapsed = useResponsiveNav(toolbarRef, navContentRef, accountRef);
 
   const navItems = [
     { key: "home", href: "/" },
@@ -48,6 +51,9 @@ export default function Navbar() {
     { key: "blog", href: `/blog/${locale}` },
     { key: "about", href: "/about" },
   ] as const;
+  const isCurrent = (key: typeof navItems[number]["key"], href: string) =>
+    key === "blog" ? pathname.startsWith("/blog/") :
+      href === "/" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <>
@@ -66,29 +72,36 @@ export default function Navbar() {
         }}
       >
         <Toolbar ref={toolbarRef} sx={{ px: { xs: 2, sm: 4 }, display: "flex", flexDirection: "row", alignItems: "center", gap: 1 }}>
-          <NavbarAccountMenu homeHref="/" settingsHref={settingsUrl} accountHref="/user-status" userDataHref="/user-data" homeLabel={t.nav.home} settingsLabel={t.nav.settings} accountLabel={t.nav.account} userDataLabel={t.nav.userData} />
+          <Box ref={accountRef} sx={{ flexShrink: 0 }}>
+            <NavbarAccountMenu homeHref="/" settingsHref={settingsUrl} accountHref="/user-status" userDataHref="/user-data" homeLabel={t.nav.home} settingsLabel={t.nav.settings} accountLabel={t.nav.account} userDataLabel={t.nav.userData} loginLabel={t.auth.statusPage.login} registerLabel={t.nav.register} />
+          </Box>
 
           {/* Mobile layout */}
-          {collapsed ? (
+          {collapsed && (
             <Box sx={{ display: "flex", alignItems: "center", flexDirection: "row-reverse", flexGrow: 1, gap: 1 }}>
               <ThemeToggle />
               <LocaleSwitcher />
               <IconButton
                 onClick={() => setDrawerOpen(true)}
-                aria-label="Open menu"
+                aria-label={t.nav.menu}
+                aria-expanded={drawerOpen}
+                aria-controls={drawerOpen ? "mobile-navigation" : undefined}
               >
                 <MenuIcon />
               </IconButton>
             </Box>
-          ) : (
-            /* Desktop layout */
-            <Box ref={navContentRef} sx={{ display: "flex", gap: 1, alignItems: "center", flexDirection: "row-reverse", flexGrow: 1, whiteSpace: "nowrap" }}>
+          )}
+            {/* Keep an intrinsic-width row mounted so resizing and locale changes
+                can expand the navigation again after it has collapsed. */}
+            <Box ref={navContentRef} component="nav" aria-label={t.nav.menu} aria-hidden={collapsed || undefined} inert={collapsed} sx={{ display: "flex", gap: 1, alignItems: "center", ml: "auto", flexShrink: 0, width: "max-content", whiteSpace: "nowrap", ...(collapsed && { position: "absolute", right: 0, visibility: "hidden", pointerEvents: "none" }) }}>
               {navItems.map((item) => (
                 <Button
                   key={item.href}
                   component={Link}
                   href={item.href}
                   size="small"
+                  aria-current={isCurrent(item.key, item.href) ? "page" : undefined}
+                  variant={isCurrent(item.key, item.href) ? "outlined" : "text"}
                 >
                   {t.nav[item.key as keyof typeof t.nav]}
                 </Button>
@@ -97,12 +110,12 @@ export default function Navbar() {
               <LocaleSwitcher />
               <ThemeToggle />
             </Box>
-          )}
         </Toolbar>
       </AppBar>
 
       {/* Mobile Drawer */}
       <Drawer
+        id="mobile-navigation"
         anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -154,13 +167,13 @@ export default function Navbar() {
                 </Typography>
               </Box>
             </Box>
-            <IconButton onClick={() => setDrawerOpen(false)} aria-label="Close menu" size="small">
+            <IconButton onClick={() => setDrawerOpen(false)} aria-label={t.blogPage.done} size="small">
               <CloseIcon />
             </IconButton>
           </Box>
 
           {/* Navigation items */}
-          <List sx={{ px: 2, flex: 1 }}>
+          <List aria-label={t.nav.menu} sx={{ px: 2, flex: 1 }}>
             {navItems.map((item, index) => {
               const icons = [<HomeIcon key="home" />, <BuildIcon key="tools" />, <ArticleIcon key="blog" />, <PersonIcon key="about" />];
               return (
@@ -169,6 +182,8 @@ export default function Navbar() {
                     component={Link}
                     href={item.href}
                     onClick={() => setDrawerOpen(false)}
+                    selected={isCurrent(item.key, item.href)}
+                    aria-current={isCurrent(item.key, item.href) ? "page" : undefined}
                     sx={{
                       borderRadius: 2,
                       py: 1.5,

@@ -21,6 +21,7 @@ import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import { createRequestGate } from "@components/ui/auth/request-gate";
 import AuthPageShell from "@components/ui/auth/AuthPageShell";
 import CodeField, { useResendCooldown } from "@components/ui/auth/CodeField";
 import {
@@ -78,6 +79,7 @@ export default function RegisterClient() {
     password: false,
     confirmPassword: false,
   });
+  const requestGate = useRef(createRequestGate());
   const inputRefs = useRef<Partial<Record<Field, HTMLInputElement | null>>>({});
   // Step two: the details are kept while the user confirms the e-mail with a code.
   const [step, setStep] = useState<"details" | "code">("details");
@@ -117,6 +119,8 @@ export default function RegisterClient() {
   const normalizedEmail = email.trim().toLowerCase();
 
   async function sendCode() {
+    const release = requestGate.current.acquire();
+    if (!release) return false;
     setError(null);
     setSending(true);
     try {
@@ -131,6 +135,7 @@ export default function RegisterClient() {
       return false;
     } finally {
       setSending(false);
+      release();
     }
   }
 
@@ -161,6 +166,8 @@ export default function RegisterClient() {
       setError(t.auth.verify.codeInvalid);
       return;
     }
+    const release = requestGate.current.acquire();
+    if (!release) return;
     setSubmitting(true);
     try {
       await authSession.register({ nickname: nickname.trim(), email: normalizedEmail, password, code });
@@ -168,6 +175,8 @@ export default function RegisterClient() {
     } catch (requestError) {
       setError(authErrorMessage(requestError, t.auth.errors));
       setSubmitting(false);
+    } finally {
+      release();
     }
   }
 
@@ -203,6 +212,7 @@ export default function RegisterClient() {
             onChange={setCode}
             onResend={() => void sendCode()}
             sending={sending}
+            disabled={sending || submitting}
             cooldown={cooldown.seconds}
             autoFocus
             labels={{
@@ -216,13 +226,13 @@ export default function RegisterClient() {
             type="submit"
             variant="contained"
             size="large"
-            disabled={submitting || code.length !== 6}
+            disabled={sending || submitting || code.length !== 6}
             disableElevation
             sx={{ minHeight: 48, fontWeight: 700, borderRadius: 2.5 }}
           >
             {submitting ? <CircularProgress size={23} color="inherit" /> : copy.createAccount}
           </Button>
-          <Button type="button" variant="text" onClick={() => { setError(null); setStep("details"); }}>
+          <Button type="button" variant="text" disabled={sending || submitting} onClick={() => { setError(null); setStep("details"); }}>
             {copy.changeDetails}
           </Button>
         </Stack>
@@ -231,6 +241,7 @@ export default function RegisterClient() {
         {error ? <Alert severity="error">{error}</Alert> : null}
         <TextField
           label={copy.email}
+          disabled={sending}
           type="email"
           autoComplete="email"
           value={email}
@@ -248,6 +259,7 @@ export default function RegisterClient() {
         />
         <TextField
           label={copy.nickname}
+          disabled={sending}
           autoComplete="nickname"
           value={nickname}
           onChange={(event) => setNickname(event.target.value)}
@@ -264,6 +276,7 @@ export default function RegisterClient() {
         <Box>
           <TextField
             label={copy.password}
+          disabled={sending}
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             value={password}
@@ -331,6 +344,7 @@ export default function RegisterClient() {
         </Box>
         <TextField
           label={copy.confirmPassword}
+          disabled={sending}
           type={showPassword ? "text" : "password"}
           autoComplete="new-password"
           value={confirmPassword}

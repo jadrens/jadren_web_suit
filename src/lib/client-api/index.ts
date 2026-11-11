@@ -26,6 +26,7 @@ export { authSession };
 const rpc = createRpcClients({
   getAccessToken: authSession.getAccessToken,
   refreshAccessToken: authSession.refreshAccessToken,
+  getSessionIdentity: () => authSession.getSnapshot().user?.userId ?? null,
 });
 
 export const quickLinksApi = {
