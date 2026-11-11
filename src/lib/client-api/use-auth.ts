@@ -23,5 +23,8 @@ export function useAuth() {
     loadCurrentUser: authSession.loadCurrentUser,
     sendVerificationCode: authSession.sendVerificationCode,
     verifyEmail: authSession.verifyEmail,
+    sendRegistrationCode: authSession.sendRegistrationCode,
+    sendPasswordResetCode: authSession.sendPasswordResetCode,
+    resetPassword: authSession.resetPassword,
   };
 }

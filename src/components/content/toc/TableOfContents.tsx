@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Box, List, ListItem, ListItemButton, ListItemText, Collapse, Typography, Tooltip, alpha } from "@mui/material";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Box, List, ListItem, ListItemButton, ListItemText, Collapse, Typography, Tooltip, IconButton, alpha } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import { useReadingProgress, Heading } from "../reading/ReadingProgressContext";
+import { useReadingHeadings, Heading } from "../reading/ReadingProgressContext";
 import { useI18n } from "@lib/i18n/content";
 import { tocDesktopWidth } from "@config/publishing/toc";
 
@@ -20,26 +20,17 @@ interface TocItemProps {
 const INDENT_PER_LEVEL = 1.5;
 
 function TocItem({ heading, expandedIds, onToggle }: TocItemProps) {
-  const { activeHeadingId } = useReadingProgress();
+  const { activeHeadingId } = useReadingHeadings();
+  const { t } = useI18n();
   const hasChildren = heading.children.length > 0;
   const isActive = activeHeadingId === heading.id;
   const isExpanded = expandedIds.has(heading.id);
 
-  const isDescendantActive = (h: Heading): boolean => {
-    if (h.id === activeHeadingId) return true;
-    return h.children.some(isDescendantActive);
-  };
-
-  const isActiveOrAncestor = isActive || (hasChildren && heading.children.some(isDescendantActive));
-
   const handleClick = () => {
-    if (hasChildren) {
-      onToggle(heading.id);
-    }
     const element = document.getElementById(heading.id);
     if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "start" });
-      window.history.pushState(null, "", `#${heading.id}`);
+      element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
+      window.history.pushState(window.history.state, "", `#${encodeURIComponent(heading.id)}`);
     }
   };
 
@@ -49,8 +40,11 @@ function TocItem({ heading, expandedIds, onToggle }: TocItemProps) {
     <>
       <ListItem disablePadding disableGutters>
         <ListItemButton
+          component="a"
+          href={`#${encodeURIComponent(heading.id)}`}
           data-heading-id={heading.id}
-          onClick={handleClick}
+          onClick={(event) => { event.preventDefault(); handleClick(); }}
+          aria-current={isActive ? "location" : undefined}
           sx={{
             py: 0.5,
             pl: 0.5 + indent,
@@ -58,17 +52,9 @@ function TocItem({ heading, expandedIds, onToggle }: TocItemProps) {
             bgcolor: isActive ? "action.selected" : "transparent",
             "&:hover": { bgcolor: isActive ? "action.selected" : "action.hover" },
             minHeight: ITEM_HEIGHT,
+            minWidth: 0,
           }}
         >
-          {hasChildren && (
-            <Box sx={{ mr: 0.5, display: "flex", alignItems: "center" }}>
-              {isExpanded ? (
-                <ExpandLessIcon sx={{ fontSize: 18 }} />
-              ) : (
-                <ExpandMoreIcon sx={{ fontSize: 18 }} />
-              )}
-            </Box>
-          )}
           <Tooltip title={heading.text} placement="top" arrow>
             <ListItemText
               sx={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}
@@ -84,6 +70,11 @@ function TocItem({ heading, expandedIds, onToggle }: TocItemProps) {
             />
           </Tooltip>
         </ListItemButton>
+        {hasChildren && (
+          <IconButton size="small" onClick={() => onToggle(heading.id)} aria-label={`${t.toc.toggleSection}: ${heading.text}`} aria-expanded={isExpanded}>
+            {isExpanded ? <ExpandLessIcon sx={{ fontSize: 18 }} /> : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
+          </IconButton>
+        )}
       </ListItem>
       {hasChildren && (
         <Collapse in={isExpanded} timeout="auto" unmountOnExit>
@@ -99,12 +90,25 @@ function TocItem({ heading, expandedIds, onToggle }: TocItemProps) {
 }
 
 export default function TableOfContents() {
-  const { headings, activeHeadingId } = useReadingProgress();
+  const { headings, activeHeadingId } = useReadingHeadings();
   const { t } = useI18n();
   const [navVisible, setNavVisible] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
+  const activeAncestorIds = useMemo(() => {
+    const result = new Set<string>();
+    const revealActiveBranch = (items: Heading[]): boolean => items.some((heading) => {
+      if (heading.id === activeHeadingId) return true;
+      if (revealActiveBranch(heading.children)) {
+        result.add(heading.id);
+        return true;
+      }
+      return false;
+    });
+    revealActiveBranch(headings);
+    return result;
+  }, [headings, activeHeadingId]);
 
   useEffect(() => {
     const timer = setTimeout(() => setLoaded(true), 50);
@@ -112,21 +116,12 @@ export default function TableOfContents() {
   }, []);
 
   useEffect(() => {
-    let lastScrollY = window.scrollY;
-
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY <= NAV_HEIGHT) {
-        setNavVisible(true);
-      } else if (currentScrollY > lastScrollY) {
-        setNavVisible(false);
-      } else {
-        setNavVisible(false);
-      }
-      lastScrollY = currentScrollY;
+      setNavVisible(window.scrollY <= NAV_HEIGHT);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -157,8 +152,18 @@ export default function TableOfContents() {
     };
 
     tryAdd(headings);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- depends on the measured viewport height.
     setExpandedIds(tryExpanded);
   }, [headings]);
+
+  useEffect(() => {
+    if (activeAncestorIds.size === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reveal the new reading position while allowing subsequent manual collapse.
+    setExpandedIds((current) => {
+      if ([...activeAncestorIds].every((id) => current.has(id))) return current;
+      return new Set([...current, ...activeAncestorIds]);
+    });
+  }, [activeAncestorIds]);
 
   // Auto-scroll to keep active heading visible inside the TOC float
   useEffect(() => {
@@ -169,12 +174,19 @@ export default function TableOfContents() {
       const activeEl = listRef.current?.querySelector(
         `[data-heading-id="${CSS.escape(activeHeadingId)}"]`
       );
-      if (activeEl) {
-        activeEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const container = listRef.current;
+      if (activeEl && container) {
+        const activeRect = activeEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        if (activeRect.top < containerRect.top) {
+          container.scrollTop -= containerRect.top - activeRect.top;
+        } else if (activeRect.bottom > containerRect.bottom) {
+          container.scrollTop += activeRect.bottom - containerRect.bottom;
+        }
       }
     });
     return () => cancelAnimationFrame(raf);
-  }, [activeHeadingId]);
+  }, [activeHeadingId, expandedIds]);
 
   const handleToggle = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -191,6 +203,8 @@ export default function TableOfContents() {
   if (headings.length === 0) {
     return (
       <Box
+        component="nav"
+        aria-label={t.toc.contents}
         sx={(theme) => ({
           width: tocDesktopWidth,
           flexShrink: 0,
@@ -200,14 +214,13 @@ export default function TableOfContents() {
           pr: 2,
           pt: 1.5,
           pb: 2,
-          mx: 2,
           bgcolor: alpha(theme.palette.background.paper, 0.75),
           backdropFilter: 'blur(16px)',
           borderRadius: 5,
           border: 1,
           borderColor: 'divider',
           boxShadow: theme.shadows[4],
-          display: { xs: "none", sm: "block" },
+          display: { xs: "none", lg: "block" },
         })}
       >
         <Typography
@@ -228,6 +241,8 @@ export default function TableOfContents() {
   return (
     <Box
       ref={listRef}
+      component="nav"
+      aria-label={t.toc.contents}
       sx={(theme) => ({
         width: tocDesktopWidth,
         flexShrink: 0,
@@ -239,7 +254,6 @@ export default function TableOfContents() {
         pr: 2,
         pt: 1.5,
         pb: 2,
-        mx: 2,
         zIndex: 1,
         bgcolor: alpha(theme.palette.background.paper, 0.75),
         backdropFilter: 'blur(16px)',
@@ -247,7 +261,7 @@ export default function TableOfContents() {
         border: 1,
         borderColor: 'divider',
         boxShadow: theme.shadows[4],
-        display: { xs: "none", sm: "block" },
+        display: { xs: "none", lg: "block" },
         transform: loaded ? "translateX(0)" : "translateX(20px)",
         opacity: loaded ? 1 : 0,
         transition: "top 0.2s, transform 0.3s ease-out, opacity 0.3s ease-out",

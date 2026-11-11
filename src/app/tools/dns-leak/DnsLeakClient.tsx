@@ -25,11 +25,13 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import { alpha } from "@mui/material";
 import Footer from "@components/ui/layout/Footer";
 import { toolsApi } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/app";
+import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -194,6 +196,7 @@ type Phase = "idle" | "probing" | "streaming";
 export default function DnsLeakClient() {
   const { t } = useI18n();
   const theme = useTheme();
+  useDocumentTitle(t.tools.dnsLeak.title);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [rows, setRows] = useState<RowState[]>([]);
@@ -269,7 +272,7 @@ export default function DnsLeakClient() {
           if (ip) void fetchGeo(domain, ip);
           return true;
         }
-      } catch (err) {
+      } catch {
         if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       }
       return false;
@@ -366,6 +369,10 @@ export default function DnsLeakClient() {
     .filter((c, i, arr) => arr.indexOf(c) === i);
 
   const hasLeak = allCountries.length > 1;
+  // No resolver country at all (every probe failed or nothing was recorded):
+  // there is nothing to judge, so do not report "no leak".
+  const inconclusive = allCountries.length === 0;
+  const verdictColor = hasLeak ? "warning" : inconclusive ? "info" : "success";
   const allDone = rows.length > 0 && rows.every((r) => !r.loading);
 
   // ── inline geo chip renderer (click to open drawer) ──
@@ -492,44 +499,32 @@ export default function DnsLeakClient() {
                           p: 2.5,
                           borderRadius: 2,
                           mb: 3,
-                          bgcolor: hasLeak
-                            ? alpha(theme.palette.warning.main, 0.08)
-                            : alpha(theme.palette.success.main, 0.08),
+                          bgcolor: alpha(theme.palette[verdictColor].main, 0.08),
                           border: 1,
-                          borderColor: hasLeak
-                            ? alpha(theme.palette.warning.main, 0.3)
-                            : alpha(theme.palette.success.main, 0.3),
+                          borderColor: alpha(theme.palette[verdictColor].main, 0.3),
                         }}
                       >
                         {hasLeak ? (
-                          <WarningAmberIcon
-                            color="warning"
-                            sx={{ fontSize: 36 }}
-                          />
+                          <WarningAmberIcon color="warning" sx={{ fontSize: 36 }} />
+                        ) : inconclusive ? (
+                          <HelpOutlineIcon color="info" sx={{ fontSize: 36 }} />
                         ) : (
-                          <VerifiedIcon
-                            color="success"
-                            sx={{ fontSize: 36 }}
-                          />
+                          <VerifiedIcon color="success" sx={{ fontSize: 36 }} />
                         )}
                         <Box>
-                          <Typography
-                            variant="h6"
-                            sx={{
-                              fontWeight: 700,
-                              color: hasLeak ? "warning.main" : "success.main",
-                            }}
-                          >
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: `${verdictColor}.main` }}>
                             {hasLeak
                               ? t.tools.dnsLeak.leakDetected
-                              : t.tools.dnsLeak.noLeak}
+                              : inconclusive
+                                ? t.tools.dnsLeak.inconclusive
+                                : t.tools.dnsLeak.noLeak}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             {hasLeak
                               ? t.tools.dnsLeak.leakDetectedDesc(allCountries.length)
-                              : allCountries.length === 1
-                                ? t.tools.dnsLeak.noLeakSingle(allCountries[0])
-                                : t.tools.dnsLeak.noDataYet}
+                              : inconclusive
+                                ? t.tools.dnsLeak.noDataYet
+                                : t.tools.dnsLeak.noLeakSingle(allCountries[0])}
                           </Typography>
                         </Box>
                       </Box>
@@ -781,7 +776,7 @@ export default function DnsLeakClient() {
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
             IP Info
           </Typography>
-          <IconButton size="small" onClick={() => setGeoDrawerDomain(null)}>
+          <IconButton size="small" aria-label={t.tools.dnsLeak.close} onClick={() => setGeoDrawerDomain(null)}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>

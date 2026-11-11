@@ -229,7 +229,7 @@ type Dataset = keyof typeof datasets;
 
 function drillParameters(dataset: string, mode: string) {
   if (!["phonetic", "meaning", "word"].includes(mode)) throw apiFailure("invalid_mode", 400, "invalid_mode");
-  if (!(dataset in datasets)) throw apiFailure("invalid_dataset", 400, "invalid_dataset");
+  if (!Object.hasOwn(datasets, dataset)) throw apiFailure("invalid_dataset", 400, "invalid_dataset");
   return { dataset: dataset as Dataset, mode: mode as Mode };
 }
 

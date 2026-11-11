@@ -132,7 +132,8 @@
 | `/blog/zh` | `src/app/blog/[locale]/page.tsx` | Chinese blog listing |
 | `/blog/en/<slug>` | `src/app/blog/[locale]/[slug]/page.tsx` | Single blog post |
 | `/editor` | `src/app/editor/page.tsx` | Authenticated Markdown editor |
-| `/rpc/<package.Service>/<Method>` | `src/app/rpc/[service]/[method]/route.ts` | Connect RPC endpoint (search, auth, editor, tools, ...) |
+| `/rpc/ws` | `scripts/server.ts`, `src/lib/rpc/server/websocket.ts` | Multiplexed browser RPC over WebSocket |
+| `/rpc/<package.Service>/<Method>` | `src/app/rpc/[service]/[method]/route.ts` | HTTP cookie auth, gateway loopback dispatch, and Connect/gRPC-Web compatibility |
 
 All blog pages use `dynamic = "force-dynamic"` (SSR only, no static generation).
 

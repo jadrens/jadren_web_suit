@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardActionArea, CardContent, CircularProgress, Divider, Radio, Stack, TextField, Typography } from "@mui/material";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import PublicIcon from "@mui/icons-material/Public";
@@ -17,50 +17,61 @@ const valid = (lat: number, lon: number) => Number.isFinite(lat) && lat >= -90 &
 
 export default function SettingsCenter() {
   const { mode, setMode, refreshTheme } = useTheme();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [source, setSource] = useState<ThemeCoordinates["source"]>();
   const [solar, setSolar] = useState<SolarCache | null>(null);
   const [busy, setBusy] = useState<"geo" | "ip" | null>(null);
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null);
+  const requestId = useRef(0);
+  useEffect(() => () => { requestId.current += 1; }, []);
   const [section, setSection] = useState<"theme" | "llm">("theme");
 
   useEffect(() => {
     try {
       const coordinates = JSON.parse(localStorage.getItem(COORDINATES_KEY) || "null") as ThemeCoordinates | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration.
       if (coordinates) { setLatitude(String(coordinates.latitude)); setLongitude(String(coordinates.longitude)); setSource(coordinates.source); }
       setSolar(JSON.parse(localStorage.getItem(SOLAR_KEY) || "null"));
     } catch { /* old invalid local data is ignored */ }
   }, []);
 
   const save = (coordinates: ThemeCoordinates) => {
-    localStorage.setItem(COORDINATES_KEY, JSON.stringify(coordinates));
-    localStorage.removeItem(SOLAR_KEY);
+    try {
+      localStorage.setItem(COORDINATES_KEY, JSON.stringify(coordinates));
+      localStorage.removeItem(SOLAR_KEY);
+    } catch {
+      setNotice({ error: true, text: locale === "zh" ? "无法保存位置，请检查浏览器存储权限。" : "Could not save the location. Check browser storage permissions." });
+      return;
+    }
     setLatitude(String(coordinates.latitude)); setLongitude(String(coordinates.longitude)); setSource(coordinates.source);
     setMode("automatic");
     setTimeout(() => { refreshTheme(); try { setSolar(JSON.parse(localStorage.getItem(SOLAR_KEY) || "null")); } catch { setSolar(null); } }, 0);
     setNotice({ error: false, text: t.settings.saved });
   };
   const saveManual = () => {
+    requestId.current += 1; setBusy(null);
     const lat = Number(latitude), lon = Number(longitude);
-    if (!valid(lat, lon)) return setNotice({ error: true, text: t.settings.invalid });
+    if (!latitude.trim() || !longitude.trim() || !valid(lat, lon)) return setNotice({ error: true, text: t.settings.invalid });
     save({ latitude: lat, longitude: lon, source: "manual" });
   };
   const geolocate = () => {
     if (!navigator.geolocation) return setNotice({ error: true, text: t.settings.locationFailed });
+    const id = ++requestId.current;
     setBusy("geo");
-    navigator.geolocation.getCurrentPosition(({ coords }) => { setBusy(null); save({ latitude: coords.latitude, longitude: coords.longitude, source: "geolocation" }); }, () => { setBusy(null); setNotice({ error: true, text: t.settings.locationFailed }); }, { timeout: 10000 });
+    navigator.geolocation.getCurrentPosition(({ coords }) => { if (id !== requestId.current) return; setBusy(null); save({ latitude: coords.latitude, longitude: coords.longitude, source: "geolocation" }); }, () => { if (id !== requestId.current) return; setBusy(null); setNotice({ error: true, text: t.settings.locationFailed }); }, { timeout: 10000 });
   };
   const locateIp = async () => {
+    const id = ++requestId.current;
     setBusy("ip");
     try {
       const response = await fetch("https://ipwho.is/");
       const data = await response.json() as { success?: boolean; latitude?: number; longitude?: number };
       const lat = Number(data.latitude), lon = Number(data.longitude);
       if (!response.ok || data.success === false || !valid(lat, lon)) throw new Error();
-      save({ latitude: lat, longitude: lon, source: "ip" });
-    } catch { setNotice({ error: true, text: t.settings.ipFailed }); } finally { setBusy(null); }
+      if (id === requestId.current) save({ latitude: lat, longitude: lon, source: "ip" });
+    } catch { if (id === requestId.current) setNotice({ error: true, text: t.settings.ipFailed }); } finally { if (id === requestId.current) setBusy(null); }
   };
   const time = (timestamp: number) => new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(timestamp);
 
@@ -73,7 +84,7 @@ export default function SettingsCenter() {
   const themeOptions = <>
     <Stack spacing={1.25}>
       {modes.map((item) => <Card key={item.value} variant="outlined" sx={{ borderRadius: 2.5, borderColor: mode === item.value ? "primary.main" : "divider", bgcolor: mode === item.value ? "action.selected" : "transparent", transition: "border-color .2s, background-color .2s" }}>
-        <CardActionArea onClick={() => setMode(item.value)} sx={{ px: 2, py: 1.5, display: "flex", justifyContent: "space-between" }}>
+        <CardActionArea onClick={() => { requestId.current += 1; setBusy(null); setMode(item.value); }} sx={{ px: 2, py: 1.5, display: "flex", justifyContent: "space-between" }}>
           <Typography sx={{ fontWeight: mode === item.value ? 700 : 500 }}>{item.label}</Typography>
           <Radio checked={mode === item.value} value={item.value} tabIndex={-1} disableRipple />
         </CardActionArea>

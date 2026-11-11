@@ -44,12 +44,14 @@ export default function GrammarCheckerClient() {
   const [polishes, setPolishes] = useState<PolishItem[]>([]);
   const polishControllers = useRef(new Map<string, AbortController>());
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration.
   useEffect(() => { const items = getLlmModels().filter((item) => item.id && item.providerId && typeof item.modelId === "string" && item.modelId.trim()); setModels(items); setProviders(getLlmProfiles()); setModelId((current) => items.some((item) => item.id === current) ? current : items[0]?.id || ""); }, []);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PREFERENCES_KEY) || "null") as { modelId?: string; mode?: CheckMode; thinking?: boolean; effort?: ReasoningEffort; budget?: number } | null;
       if (saved?.modelId) {
         const savedModelStillExists = getLlmModels().some((item) => item.id === saved.modelId && item.providerId && typeof item.modelId === "string" && item.modelId.trim());
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration.
         if (savedModelStillExists) setModelId(saved.modelId);
       }
       if (saved?.mode && ["strict", "normal", "lenient"].includes(saved.mode)) setMode(saved.mode);
@@ -63,6 +65,7 @@ export default function GrammarCheckerClient() {
     if (!preferencesReady) return;
     localStorage.setItem(PREFERENCES_KEY, JSON.stringify({ modelId, mode, thinking, effort, budget }));
   }, [budget, effort, mode, modelId, preferencesReady, thinking]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage is only readable after hydration.
   useEffect(() => { try { const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); if (Array.isArray(saved)) setHistory(saved.slice(0, 32)); } catch { /* Ignore invalid history. */ } }, []);
   useEffect(() => { if (!running) return; const timer = window.setInterval(() => setElapsed((Date.now() - startedAt.current) / 1000), 100); return () => clearInterval(timer); }, [running]);
   const selected = models.find((item) => item.id === modelId);

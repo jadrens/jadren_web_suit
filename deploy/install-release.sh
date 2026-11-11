@@ -60,7 +60,7 @@ write_env() {
       printf "POSTGRES_PORT=%s\n" "$POSTGRES_PORT"
       printf "POSTGRES_SSL=%s\n" "$POSTGRES_SSL"
       printf "JWT_SECRET=%s\n" "$JWT_SECRET"
-      printf "RESEND_API_KEY=%s\n" "$RESEND_API_KEY"
+      printf "MAIL_API_TOKEN=%s\n" "$MAIL_API_TOKEN"
     } > "$release/.env"
   )
 }

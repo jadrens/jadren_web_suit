@@ -39,14 +39,15 @@ export function readGlobalLocale(): GlobalLocale {
   const cookieLocale = readLocaleCookie();
   if (cookieLocale) return cookieLocale;
 
-  const storedLocale = localStorage.getItem(STORAGE_KEY);
+  let storedLocale: string | null = null;
+  try { storedLocale = localStorage.getItem(STORAGE_KEY); } catch { /* storage may be disabled */ }
   if (isGlobalLocale(storedLocale)) return storedLocale;
 
   return normalizeGlobalLocale(navigator.language);
 }
 
 export function writeGlobalLocale(locale: GlobalLocale) {
-  localStorage.setItem(STORAGE_KEY, locale);
+  try { localStorage.setItem(STORAGE_KEY, locale); } catch { /* cookie still persists the preference */ }
 
   const baseHostname = getBaseHostname(window.location.hostname);
   const domain = baseHostname ? `; Domain=${baseHostname}` : "";

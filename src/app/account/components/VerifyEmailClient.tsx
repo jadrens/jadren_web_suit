@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Alert,
   Box,
@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import MarkEmailReadRoundedIcon from "@mui/icons-material/MarkEmailReadRounded";
+import { createRequestGate } from "@components/ui/auth/request-gate";
 import AuthPageShell from "@components/ui/auth/AuthPageShell";
 import {
   authErrorMessage,
@@ -53,6 +54,7 @@ export default function VerifyEmailClient({
   const { t, locale } = useI18n();
   const copy = t.auth.verify;
   useDocumentTitle(copy.title);
+  const requestGate = useRef(createRequestGate());
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +88,8 @@ export default function VerifyEmailClient({
       return;
     }
 
+    const release = requestGate.current.acquire();
+    if (!release) return;
     setSending(true);
     try {
       const response = await authSession.sendVerificationCode(
@@ -109,6 +113,7 @@ export default function VerifyEmailClient({
       setError(authErrorMessage(requestError, t.auth.errors));
     } finally {
       setSending(false);
+      release();
     }
   }
 
@@ -126,6 +131,8 @@ export default function VerifyEmailClient({
       return;
     }
 
+    const release = requestGate.current.acquire();
+    if (!release) return;
     setSubmitting(true);
     try {
       await authSession.verifyEmail(normalizedEmail, code);
@@ -135,6 +142,7 @@ export default function VerifyEmailClient({
       setError(authErrorMessage(requestError, t.auth.errors));
     } finally {
       setSubmitting(false);
+      release();
     }
   }
 
@@ -180,8 +188,14 @@ export default function VerifyEmailClient({
           type="email"
           autoComplete="email"
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          disabled={verified}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            setCode("");
+            setNotice(null);
+            setSentAt(null);
+            setExpiresAt(null);
+          }}
+          disabled={verified || sending || submitting}
           required
           fullWidth
         />
@@ -216,7 +230,7 @@ export default function VerifyEmailClient({
             onChange={(event) =>
               setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
             }
-            disabled={verified}
+            disabled={verified || sending || submitting}
             required
             fullWidth
             inputProps={{
@@ -240,7 +254,7 @@ export default function VerifyEmailClient({
             <Button
               type="button"
               variant="text"
-              disabled={sending || cooldown > 0}
+              disabled={sending || submitting || cooldown > 0}
               aria-label={
                 sending
                   ? copy.sending
@@ -277,7 +291,7 @@ export default function VerifyEmailClient({
           type="submit"
           variant="contained"
           size="large"
-          disabled={submitting || verified}
+          disabled={sending || submitting || verified}
           sx={{ minHeight: 48, fontWeight: 700 }}
         >
           {submitting ? (

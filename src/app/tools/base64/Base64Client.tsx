@@ -55,18 +55,31 @@ export default function Base64Client() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [convertedAs, setConvertedAs] = useState<"encode" | "decode" | null>(null);
-  const [toast, setToast] = useState({ open: false, message: "" });
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+
+  const fail = (message: string) => {
+    setOutput("");
+    setConvertedAs(null);
+    setError(message);
+  };
 
   const handleModeChange = (_: React.MouseEvent<HTMLElement>, newMode: Mode | null) => {
     if (newMode !== null) {
+      // Keep what the user typed or pasted; only the result belongs to the old mode.
       setMode(newMode);
-      setInput("");
       setOutput("");
       setConvertedAs(null);
+      setError(null);
     }
   };
 
   const handleConvert = () => {
+    setError(null);
     if (!input.trim()) {
       setOutput("");
       setConvertedAs(null);
@@ -81,8 +94,7 @@ export default function Base64Client() {
           return;
         }
         if (mode === "decode") {
-          setOutput("Invalid Base64 string");
-          setConvertedAs(null);
+          fail(t.tools.base64.invalidBase64);
           return;
         }
       }
@@ -106,8 +118,7 @@ export default function Base64Client() {
         setConvertedAs("decode");
       }
     } catch {
-      setOutput(mode === "decode" ? "Invalid Base64 string" : "Invalid input for encoding");
-      setConvertedAs(null);
+      fail(mode === "decode" ? t.tools.base64.invalidBase64 : t.tools.base64.invalidInput);
     }
   };
 
@@ -115,9 +126,9 @@ export default function Base64Client() {
     if (!output) return;
     try {
       await navigator.clipboard.writeText(output);
-      setToast({ open: true, message: t.tools.base64.copied });
+      setToast({ open: true, message: t.tools.base64.copied, severity: "success" });
     } catch {
-      setToast({ open: true, message: "Failed to copy" });
+      setToast({ open: true, message: t.tools.base64.copyFailed, severity: "error" });
     }
   };
 
@@ -141,7 +152,7 @@ export default function Base64Client() {
               value={mode}
               exclusive
               onChange={handleModeChange}
-              aria-label="encode or decode mode"
+              aria-label={t.tools.base64.modeLabel}
               sx={{
                 "& .MuiToggleButton-root": {
                   px: 4,
@@ -217,6 +228,12 @@ export default function Base64Client() {
             </Button>
           </Box>
 
+          {error && (
+            <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+              {error}
+            </Alert>
+          )}
+
           {/* Output */}
           <Box sx={{ mb: 3 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -270,7 +287,7 @@ export default function Base64Client() {
         onClose={() => setToast({ ...toast, open: false })}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert severity="success" variant="filled" sx={{ borderRadius: 2 }}>
+        <Alert severity={toast.severity} variant="filled" sx={{ borderRadius: 2 }}>
           {toast.message}
         </Alert>
       </Snackbar>

@@ -88,8 +88,15 @@ function isIpv4(address: string): boolean {
   );
 }
 
+// The URL parser accepts exactly the valid IPv6 literals, including "::" compression.
 function isIpv6(address: string): boolean {
-  return /^(([0-9a-fA-F]{1,4}):){2,7}([0-9a-fA-F]{1,4})$/.test(address);
+  if (!address.includes(":") || !/^[0-9a-fA-F:.]+$/.test(address)) return false;
+  try {
+    new URL(`http://[${address}]/`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeQueryInput(value: string) {
@@ -241,7 +248,7 @@ export default function DnsClient() {
         };
       });
 
-      let finalSections = [...filledSections];
+      const finalSections = [...filledSections];
 
       if (!isIp) {
         const cnameSection = finalSections.find((sec) => sec.type === "CNAME");
@@ -371,26 +378,7 @@ export default function DnsClient() {
       await navigator.clipboard.writeText(text);
       setToast({ open: true, message: t.tools.dns.copied });
     } catch {
-      setToast({ open: true, message: "Failed to copy" });
-    }
-  };
-
-  const handleCopyAll = async () => {
-    if (!sections.length) return;
-    const text = sections
-      .flatMap((section) =>
-        section.records.map(
-          (r) => `${r.name}\t${r.TTL}\tIN\t${r.type}\t${r.data}`
-        )
-      )
-      .join("\n");
-    if (!text) return;
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setToast({ open: true, message: t.tools.dns.copied });
-    } catch {
-      setToast({ open: true, message: "Failed to copy" });
+      setToast({ open: true, message: t.tools.dns.copyFailed });
     }
   };
 
@@ -550,7 +538,7 @@ export default function DnsClient() {
                 ) : geoData ? (
                   <Box sx={{ display: "flex", flexDirection: "column" }}>
                     <GeoRow
-                      label="Location"
+                      label={t.tools.ip.location}
                       value={
                         [
                           geoData.country,
@@ -563,15 +551,15 @@ export default function DnsClient() {
                       }
                     />
                     <GeoRow
-                      label="Coordinates"
+                      label={t.tools.ip.coordinates}
                       value={
-                        geoData.lat && geoData.lon
+                        Number.isFinite(geoData.lat) && Number.isFinite(geoData.lon)
                           ? `${geoData.lat}, ${geoData.lon}`
                           : "—"
                       }
                     />
                     <GeoRow
-                      label="Timezone"
+                      label={t.tools.ip.timezone}
                       value={
                         geoData.timezone
                           ? `${geoData.timezone} (UTC${
@@ -581,15 +569,15 @@ export default function DnsClient() {
                       }
                     />
                     <GeoRow
-                      label="ISP"
+                      label={t.tools.ip.isp}
                       value={geoData.isp || "—"}
                     />
                     <GeoRow
-                      label="Organization"
+                      label={t.tools.ip.organization}
                       value={geoData.org || "—"}
                     />
                     <GeoRow
-                      label="ASN"
+                      label={t.tools.ip.asn}
                       value={
                         geoData.as
                           ? `${geoData.as}${
@@ -599,18 +587,18 @@ export default function DnsClient() {
                       }
                     />
                     <GeoRow
-                      label="Reverse DNS"
+                      label={t.tools.ip.reverseDns}
                       value={geoData.reverse || "—"}
                     />
                     <GeoRow
-                      label="Network"
+                      label={t.tools.ip.network}
                       value={[
-                        geoData.mobile && "Mobile",
-                        geoData.proxy && "Proxy",
-                        geoData.hosting && "Hosting",
+                        geoData.mobile && t.tools.ip.mobile,
+                        geoData.proxy && t.tools.ip.proxy,
+                        geoData.hosting && t.tools.ip.hosting,
                       ]
                         .filter(Boolean)
-                        .join(", ") || "Standard"}
+                        .join(", ") || t.tools.ip.standard}
                     />
                   </Box>
                 ) : null}
@@ -770,6 +758,7 @@ export default function DnsClient() {
                               <Button
                                 size="small"
                                 onClick={() => handleCopy(record.data)}
+                                aria-label={t.tools.dns.copyRecord(record.data)}
                                 sx={{
                                   minWidth: 36,
                                   p: 0.5,

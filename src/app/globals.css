@@ -59,6 +59,22 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Day/night switch (see ThemeProvider.toggleTheme): the new theme is revealed as a circle
+   driven from JS, so the default cross-fade and per-element color transitions are disabled. */
+html.theme-transition::view-transition-old(root),
+html.theme-transition::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html.theme-transition::view-transition-old(root) { z-index: 1; }
+html.theme-transition::view-transition-new(root) { z-index: 2; }
+
+html.theme-transition,
+html.theme-transition *:not(.theme-toggle-icon) {
+  transition: none !important;
+}
+
 .page-below-navbar { min-height: calc(100dvh - 64px); }
 
 @media (max-width: 599.95px) {

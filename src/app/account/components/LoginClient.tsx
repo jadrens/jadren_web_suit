@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Alert,
   Button,
@@ -15,6 +15,7 @@ import {
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
+import { createRequestGate } from "@components/ui/auth/request-gate";
 import AuthPageShell from "@components/ui/auth/AuthPageShell";
 import { authErrorMessage } from "@components/ui/auth/form-utils";
 import { useAuth } from "@lib/client-api/use-auth";
@@ -26,6 +27,7 @@ export default function LoginClient({ nextPath }: { nextPath: string }) {
   const { t } = useI18n();
   const copy = t.auth.login;
   useDocumentTitle(copy.title);
+  const requestGate = useRef(createRequestGate());
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -44,14 +46,16 @@ export default function LoginClient({ nextPath }: { nextPath: string }) {
       return;
     }
 
+    const release = requestGate.current.acquire();
+    if (!release) return;
     setSubmitting(true);
     try {
       await auth.login({ identifier: identifier.trim(), password });
-      window.location.replace(nextPath);
     } catch (requestError) {
       setError(authErrorMessage(requestError, t.auth.errors));
     } finally {
       setSubmitting(false);
+      release();
     }
   }
 
@@ -113,6 +117,14 @@ export default function LoginClient({ nextPath }: { nextPath: string }) {
             },
           }}
         />
+        <MuiLink
+          href={identifier.includes("@") ? `/reset-password?email=${encodeURIComponent(identifier.trim())}` : "/reset-password"}
+          variant="body2"
+          underline="hover"
+          sx={{ alignSelf: "flex-end", fontWeight: 600 }}
+        >
+          {t.auth.reset.forgot}
+        </MuiLink>
         <Button
           type="submit"
           variant="contained"

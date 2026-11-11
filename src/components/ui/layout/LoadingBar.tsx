@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 
 export default function LoadingBar() {
   const pathname = usePathname();
-  const [loading, setLoading] = useState(false);
+  // The bar shows from a navigation until 300 ms later, when this catches up.
+  const [settledPath, setSettledPath] = useState(pathname);
+  const loading = settledPath !== pathname;
 
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 300);
+    const timer = setTimeout(() => setSettledPath(pathname), 300);
     return () => clearTimeout(timer);
   }, [pathname]);
 

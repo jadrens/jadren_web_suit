@@ -4,8 +4,8 @@ import { Box, Drawer, List, ListItem, ListItemButton, ListItemText, Collapse, Ty
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import { useState, useEffect } from "react";
-import { useReadingProgress, Heading } from "../reading/ReadingProgressContext";
+import { useState } from "react";
+import { useReadingHeadings, Heading } from "../reading/ReadingProgressContext";
 import { useI18n } from "@lib/i18n/content";
 import { tocMobileWidth } from "@config/publishing/toc";
 
@@ -17,7 +17,8 @@ interface TocItemProps {
 const INDENT_PER_LEVEL = 1.5;
 
 function TocItem({ heading, onSelect }: TocItemProps) {
-  const { activeHeadingId } = useReadingProgress();
+  const { activeHeadingId } = useReadingHeadings();
+  const { t } = useI18n();
   const hasChildren = heading.children.length > 0;
   const isActive = activeHeadingId === heading.id;
   const isH1 = heading.level === 1;
@@ -28,28 +29,16 @@ function TocItem({ heading, onSelect }: TocItemProps) {
   };
 
   const shouldBeOpen = isH1 || isActive || (hasChildren && heading.children.some(isDescendantActive));
-  const [open, setOpen] = useState(shouldBeOpen);
-
-  useEffect(() => {
-    if (shouldBeOpen && !open) {
-      setOpen(true);
-    }
-  }, [shouldBeOpen, open]);
+  const [expanded, setExpanded] = useState<boolean | null>(null);
+  const open = expanded ?? shouldBeOpen;
 
   const handleClick = () => {
-    if (hasChildren && !open) {
-      setOpen(true);
-    } else {
-      const element = document.getElementById(heading.id);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
-        window.history.pushState(null, "", `#${heading.id}`);
-      }
-      onSelect();
-      if (hasChildren) {
-        setOpen(!open);
-      }
+    const element = document.getElementById(heading.id);
+    if (element) {
+      element.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "start" });
+      window.history.pushState(window.history.state, "", `#${encodeURIComponent(heading.id)}`);
     }
+    onSelect();
   };
 
   const indent = (heading.level - 1) * INDENT_PER_LEVEL;
@@ -58,20 +47,19 @@ function TocItem({ heading, onSelect }: TocItemProps) {
     <>
       <ListItem disablePadding disableGutters>
         <ListItemButton
-          onClick={handleClick}
+          component="a"
+          href={`#${encodeURIComponent(heading.id)}`}
+          onClick={(event) => { event.preventDefault(); handleClick(); }}
+          aria-current={isActive ? "location" : undefined}
           sx={{
             py: 0.75,
+            minWidth: 0,
             pl: 1 + indent,
             borderRadius: 1,
             bgcolor: isActive ? "action.selected" : "transparent",
             "&:hover": { bgcolor: isActive ? "action.selected" : "action.hover" },
           }}
         >
-          {hasChildren && (
-            <Box sx={{ mr: 0.5, display: "flex", alignItems: "center" }}>
-              {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </Box>
-          )}
           <Tooltip title={heading.text} placement="top" arrow>
             <ListItemText
               sx={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}
@@ -87,6 +75,11 @@ function TocItem({ heading, onSelect }: TocItemProps) {
             />
           </Tooltip>
         </ListItemButton>
+        {hasChildren && (
+          <IconButton size="small" onClick={() => setExpanded(!open)} aria-label={`${t.toc.toggleSection}: ${heading.text}`} aria-expanded={open}>
+            {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </IconButton>
+        )}
       </ListItem>
       {hasChildren && (
         <Collapse in={open} timeout="auto" unmountOnExit>
@@ -107,7 +100,7 @@ interface TableOfContentsDrawerProps {
 }
 
 export default function TableOfContentsDrawer({ open, onClose }: TableOfContentsDrawerProps) {
-  const { headings } = useReadingProgress();
+  const { headings } = useReadingHeadings();
   const { t } = useI18n();
 
   const handleSelect = () => {
@@ -120,9 +113,9 @@ export default function TableOfContentsDrawer({ open, onClose }: TableOfContents
       open={open}
       onClose={onClose}
       sx={{
-        display: { xs: "block", sm: "none" },
+        display: { xs: "block", lg: "none" },
         "& .MuiDrawer-paper": {
-          width: `min(${tocMobileWidth}px, 100vw)`,
+          width: `min(${tocMobileWidth}px, 90vw)`,
           maxWidth: "100vw",
           boxSizing: "border-box"
         },
@@ -133,7 +126,7 @@ export default function TableOfContentsDrawer({ open, onClose }: TableOfContents
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>
                     {t.toc.contents}
           </Typography>
-          <IconButton onClick={onClose} aria-label="Close">
+          <IconButton onClick={onClose} aria-label={t.toc.close}>
             <CloseIcon />
           </IconButton>
         </Toolbar>

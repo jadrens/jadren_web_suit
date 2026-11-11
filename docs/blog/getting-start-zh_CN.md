@@ -2,7 +2,7 @@
 
 ## 这是一个自己闲暇编写的一个博客/简单文档站点
 ### 如果想查看该项目的效果, 请访问:
-- [jadren blog (https://blog.jadren.me)](https://blog.jadren.me)
+- [jadren's nook (https://blog.jadren.me)](https://blog.jadren.me)
 
 
 ## 关于创建或修改文章
@@ -80,7 +80,7 @@ export const SITE_CONFIG = {
   // 你的网站域名 这里用来生成sitemap.xml,有助于搜索引擎对你网站的索引
   baseUrl: "https://blog.jadren.me",
   // 网站标题
-  siteName: "jadren blog",
+  siteName: "jadren's nook",
   // 给搜索引擎看的网站介绍
   description: "A blog with markdown and LaTeX support",
   // 如果你要把你的网站开源可编辑, 这里填入你的github项目地址

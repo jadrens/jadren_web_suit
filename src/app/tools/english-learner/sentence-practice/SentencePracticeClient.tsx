@@ -10,6 +10,7 @@ import Footer from "@components/ui/layout/Footer";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import { useSiteUrl } from "@lib/site-url";
 import { useAuth } from "@lib/client-api/use-auth";
+import { useDialogAccountKey, useDialogOperation } from "@components/vocabulary/use-dialog-operation";
 import { ApiError, vocabularyPracticeApi, type VocabularyCollectionSummary, type VocabularyUsage } from "@lib/client-api";
 import { getLlmModels, getLlmProfiles, LlmClient, type LlmModelProfile, type LlmProfile } from "@lib/llm";
 import { useI18n } from "@lib/i18n/app";
@@ -36,7 +37,13 @@ const copyByLocale = {
 };
 
 export default function SentencePracticeClient() {
+  const key = useDialogAccountKey();
+  return <SentencePracticeContent key={key} />;
+}
+
+function SentencePracticeContent() {
   const { locale } = useI18n(); const copy = copyByLocale[locale]; const { status, isAuthenticated, user } = useAuth(); useDocumentTitle(copy.title);
+  const startOperation = useDialogOperation(true);
   const settingsUrl = useSiteUrl("main", "/settings");
   const [usages, setUsages] = useState<VocabularyUsage[]>([]); const [collections, setCollections] = useState<VocabularyCollectionSummary[]>([]); const [collectionId, setCollectionId] = useState(""); const [collectionDialogOpen, setCollectionDialogOpen] = useState(false); const [models, setModels] = useState<LlmModelProfile[]>([]); const [providers, setProviders] = useState<LlmProfile[]>([]); const [modelId, setModelId] = useState("");
   const [loading, setLoading] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
@@ -46,11 +53,12 @@ export default function SentencePracticeClient() {
   const practiceUsages = usages.filter((item) => item.collectionId === collectionId);
 
   useEffect(() => { const timer = window.setTimeout(() => { const available = getLlmModels().filter((item) => item.id && item.providerId && item.modelId.trim()); setModels(available); setProviders(getLlmProfiles()); setModelId(available[0]?.id || ""); }, 0); return () => window.clearTimeout(timer); }, []);
-  const load = useCallback(async () => { setLoading(true); setError(""); try { const data = await vocabularyPracticeApi.list(); setUsages(data.usages); setCollections(data.collections); setCollectionId(current => data.collections.some(item => item.collectionId === current) ? current : (data.collections[0]?.collectionId || "")); } catch { setError(copy.loadFailed); } finally { setLoading(false); } }, [copy.loadFailed]);
-  useEffect(() => { if (status === "authenticated" && user?.status === 1) { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); } }, [load, status, user?.status, user?.userId]);
+  const load = useCallback(async () => { const isCurrent = startOperation(); setLoading(true); setError(""); try { const data = await vocabularyPracticeApi.list(); if (!isCurrent()) return; setUsages(data.usages); setCollections(data.collections); setCollectionId(current => data.collections.some(item => item.collectionId === current) ? current : (data.collections[0]?.collectionId || "")); } catch { if (isCurrent()) setError(copy.loadFailed); } finally { if (isCurrent()) setLoading(false); } }, [copy.loadFailed, startOperation]);
+  const eligible = isAuthenticated && user?.status === 1;
+  useEffect(() => { if (eligible) { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); } }, [load, eligible]);
 
   async function generateExercise() {
-    if (!selected || !provider || !practiceUsages.length) return; setBusy(true); setError(""); setExercise(null); setGrade(null); setAnswer("");
+    if (!selected || !provider || !practiceUsages.length) return; const isCurrent = startOperation(); setBusy(true); setError(""); setExercise(null); setGrade(null); setAnswer("");
     let candidateIds: string[] = []; let reviewedUsageId = ""; let reviewedAttempts: Array<{ question: string; exampleSentence: string }> = []; let generated: Exercise | null = null;
     const candidatePool = sentenceCandidatePool(practiceUsages); const expected = Math.min(5, candidatePool.length);
     try {
@@ -63,33 +71,34 @@ export default function SentencePracticeClient() {
         tools: [
           { name: "select_candidates", description: `Select exactly ${expected} best items for the learner to review. Prefer meanings with no attempts.`, parameters: { type: "object", properties: { usage_ids: { type: "array", items: { type: "string" }, minItems: expected, maxItems: expected } }, required: ["usage_ids"], additionalProperties: false }, execute: (args) => { const ids = Array.isArray(args.usage_ids) ? args.usage_ids.map(String) : []; if (ids.length !== expected || new Set(ids).size !== expected || ids.some((id) => !candidatePool.some((item) => item.usageId === id))) throw new Error("Invalid candidate selection"); candidateIds = ids; return { candidates: candidatePool.filter((item) => ids.includes(item.usageId)) }; } },
           { name: "review_recent_attempts", description: "Required before creating an exercise. Read the five most recent attempts across every usage of the selected word so the next question does not repeat them.", parameters: { type: "object", properties: { usage_id: { type: "string" } }, required: ["usage_id"], additionalProperties: false }, execute: (args) => { const usageId = String(args.usage_id || ""); const usage = usages.find((item) => item.usageId === usageId); if (!usage || !candidateIds.includes(usageId)) throw new Error("Recent attempts can only be reviewed for a selected candidate"); reviewedUsageId = usageId; const recent = usages.filter((item) => item.word.toLocaleLowerCase() === usage.word.toLocaleLowerCase()).flatMap((item) => item.attempts.map((attempt) => ({ ...attempt, meaning: item.prompt }))).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5); reviewedAttempts = recent; return { word: usage.word, targetMeaning: usage.prompt, recentAttemptsForWord: recent }; } },
-          { name: "create_exercise", description: "Create one non-repeating exercise in Simplified Chinese after reviewing recent attempts.", parameters: { type: "object", properties: { usage_id: { type: "string" }, instruction: { type: "string", description: "Simplified Chinese writing requirement" }, example_sentence: { type: "string", description: "Internal English reference; hidden from learner" } }, required: ["usage_id", "instruction", "example_sentence"], additionalProperties: false }, execute: (args) => { const usageId = String(args.usage_id || ""), instruction = String(args.instruction || "").trim(), exampleSentence = String(args.example_sentence || "").trim(); const usage = usages.find((item) => item.usageId === usageId); if (!usage || !candidateIds.includes(usageId) || reviewedUsageId !== usageId) throw new Error("Exercise creation requires reviewing the selected word's recent attempts first"); if (!/[\u3400-\u9fff]/.test(instruction)) throw new Error("Exercise instruction must be written in Simplified Chinese"); const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""); if (reviewedAttempts.some((attempt) => normalize(attempt.question) === normalize(instruction) || normalize(attempt.exampleSentence) === normalize(exampleSentence))) throw new Error("Exercise repeats a recent question or example"); generated = { usageId, word: usage.word, prompt: usage.prompt, instruction, exampleSentence }; setExercise(generated); return { accepted: true }; } },
+          { name: "create_exercise", description: "Create one non-repeating exercise in Simplified Chinese after reviewing recent attempts.", parameters: { type: "object", properties: { usage_id: { type: "string" }, instruction: { type: "string", description: "Simplified Chinese writing requirement" }, example_sentence: { type: "string", description: "Internal English reference; hidden from learner" } }, required: ["usage_id", "instruction", "example_sentence"], additionalProperties: false }, execute: (args) => { const usageId = String(args.usage_id || ""), instruction = String(args.instruction || "").trim(), exampleSentence = String(args.example_sentence || "").trim(); const usage = usages.find((item) => item.usageId === usageId); if (!usage || !candidateIds.includes(usageId) || reviewedUsageId !== usageId) throw new Error("Exercise creation requires reviewing the selected word's recent attempts first"); if (!/[\u3400-\u9fff]/.test(instruction)) throw new Error("Exercise instruction must be written in Simplified Chinese"); const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""); if (reviewedAttempts.some((attempt) => normalize(attempt.question) === normalize(instruction) || normalize(attempt.exampleSentence) === normalize(exampleSentence))) throw new Error("Exercise repeats a recent question or example"); generated = { usageId, word: usage.word, prompt: usage.prompt, instruction, exampleSentence }; if (isCurrent()) setExercise(generated); return { accepted: true }; } },
         ],
       })) { if (event.type === "done") break; }
       if (!generated) throw new Error("Missing exercise");
-    } catch { setError(copy.aiFailed); }
-    finally { setBusy(false); }
+    } catch { if (isCurrent()) setError(copy.aiFailed); }
+    finally { if (isCurrent()) setBusy(false); }
   }
 
   async function gradeAnswer() {
-    if (!exercise || !answer.trim() || !selected || !provider) return; setBusy(true); setError(""); setGrade(null); let result: Grade | null = null; let finalResult: Grade;
+    if (!exercise || !answer.trim() || !selected || !provider) return; const isCurrent = startOperation(); setBusy(true); setError(""); setGrade(null); let result: Grade | null = null; let finalResult: Grade;
     try {
       const client = new LlmClient({ profile: provider, model: selected.modelId, maxToolRounds: 3 });
       for await (const event of client.stream({
         messages: [{ role: "user", content: JSON.stringify({ word: exercise.word, intendedUsage: exercise.prompt, instruction: exercise.instruction, example: exercise.exampleSentence, learnerSentence: answer.trim() }) }],
         systemPrompt: "Judge whether the learner's English sentence is grammatically acceptable and uses the specified word with the requested meaning. Minor stylistic or punctuation issues do not make it wrong. Call grade_answer exactly once. Give concise feedback in Simplified Chinese and provide a corrected sentence only when needed.",
         maxTokens: 1024, temperature: .1, isComplete: () => result !== null, incompletePrompt: "Please call grade_answer now.", maxIncompleteRetries: 2,
-        tools: [{ name: "grade_answer", description: "Record the sentence judgment.", parameters: { type: "object", properties: { is_correct: { type: "boolean" }, feedback: { type: "string" }, corrected_sentence: { type: ["string", "null"] } }, required: ["is_correct", "feedback", "corrected_sentence"], additionalProperties: false }, execute: (args) => { result = { isCorrect: Boolean(args.is_correct), feedback: String(args.feedback || ""), correctedSentence: args.corrected_sentence ? String(args.corrected_sentence) : null }; setGrade(result); return { accepted: true }; } }],
+        tools: [{ name: "grade_answer", description: "Record the sentence judgment.", parameters: { type: "object", properties: { is_correct: { type: "boolean" }, feedback: { type: "string" }, corrected_sentence: { type: ["string", "null"] } }, required: ["is_correct", "feedback", "corrected_sentence"], additionalProperties: false }, execute: (args) => { result = { isCorrect: Boolean(args.is_correct), feedback: String(args.feedback || ""), correctedSentence: args.corrected_sentence ? String(args.corrected_sentence) : null }; if (isCurrent()) setGrade(result); return { accepted: true }; } }],
       })) { if (event.type === "done") break; }
       const completedGrade = result as Grade | null;
       if (!completedGrade) throw new Error("Missing grade");
       finalResult = completedGrade;
-    } catch { setError(copy.gradeFailed); setBusy(false); return; }
+    } catch { if (isCurrent()) { setError(copy.gradeFailed); setBusy(false); } return; }
+    if (!isCurrent()) return;
     try {
       await vocabularyPracticeApi.recordAttempt({ usageId: exercise.usageId, question: exercise.instruction, exampleSentence: exercise.exampleSentence, answer: answer.trim(), isCorrect: finalResult.isCorrect, feedback: finalResult.feedback, correctedSentence: finalResult.correctedSentence });
-      await load();
-    } catch (cause) { setError(`${copy.saveGradeFailed}${cause instanceof ApiError ? ` HTTP ${cause.status}${cause.code ? ` (${cause.code})` : ""}: ${cause.message}` : cause instanceof Error ? ` ${cause.message}` : ""}`); }
-    finally { setBusy(false); }
+      if (isCurrent()) await load();
+    } catch (cause) { if (isCurrent()) setError(`${copy.saveGradeFailed}${cause instanceof ApiError ? ` HTTP ${cause.status}${cause.code ? ` (${cause.code})` : ""}: ${cause.message}` : cause instanceof Error ? ` ${cause.message}` : ""}`); }
+    finally { if (isCurrent()) setBusy(false); }
   }
 
   if (status === "uninitialized") return <Box sx={{ minHeight: "70vh", display: "grid", placeItems: "center" }}><CircularProgress /></Box>;

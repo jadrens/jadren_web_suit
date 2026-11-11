@@ -91,6 +91,10 @@ function safeJson(value: string) {
   try { return JSON.parse(value) as Record<string, unknown>; } catch { return {}; }
 }
 
+function readObjectField(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : undefined;
+}
+
 function makeRequest(profile: LlmProfile, options: LlmRequestBase, stream: boolean): {
   body: Record<string, unknown>;
   headers: Record<string, string>;
@@ -105,7 +109,7 @@ function makeRequest(profile: LlmProfile, options: LlmRequestBase, stream: boole
       model, stream, max_tokens: maxTokens ?? 4096,
       messages: messages.filter((m) => m.role !== "system").map((m) => m.role === "tool"
         ? { role: "user", content: [{ type: "tool_result", tool_use_id: m.toolCallId, content: m.content }] }
-        : m.toolCalls?.length ? { role: "assistant", content: (m.providerData as any)?.content || [...(m.content ? [{ type: "text", text: m.content }] : []), ...m.toolCalls.map((call) => ({ type: "tool_use", id: call.id, name: call.name, input: call.arguments }))] }
+        : m.toolCalls?.length ? { role: "assistant", content: readObjectField(m.providerData, "content") || [...(m.content ? [{ type: "text", text: m.content }] : []), ...m.toolCalls.map((call) => ({ type: "tool_use", id: call.id, name: call.name, input: call.arguments }))] }
         : { role: m.role, content: m.content }),
     };
     if (system) body.system = system;
@@ -158,19 +162,106 @@ async function request(profile: LlmProfile, options: LlmRequestBase, stream: boo
   return response;
 }
 
-function parseNonStream(profile: LlmProfile, raw: any): LlmResponse {
+interface ClaudeContentBlock {
+  type?: string;
+  text?: string;
+  thinking?: string;
+}
+
+interface ClaudeToolUseBlock extends ClaudeContentBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input?: Record<string, unknown>;
+}
+
+interface ClaudeApiResponse {
+  id?: string;
+  model?: string;
+  content?: ClaudeContentBlock[];
+  stop_reason?: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
+}
+
+interface ResponsesContentPart {
+  type?: string;
+  text?: string;
+}
+
+interface ResponsesOutputItem {
+  type?: string;
+  id?: string;
+  name?: string;
+  arguments?: string;
+  summary?: ResponsesContentPart[];
+  content?: ResponsesContentPart[];
+}
+
+interface ResponsesFunctionCallItem extends ResponsesOutputItem {
+  type: "function_call";
+  id: string;
+  call_id: string;
+  name: string;
+}
+
+interface ResponsesApiResponse {
+  id?: string;
+  model?: string;
+  output_text?: string;
+  output?: ResponsesOutputItem[];
+  status?: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    output_tokens_details?: { reasoning_tokens?: number };
+  };
+}
+
+interface CompletionToolCall {
+  id: string;
+  function: { name: string; arguments?: string };
+}
+
+interface CompletionMessage {
+  content?: string;
+  reasoning_content?: string;
+  tool_calls?: CompletionToolCall[];
+}
+
+interface CompletionChoice {
+  message?: CompletionMessage;
+  finish_reason?: string;
+}
+
+interface CompletionApiResponse {
+  id?: string;
+  model?: string;
+  choices?: CompletionChoice[];
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+}
+
+function parseNonStream(profile: LlmProfile, raw: unknown): LlmResponse {
   if (profile.type === "claude") {
-    const content = raw.content || [];
-    return { id: raw.id, model: raw.model, text: content.filter((x: any) => x.type === "text").map((x: any) => x.text).join(""), thinking: content.filter((x: any) => x.type === "thinking").map((x: any) => x.thinking).join(""), toolCalls: content.filter((x: any) => x.type === "tool_use").map((x: any) => ({ id: x.id, name: x.name, arguments: x.input || {}, rawArguments: JSON.stringify(x.input || {}) })), finishReason: raw.stop_reason, usage: { inputTokens: raw.usage?.input_tokens, outputTokens: raw.usage?.output_tokens }, raw };
+    const data = raw as ClaudeApiResponse;
+    const content = data.content || [];
+    return { id: data.id, model: data.model, text: content.filter((x) => x.type === "text").map((x) => x.text).join(""), thinking: content.filter((x) => x.type === "thinking").map((x) => x.thinking).join(""), toolCalls: content.filter((x): x is ClaudeToolUseBlock => x.type === "tool_use").map((x) => ({ id: x.id, name: x.name, arguments: x.input || {}, rawArguments: JSON.stringify(x.input || {}) })), finishReason: data.stop_reason, usage: { inputTokens: data.usage?.input_tokens, outputTokens: data.usage?.output_tokens }, raw };
   }
   if (profile.type === "openai-responses") {
-    const output = raw.output || [];
-    const reasoning = output.filter((x: any) => x.type === "reasoning").flatMap((x: any) => x.summary || x.content || []).map((x: any) => x.text || "").join("");
-    return { id: raw.id, model: raw.model, text: raw.output_text || output.flatMap((x: any) => x.content || []).filter((x: any) => x.type === "output_text").map((x: any) => x.text).join(""), thinking: reasoning, toolCalls: output.filter((x: any) => x.type === "function_call").map((x: any) => ({ id: x.call_id || x.id, name: x.name, arguments: safeJson(x.arguments || "{}"), rawArguments: x.arguments || "{}" })), finishReason: raw.status, usage: { inputTokens: raw.usage?.input_tokens, outputTokens: raw.usage?.output_tokens, reasoningTokens: raw.usage?.output_tokens_details?.reasoning_tokens, totalTokens: raw.usage?.total_tokens }, raw };
+    const data = raw as ResponsesApiResponse;
+    const output = data.output || [];
+    const reasoning = output.filter((x) => x.type === "reasoning").flatMap((x) => x.summary || x.content || []).map((x) => x.text || "").join("");
+    return { id: data.id, model: data.model, text: data.output_text || output.flatMap((x) => x.content || []).filter((x) => x.type === "output_text").map((x) => x.text).join(""), thinking: reasoning, toolCalls: output.filter((x): x is ResponsesFunctionCallItem => x.type === "function_call").map((x) => ({ id: x.call_id || x.id, name: x.name, arguments: safeJson(x.arguments || "{}"), rawArguments: x.arguments || "{}" })), finishReason: data.status, usage: { inputTokens: data.usage?.input_tokens, outputTokens: data.usage?.output_tokens, reasoningTokens: data.usage?.output_tokens_details?.reasoning_tokens, totalTokens: data.usage?.total_tokens }, raw };
   }
-  const choice = raw.choices?.[0] || {};
+  const data = raw as CompletionApiResponse;
+  const choice = data.choices?.[0] || {};
   const message = choice.message || {};
-  return { id: raw.id, model: raw.model, text: message.content || "", thinking: message.reasoning_content || "", toolCalls: (message.tool_calls || []).map((x: any) => ({ id: x.id, name: x.function?.name, arguments: safeJson(x.function?.arguments || "{}"), rawArguments: x.function?.arguments || "{}" })), finishReason: choice.finish_reason, usage: { inputTokens: raw.usage?.prompt_tokens, outputTokens: raw.usage?.completion_tokens, reasoningTokens: raw.usage?.completion_tokens_details?.reasoning_tokens, totalTokens: raw.usage?.total_tokens }, raw };
+  return { id: data.id, model: data.model, text: message.content || "", thinking: message.reasoning_content || "", toolCalls: (message.tool_calls || []).map((x) => ({ id: x.id, name: x.function?.name, arguments: safeJson(x.function?.arguments || "{}"), rawArguments: x.function?.arguments || "{}" })), finishReason: choice.finish_reason, usage: { inputTokens: data.usage?.prompt_tokens, outputTokens: data.usage?.completion_tokens, reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens, totalTokens: data.usage?.total_tokens }, raw };
 }
 
 async function* readSse(response: Response) {
@@ -190,13 +281,32 @@ async function* readSse(response: Response) {
   }
 }
 
+interface ClaudeStreamBlock {
+  type?: string;
+  text?: string;
+  thinking?: string;
+  signature?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+}
+
+interface RawResponseData {
+  id?: string;
+  model?: string;
+  stop_reason?: string;
+  status?: string;
+  content?: unknown[];
+  [key: string]: unknown;
+}
+
 async function* streamLlm(options: LlmStreamRequest): AsyncGenerator<LlmStreamEvent> {
   const profile = getLlmProfile(options.profile);
   const response = await request(profile, options, true);
-  let text = "", thinking = "", rawFinal: any = null;
+  let text = "", thinking = "", rawFinal: RawResponseData | null = null;
   let usage: LlmUsage | undefined;
   const calls = new Map<string, { id: string; name: string; args: string }>();
-  const claudeBlocks = new Map<number, any>();
+  const claudeBlocks = new Map<number, ClaudeStreamBlock>();
   for await (const event of readSse(response)) {
     if (profile.type === "claude") {
       if (event.type === "message_start") { rawFinal = event.message; usage = { inputTokens: event.message?.usage?.input_tokens, outputTokens: event.message?.usage?.output_tokens }; }
@@ -264,6 +374,12 @@ function stringifyToolResult(value: unknown) {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
+function toLlmTool(tool: LlmFunction): LlmTool {
+  const { execute, ...rest } = tool;
+  void execute;
+  return rest;
+}
+
 /**
  * High-level client that automatically executes local tool functions.
  * API tokens are read from the selected browser-local profile at call time.
@@ -290,7 +406,7 @@ export class LlmClient {
     let incompleteRetries = 0;
     let requireTools = false;
     for (let round = 0; round <= maxRounds; round++) {
-      const response = await callLlm({ ...options, toolChoice: requireTools ? "required" : options.toolChoice, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(({ execute: _execute, ...tool }) => tool) });
+      const response = await callLlm({ ...options, toolChoice: requireTools ? "required" : options.toolChoice, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(toLlmTool) });
       requireTools = false;
       if (!response.toolCalls.length) {
         if (!options.isComplete || options.isComplete()) return response;
@@ -323,7 +439,7 @@ export class LlmClient {
     const aggregateUsage: LlmUsage = {};
     for (let round = 0; round <= maxRounds; round++) {
       let completed: LlmResponse | null = null;
-      const events = callLlm({ ...options, stream: true, toolChoice: requireTools ? "required" : options.toolChoice, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(({ execute: _execute, ...tool }) => tool) });
+      const events = callLlm({ ...options, stream: true, toolChoice: requireTools ? "required" : options.toolChoice, profile: this.config.profile, model: this.model(options.model), messages, tools: functions.map(toLlmTool) });
       requireTools = false;
       for await (const event of events) {
         if (event.type === "done") {

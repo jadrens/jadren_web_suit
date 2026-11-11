@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import Link from "next/link";
 import {
   Alert,
@@ -41,6 +41,9 @@ import Footer from "@components/ui/layout/Footer";
 import { ShowNavbarLoginStatus } from "@components/ui/layout/NavbarLoginStatus";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import { useAutoRefresh } from "@hooks/app/useAutoRefresh";
+import { createRequestGate } from "@components/ui/auth/request-gate";
+import { createListRequestGuard } from "@hooks/app/list-request-guard";
+import { authSession } from "@lib/client-api/session";
 import { useAuth } from "@lib/client-api/use-auth";
 import { ApiError, quickLinksApi, type QuickLink } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/app";
@@ -82,9 +85,31 @@ interface EditDraft {
 }
 
 export default function QuickLinkClient() {
+  const auth = useAuth();
+  return <AccountView key={auth.user?.userId ?? "anonymous"} auth={auth} />;
+}
+
+function AccountView({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const { t, locale } = useI18n();
   const copy = t.tools.quickLink;
-  const { status, isAuthenticated, user } = useAuth();
+  const { status, isAuthenticated, user } = auth;
+  const accountId = user?.userId;
+  const mounted = useRef(false);
+  const initialized = useRef(false);
+  const mutationGate = useRef(createRequestGate());
+  const [mutationPending, setMutationPending] = useState(false);
+  const beginMutation = useCallback(() => {
+    const release = mutationGate.current.acquire();
+    if (!release) return null;
+    setMutationPending(true);
+    return () => { release(); if (mounted.current) setMutationPending(false); };
+  }, []);
+  const listGuard = useRef(createListRequestGuard(accountId, () => authSession.getSnapshot().user?.userId));
+  const isCurrent = useCallback(() => mounted.current && !!accountId && authSession.getSnapshot().user?.userId === accountId, [accountId]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   useDocumentTitle(copy.title);
 
   const [links, setLinks] = useState<QuickLink[]>([]);
@@ -105,34 +130,38 @@ export default function QuickLinkClient() {
   const [refreshedAt, setRefreshedAt] = useState(0);
 
   const loadLinks = useCallback(async (showLoading = true) => {
+    const request = listGuard.current.begin();
+    const foregroundRequest = showLoading ? listGuard.current.beginForeground() : null;
     if (showLoading) setLoading(true);
-    setError(null);
+    // Background refreshes run every 30 s; only clear a previous load failure,
+    // never the error of an action the user has not seen yet.
+    setError((current) => (current === copy.loadFailed ? null : current));
     try {
       const response = await quickLinksApi.list();
+      if (!isCurrent() || !listGuard.current.isCurrent(request)) return;
       setLinks(response.links);
       setRefreshedAt(Date.now());
     } catch {
-      setError(copy.loadFailed);
+      if (isCurrent() && listGuard.current.isCurrent(request)) setError(copy.loadFailed);
     } finally {
-      if (showLoading) setLoading(false);
+      if (foregroundRequest !== null && isCurrent() && listGuard.current.isLatestForeground(foregroundRequest)) setLoading(false);
     }
-  }, [copy.loadFailed]);
+  }, [copy.loadFailed, isCurrent]);
 
+  const initialLoad = useRef(loadLinks);
+  useEffect(() => { initialLoad.current = loadLinks; }, [loadLinks]);
   useEffect(() => {
-    if (status !== "authenticated") {
-      if (!isAuthenticated) {
-        const timer = window.setTimeout(() => setLinks([]), 0);
-        return () => window.clearTimeout(timer);
-      }
-      return;
-    }
-    const timer = window.setTimeout(() => void loadLinks(), 0);
+    if (!(isAuthenticated) || initialized.current) return;
+    const timer = window.setTimeout(() => {
+      initialized.current = true;
+      void initialLoad.current();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [isAuthenticated, loadLinks, status, user?.userId]);
+  }, [isAuthenticated]);
 
   useAutoRefresh(
     () => loadLinks(false),
-    status === "authenticated" && isAuthenticated
+    isAuthenticated
   );
 
   function replaceLink(updated: QuickLink) {
@@ -171,6 +200,8 @@ export default function QuickLinkClient() {
       return;
     }
 
+    const release = beginMutation();
+    if (!release) return;
     setCreating(true);
     try {
       const response = await quickLinksApi.create({
@@ -179,14 +210,16 @@ export default function QuickLinkClient() {
         note: note.trim() || null,
         expiresAt: expiration.toISOString(),
       });
-      setLinks((current) => [response.link, ...current]);
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
+      setLinks((current) => [response.link, ...current.filter((item) => item.shortName !== response.link.shortName)]);
       setShortName("");
       setTargetUrl("");
       setNote("");
       setExpiresAt("");
       setCreateOpen(false);
     } catch (requestError) {
-      setError(
+      if (isCurrent()) setError(
         requestError instanceof ApiError && requestError.code === "quick_link_exists"
           ? copy.nameExists
           : requestError instanceof ApiError && requestError.code === "invalid_short_name"
@@ -196,16 +229,17 @@ export default function QuickLinkClient() {
               : copy.createFailed
       );
     } finally {
-      setCreating(false);
+      if (isCurrent()) setCreating(false);
+      release();
     }
   }
 
   async function copyLink(shortNameToCopy: string) {
     try {
       await navigator.clipboard.writeText(`${QUICK_LINK_BASE_URL}${shortNameToCopy}`);
-      setToast(copy.copied);
+      if (isCurrent()) setToast(copy.copied);
     } catch {
-      setToast(copy.copyFailed);
+      if (isCurrent()) setToast(copy.copyFailed);
     }
   }
 
@@ -259,6 +293,8 @@ export default function QuickLinkClient() {
       nextExpiration = parsed.toISOString();
     }
 
+    const release = beginMutation();
+    if (!release) return;
     setSaving(true);
     try {
       const response = await quickLinksApi.update(editDraft.link.shortName, {
@@ -266,11 +302,13 @@ export default function QuickLinkClient() {
         note: editDraft.note.trim() || null,
         ...(nextExpiration ? { expiresAt: nextExpiration } : {}),
       });
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
       replaceLink(response.link);
       setEditDraft(null);
       setToast(copy.updated);
     } catch (requestError) {
-      setEditError(
+      if (isCurrent()) setEditError(
         requestError instanceof ApiError && requestError.code === "invalid_target_url"
           ? copy.invalidTargetUrl
           : requestError instanceof ApiError && requestError.code === "expiration_not_extended"
@@ -278,7 +316,8 @@ export default function QuickLinkClient() {
             : copy.updateFailed
       );
     } finally {
-      setSaving(false);
+      if (isCurrent()) setSaving(false);
+      release();
     }
   }
 
@@ -286,32 +325,40 @@ export default function QuickLinkClient() {
     const linkItem = selectedLink;
     closeMenu();
     if (!linkItem || !window.confirm(copy.disableConfirm)) return;
+    const release = beginMutation();
+    if (!release) return;
     setError(null);
     try {
       const response = await quickLinksApi.update(linkItem.shortName, {
         disable: true,
       });
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
       replaceLink(response.link);
       setToast(copy.disabled);
     } catch {
-      setError(copy.updateFailed);
-    }
+      if (isCurrent()) setError(copy.updateFailed);
+    } finally { release(); }
   }
 
   async function deleteSelected() {
     const linkItem = selectedLink;
     closeMenu();
     if (!linkItem || !window.confirm(copy.deleteConfirm)) return;
+    const release = beginMutation();
+    if (!release) return;
     setError(null);
     try {
       await quickLinksApi.delete(linkItem.shortName);
+      if (!isCurrent()) return;
+      listGuard.current.invalidate();
       setLinks((current) =>
         current.filter((item) => item.shortName !== linkItem.shortName)
       );
       setToast(copy.deleted);
     } catch {
-      setError(copy.deleteFailed);
-    }
+      if (isCurrent()) setError(copy.deleteFailed);
+    } finally { release(); }
   }
 
   const authIsLoading = status === "uninitialized" || status === "refreshing";
@@ -353,7 +400,7 @@ export default function QuickLinkClient() {
         ) : (
           <Stack spacing={2.5}>
             {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
-            <Button startIcon={<AddLinkRoundedIcon />} variant="contained" onClick={() => { setError(null); setCreateOpen(true); }} sx={{ alignSelf: "flex-start" }}>{copy.createTitle}</Button>
+            <Button disabled={mutationPending} startIcon={<AddLinkRoundedIcon />} variant="contained" onClick={() => { setError(null); setCreateOpen(true); }} sx={{ alignSelf: "flex-start" }}>{copy.createTitle}</Button>
 
             <Box>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{copy.listTitle}</Typography>
@@ -409,7 +456,7 @@ export default function QuickLinkClient() {
                                   <ContentCopyRoundedIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
-                              <IconButton size="small" onClick={(event) => openMenu(event, quickLink)} aria-label={copy.actions}>
+                              <IconButton disabled={mutationPending} size="small" onClick={(event) => openMenu(event, quickLink)} aria-label={copy.actions}>
                                 <MoreVertRoundedIcon fontSize="small" />
                               </IconButton>
                             </TableCell>
@@ -428,7 +475,8 @@ export default function QuickLinkClient() {
       <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={createLink} noValidate>
           <DialogTitle>{copy.createTitle}</DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ pointerEvents: mutationPending ? "none" : undefined }}>
+            <fieldset disabled={mutationPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {error ? <Alert severity="error" onClose={() => setError(null)}>{error}</Alert> : null}
               <TextField
@@ -469,7 +517,7 @@ export default function QuickLinkClient() {
                 slotProps={{ inputLabel: { shrink: true } }}
               />
             </Stack>
-          </DialogContent>
+          </fieldset></DialogContent>
           <DialogActions>
             <Button onClick={() => setCreateOpen(false)} disabled={creating}>{copy.cancel}</Button>
             <Button type="submit" variant="contained" disabled={creating}>{creating ? copy.creating : copy.create}</Button>
@@ -486,7 +534,8 @@ export default function QuickLinkClient() {
       <Dialog open={Boolean(editDraft)} onClose={() => !saving && setEditDraft(null)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={saveEdit}>
           <DialogTitle>{editDraft && new Date(editDraft.link.expiresAt).getTime() <= refreshedAt ? copy.reactivateTitle : copy.editTitle}</DialogTitle>
-          <DialogContent>
+          <DialogContent sx={{ pointerEvents: mutationPending ? "none" : undefined }}>
+            <fieldset disabled={mutationPending} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {editError ? <Alert severity="error">{editError}</Alert> : null}
               <TextField
@@ -528,7 +577,7 @@ export default function QuickLinkClient() {
                 fullWidth
               />
             </Stack>
-          </DialogContent>
+          </fieldset></DialogContent>
           <DialogActions>
             <Button onClick={() => setEditDraft(null)} disabled={saving}>{copy.cancel}</Button>
             <Button type="submit" variant="contained" disabled={saving}>{saving ? copy.saving : copy.save}</Button>

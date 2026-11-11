@@ -24,10 +24,10 @@ export default function BouncingAvatar() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
   const hasStarted = useRef(false);
-  const avatarRef = useRef<any>(null);
+  const avatarRef = useRef<MatterJS.Body | null>(null);
   const startPosRef = useRef<{ x: number; y: number; size: number } | null>(null);
   const particlesRef = useRef<Particle[]>([]);
-  const hueRef = useRef(Math.random() * 360);
+  const hueRef = useRef(0);
   const lastWallBounceRef = useRef(0);
   const avatarImgRef = useRef<HTMLImageElement | null>(null);
   const squashRef = useRef({ x: 1, y: 1 });
@@ -39,6 +39,7 @@ export default function BouncingAvatar() {
     const handleClick = () => {
       if (hasStarted.current) return;
       hasStarted.current = true;
+      hueRef.current = Math.random() * 360;
 
       if (avatarEl) {
         const rect = avatarEl.getBoundingClientRect();
@@ -61,6 +62,89 @@ export default function BouncingAvatar() {
     avatarEl?.addEventListener("click", handleClick);
     return () => avatarEl?.removeEventListener("click", handleClick);
   }, []);
+
+  function spawnFragments(x: number, y: number, speed: number, radius: number, avatarAngle: number) {
+    const count = Math.floor(3 + Math.random() * 6);
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 1.2;
+      const srcDist = Math.random() * radius * 0.7;
+      const fragRadius = radius * (0.15 + Math.random() * 0.4);
+      particlesRef.current.push({
+        x: x + Math.cos(angle) * srcDist,
+        y: y + Math.sin(angle) * srcDist,
+        vx: Math.cos(angle) * (1.5 + Math.random() * speed * 0.6),
+        vy: Math.sin(angle) * (1.5 + Math.random() * speed * 0.6),
+        life: 0,
+        maxLife: 18 + Math.random() * 22,
+        radius: fragRadius,
+        hue: 0,
+        angle: avatarAngle + (Math.random() - 0.5) * 1.5,
+        angleVel: (Math.random() - 0.5) * 0.25,
+        isAvatarFragment: true,
+      });
+    }
+  }
+
+  function spawnTrailParticle(x: number, y: number, speed: number, radius: number) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = radius * (0.8 + Math.random() * 0.4);
+    particlesRef.current.push({
+      x: x + Math.cos(angle) * dist,
+      y: y + Math.sin(angle) * dist,
+      vx: (Math.random() - 0.5) * speed * 0.3,
+      vy: (Math.random() - 0.5) * speed * 0.3,
+      life: 0,
+      maxLife: 15 + Math.random() * 25,
+      radius: 1 + Math.random() * 2.5,
+      hue: (hueRef.current + Math.random() * 60 - 30 + 360) % 360,
+      angle: 0,
+      angleVel: 0,
+      isAvatarFragment: false,
+    });
+  }
+
+  function updateAndDrawParticles(ctx: CanvasRenderingContext2D) {
+    const img = avatarImgRef.current;
+    const particles = particlesRef.current;
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life++;
+      if (p.life >= p.maxLife) {
+        particles.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+      p.angle += p.angleVel;
+
+      const alpha = 1 - p.life / p.maxLife;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+
+      if (p.isAvatarFragment && img?.complete) {
+        const r = p.radius;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.clip();
+        const srcX = ((Math.sin(p.angle * 3.7) * 0.5 + 0.5) * r * 2);
+        const srcY = ((Math.cos(p.angle * 2.3) * 0.5 + 0.5) * r * 2);
+        ctx.drawImage(img, srcX, srcY, r * 3, r * 3, -r, -r, r * 2, r * 2);
+      } else {
+        const size = p.radius * (1 - p.life / p.maxLife);
+        ctx.beginPath();
+        ctx.arc(0, 0, size, 0, Math.PI * 2);
+        ctx.fillStyle = `hsl(${p.hue}, 90%, 65%)`;
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
 
   useEffect(() => {
     const Matter = matterRef.current;
@@ -252,89 +336,6 @@ export default function BouncingAvatar() {
       cancelAnimationFrame(frameId);
     };
   }, [visible]);
-
-  function spawnFragments(x: number, y: number, speed: number, radius: number, avatarAngle: number) {
-    const count = Math.floor(3 + Math.random() * 6);
-    for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 1.2;
-      const srcDist = Math.random() * radius * 0.7;
-      const fragRadius = radius * (0.15 + Math.random() * 0.4);
-      particlesRef.current.push({
-        x: x + Math.cos(angle) * srcDist,
-        y: y + Math.sin(angle) * srcDist,
-        vx: Math.cos(angle) * (1.5 + Math.random() * speed * 0.6),
-        vy: Math.sin(angle) * (1.5 + Math.random() * speed * 0.6),
-        life: 0,
-        maxLife: 18 + Math.random() * 22,
-        radius: fragRadius,
-        hue: 0,
-        angle: avatarAngle + (Math.random() - 0.5) * 1.5,
-        angleVel: (Math.random() - 0.5) * 0.25,
-        isAvatarFragment: true,
-      });
-    }
-  }
-
-  function spawnTrailParticle(x: number, y: number, speed: number, radius: number) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = radius * (0.8 + Math.random() * 0.4);
-    particlesRef.current.push({
-      x: x + Math.cos(angle) * dist,
-      y: y + Math.sin(angle) * dist,
-      vx: (Math.random() - 0.5) * speed * 0.3,
-      vy: (Math.random() - 0.5) * speed * 0.3,
-      life: 0,
-      maxLife: 15 + Math.random() * 25,
-      radius: 1 + Math.random() * 2.5,
-      hue: (hueRef.current + Math.random() * 60 - 30 + 360) % 360,
-      angle: 0,
-      angleVel: 0,
-      isAvatarFragment: false,
-    });
-  }
-
-  function updateAndDrawParticles(ctx: CanvasRenderingContext2D) {
-    const img = avatarImgRef.current;
-    const particles = particlesRef.current;
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.life++;
-      if (p.life >= p.maxLife) {
-        particles.splice(i, 1);
-        continue;
-      }
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vx *= 0.96;
-      p.vy *= 0.96;
-      p.angle += p.angleVel;
-
-      const alpha = 1 - p.life / p.maxLife;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(p.x, p.y);
-      ctx.rotate(p.angle);
-
-      if (p.isAvatarFragment && img?.complete) {
-        const r = p.radius;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.clip();
-        const srcX = ((Math.sin(p.angle * 3.7) * 0.5 + 0.5) * r * 2);
-        const srcY = ((Math.cos(p.angle * 2.3) * 0.5 + 0.5) * r * 2);
-        ctx.drawImage(img, srcX, srcY, r * 3, r * 3, -r, -r, r * 2, r * 2);
-      } else {
-        const size = p.radius * (1 - p.life / p.maxLife);
-        ctx.beginPath();
-        ctx.arc(0, 0, size, 0, Math.PI * 2);
-        ctx.fillStyle = `hsl(${p.hue}, 90%, 65%)`;
-        ctx.fill();
-      }
-
-      ctx.restore();
-    }
-  }
 
   if (!visible) return null;
 

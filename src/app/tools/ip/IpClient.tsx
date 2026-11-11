@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
   Typography,
@@ -102,30 +102,40 @@ export default function IpClient() {
   const [geoData, setGeoData] = useState<IpGeolocation | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
 
+  // Each refresh gets a number; a late answer to an older one is dropped.
+  const requestRef = useRef(0);
+
   const fetchIp = useCallback(async () => {
+    const request = ++requestRef.current;
+    const current = () => request === requestRef.current;
     setLoading(true);
     setError(null);
     setGeoData(null);
     try {
       const data = await toolsApi.clientIp();
+      if (!current()) return;
       setIp(data.ip);
 
       // Async fetch geo info
       setGeoLoading(true);
       toolsApi.ipGeo(data.ip, { signal: AbortSignal.timeout(10000) })
-        .then((geo) => setGeoData(geo as unknown as IpGeolocation))
-        .catch(() => setGeoData(null))
-        .finally(() => setGeoLoading(false));
+        .then((geo) => current() && setGeoData(geo as unknown as IpGeolocation))
+        .catch(() => current() && setGeoData(null))
+        .finally(() => current() && setGeoLoading(false));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      if (current()) setError(err instanceof Error ? err.message : t.tools.ip.loadFailed);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
-  }, []);
+  }, [t.tools.ip.loadFailed]);
 
   useEffect(() => {
+    const requests = requestRef;
     const timer = window.setTimeout(() => void fetchIp(), 0);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      requests.current++; // unmounting: ignore answers still in flight
+    };
   }, [fetchIp]);
 
   const copyToClipboard = async (text: string, label: string) => {
@@ -182,9 +192,14 @@ export default function IpClient() {
                   <CircularProgress size={32} />
                 </Box>
               ) : error ? (
-                <Typography variant="h6" color="error" sx={{ py: 4 }}>
-                  {error}
-                </Typography>
+                <Box sx={{ py: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                  <Typography variant="h6" color="error">
+                    {error}
+                  </Typography>
+                  <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={fetchIp}>
+                    {t.tools.ip.refresh}
+                  </Button>
+                </Box>
               ) : (
                 <>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2, flexWrap: "wrap" }}>
@@ -251,7 +266,7 @@ export default function IpClient() {
                           <GeoRow
                             label={t.tools.ip.coordinates}
                             value={
-                              geoData.lat && geoData.lon
+                              Number.isFinite(geoData.lat) && Number.isFinite(geoData.lon)
                                 ? `${geoData.lat}, ${geoData.lon}`
                                 : "—"
                             }

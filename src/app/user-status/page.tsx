@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import UserStatusClient from "./UserStatusClient";
 
 export const metadata: Metadata = {
-  title: "Account Status | jadren tools",
+  title: "Account Status",
   description: "View account status and manage the current session",
 };
 

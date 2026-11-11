@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -29,49 +29,36 @@ export default function QrcodeClient() {
   useDocumentTitle(t.tools.qrcode.title);
 
   const [text, setText] = useState(SITE_CONFIG.baseUrl as string);
-  const [imageUrl, setImageUrl] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [toast, setToast] = useState({ open: false, message: "" });
+  const [generated, setGenerated] = useState({ key: "", url: "", failed: false });
 
-  const handleGenerate = useCallback(async () => {
-    const value = text.trim();
-
-    if (!value) {
-      setImageUrl("");
-      setError(t.tools.qrcode.emptyHint);
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const isDark = theme.palette.mode === "dark";
-      const dark = isDark ? theme.palette.primary.main : "#111111";
-      const light = isDark ? theme.palette.background.paper : "#ffffff";
-
-      const url = await QRCode.toDataURL(value, {
-        errorCorrectionLevel: "M",
-        margin: 2,
-        width: 320,
-        color: {
-          dark,
-          light,
-        },
-      });
-      setImageUrl(url);
-    } catch {
-      setError(t.tools.qrcode.generateFailed);
-      setImageUrl("");
-    } finally {
-      setLoading(false);
-    }
-  }, [text, theme.palette.mode, t.tools.qrcode.emptyHint, t.tools.qrcode.generateFailed]);
+  const value = text.trim();
+  const isDark = theme.palette.mode === "dark";
+  const dark = isDark ? theme.palette.primary.main : "#111111";
+  const light = isDark ? theme.palette.background.paper : "#ffffff";
+  // The code is regenerated whenever the text or the colours change.
+  const key = value ? JSON.stringify([value, dark, light]) : "";
+  const current = generated.key === key;
+  const imageUrl = value && current ? generated.url : "";
+  // While the next code renders, keep showing the previous one (dimmed) instead of the empty hint.
+  const previewUrl = value ? imageUrl || generated.url : "";
+  const failed = Boolean(value) && current && generated.failed;
+  // An empty field is a normal state, shown in the preview; only a failure is an error.
+  const error = failed ? t.tools.qrcode.generateFailed : "";
 
   useEffect(() => {
-    void handleGenerate();
-  }, [handleGenerate]);
+    if (!key) return;
+    let cancelled = false;
+    QRCode.toDataURL(value, { errorCorrectionLevel: "M", margin: 2, width: 320, color: { dark, light } })
+      .then((url) => ({ key, url, failed: false }))
+      .catch(() => ({ key, url: "", failed: true }))
+      .then((result) => {
+        if (!cancelled) setGenerated(result);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [key, value, dark, light]);
 
   const handleDownload = () => {
     if (!imageUrl) return;
@@ -93,8 +80,6 @@ export default function QrcodeClient() {
 
   const handleClear = () => {
     setText("");
-    setImageUrl("");
-    setError("");
   };
 
   return (
@@ -154,14 +139,6 @@ export default function QrcodeClient() {
 
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                     <Button
-                      variant="contained"
-                      onClick={handleGenerate}
-                      disabled={loading}
-                      sx={{ px: 3, py: 1.2, borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-                    >
-                      {loading ? t.tools.qrcode.generating : t.tools.qrcode.generate}
-                    </Button>
-                    <Button
                       variant="outlined"
                       onClick={handleClear}
                       sx={{ px: 3, py: 1.2, borderRadius: 2, textTransform: "none" }}
@@ -203,21 +180,27 @@ export default function QrcodeClient() {
                     p: 3,
                   }}
                 >
-                  {imageUrl ? (
+                  {previewUrl && !failed ? (
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "center" }}>
-                      <img src={imageUrl} alt="QR code" style={{ width: 280, height: 280, borderRadius: 12 }} />
+                      <Box
+                        component="img"
+                        src={previewUrl}
+                        alt="QR code"
+                        sx={{ width: 280, height: 280, borderRadius: 3, opacity: imageUrl ? 1 : 0.5, transition: "opacity .15s" }}
+                      />
                       <Button
                         variant="contained"
                         startIcon={<DownloadIcon />}
                         onClick={handleDownload}
+                        disabled={!imageUrl}
                         sx={{ px: 3, py: 1.1, borderRadius: 2, textTransform: "none", fontWeight: 600 }}
                       >
                         {t.tools.qrcode.download}
                       </Button>
                     </Box>
                   ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center", maxWidth: 280 }}>
-                      {t.tools.qrcode.emptyHint}
+                    <Typography variant="body2" color={failed ? "error" : "text.secondary"} sx={{ textAlign: "center", maxWidth: 280 }}>
+                      {failed ? t.tools.qrcode.generateFailed : t.tools.qrcode.emptyHint}
                     </Typography>
                   )}
                 </Box>

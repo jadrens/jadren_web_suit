@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const localeName = locale === "zh" ? "中文" : "English";
   return {
-    title: `${localeName} Posts - jadren-blog`,
+    title: locale === "zh" ? "中文文章" : "English Posts",
     description: `All blog posts in ${localeName}`,
   };
 }

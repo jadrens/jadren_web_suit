@@ -1,6 +1,9 @@
 import fs from "fs";
 import path from "path";
+import type { Metadata } from "next";
 import AboutClient from "./AboutClient";
+
+export const metadata: Metadata = { title: "About" };
 
 function getAboutContent(): Record<"en" | "zh", string> {
   const root = process.cwd();

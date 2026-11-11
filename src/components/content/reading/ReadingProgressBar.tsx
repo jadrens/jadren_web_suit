@@ -1,10 +1,10 @@
 "use client";
 
 import { Box } from "@mui/material";
-import { useReadingProgress } from "./ReadingProgressContext";
+import { useReadingProgressValue } from "./ReadingProgressContext";
 
 export default function ReadingProgressBar() {
-  const { readingProgress } = useReadingProgress();
+  const readingProgress = useReadingProgressValue();
 
   return (
     <Box
@@ -21,9 +21,12 @@ export default function ReadingProgressBar() {
       <Box
         sx={{
           width: "100%",
-          height: `${readingProgress}%`,
+          height: "100%",
+          transform: `scaleY(${readingProgress / 100})`,
+          transformOrigin: "top",
           bgcolor: "primary.main",
-          transition: "height 0.1s ease-out",
+          transition: "transform 0.1s ease-out",
+          "@media (prefers-reduced-motion: reduce)": { transition: "none" },
         }}
       />
     </Box>

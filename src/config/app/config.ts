@@ -2,7 +2,7 @@ import { GITHUB_REPO_BRANCH, GITHUB_REPO_URL } from "@lib/github";
 
 const SITE_CONFIG = {
   baseUrl: "https://jadren.cn",
-  siteName: "jadren tools",
+  siteName: "jadren",
   description: "Useful online tools",
   githubRepo: GITHUB_REPO_URL,
   githubBranch: GITHUB_REPO_BRANCH,

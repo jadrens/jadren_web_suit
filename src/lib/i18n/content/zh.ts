@@ -50,6 +50,8 @@ export const zh: TranslationKeys = {
   toc: {
     contents: "目录",
     noHeadings: "暂无标题",
+    toggleSection: "展开或收起章节",
+    close: "关闭目录",
   },
   sidebar: {
     toggle: "切换文章侧边栏",
@@ -57,7 +59,11 @@ export const zh: TranslationKeys = {
   },
   blogPage: {
     posts: "文章",
-    noPosts: "暂无文章，请添加 markdown 文件到 content/posts/",
+    noPosts: "暂无文章。",
+    noMatches: "没有符合搜索或标签筛选的文章。",
+    results: "篇文章",
+    pagination: "文章分页",
+    clearSearch: "清除搜索",
     search: "搜索文章...",
     sortDesc: "最新优先",
     sortAsc: "最旧优先",

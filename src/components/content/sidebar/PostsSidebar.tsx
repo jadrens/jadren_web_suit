@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Box, List, ListItem, ListItemButton, ListItemText, Typography, IconButton, Tooltip, alpha } from "@mui/material";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import CloseIcon from "@mui/icons-material/Close";
@@ -27,6 +27,11 @@ export default function PostsSidebar({ posts, currentSlug, locale, open, onToggl
   const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>(open ? "entering" : "closed");
   const [navVisible, setNavVisible] = useState(true);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+  }, []);
 
   // Trigger slide-in after mount
   useEffect(() => {
@@ -38,27 +43,20 @@ export default function PostsSidebar({ posts, currentSlug, locale, open, onToggl
 
   // Topbar scroll avoidance
   useEffect(() => {
-    let lastScrollY = window.scrollY;
-
     const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      if (currentScrollY <= NAV_HEIGHT) {
-        setNavVisible(true);
-      } else if (currentScrollY > lastScrollY) {
-        setNavVisible(false);
-      } else {
-        setNavVisible(false);
-      }
-      lastScrollY = currentScrollY;
+      setNavVisible(window.scrollY <= NAV_HEIGHT);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const handleClose = useCallback(() => {
+    if (closeTimerRef.current) return;
     setPhase("exiting");
-    setTimeout(() => {
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
       onToggle();
       setPhase("closed");
     }, ANIM_DURATION);
@@ -85,7 +83,7 @@ export default function PostsSidebar({ posts, currentSlug, locale, open, onToggl
             border: 1,
             borderColor: 'divider',
             boxShadow: theme.shadows[3],
-            display: { xs: "none", sm: "inline-flex" },
+            display: { xs: "none", xl: "inline-flex" },
             '&:hover': {
               bgcolor: alpha(theme.palette.action.hover, 0.9),
             },
@@ -100,13 +98,15 @@ export default function PostsSidebar({ posts, currentSlug, locale, open, onToggl
   // Card state: floating sidebar
   return (
     <Box
+      component="nav"
+      aria-label={t.sidebar.allPosts}
       sx={(theme) => ({
         width: tocDesktopWidth,
         flexShrink: 0,
         position: "sticky",
         top: navVisible ? 80 : 16,
         maxHeight: navVisible ? "calc(100vh - 96px)" : "calc(100vh - 32px)",
-        display: { xs: "none", sm: "flex" },
+        display: { xs: "none", xl: "flex" },
         flexDirection: "column",
         bgcolor: alpha(theme.palette.background.paper, 0.75),
         backdropFilter: 'blur(16px)',
@@ -145,6 +145,8 @@ export default function PostsSidebar({ posts, currentSlug, locale, open, onToggl
               component={Link}
               href={`/blog/${locale}/${post.slug}`}
               selected={post.slug === currentSlug}
+              aria-current={post.slug === currentSlug ? "page" : undefined}
+              title={post.title}
               sx={{ borderRadius: 1, mb: 0.5 }}
             >
               <ListItemText

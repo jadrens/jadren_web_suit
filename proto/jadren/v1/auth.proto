@@ -2,16 +2,29 @@ syntax = "proto3";
 
 package jadren.v1;
 
-// AuthService handles account registration, e-mail verification and JWT
+// AuthService handles registration, e-mail codes, password resets and
 // sessions. Authenticated RPCs read "authorization: Bearer <jwt>" metadata.
+//
+// Sessions: Register, Login and ResetPassword return a short-lived access
+// token and set an HttpOnly refresh cookie scoped to this service. Refresh
+// reads that cookie, rotates it and returns a new access token; Logout revokes
+// the session on the server.
 service AuthService {
-  rpc Register(RegisterRequest) returns (RegisterResponse);
+  // Sends a code proving ownership of an e-mail that has no verified account.
+  rpc SendRegistrationCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
+  // Creates a verified account from a registration code and signs it in.
+  rpc Register(RegisterRequest) returns (TokenResponse);
   rpc Login(LoginRequest) returns (TokenResponse);
-  // Refresh accepts the token in the request or in the authorization header.
   rpc Refresh(RefreshRequest) returns (TokenResponse);
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
   rpc Me(MeRequest) returns (MeResponse);
+  // Verifies the e-mail of an existing unverified account.
   rpc SendVerificationCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
   rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
+  // Always reports success, so it does not reveal which e-mails have accounts.
+  rpc SendPasswordResetCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
+  // Sets a new password, revokes every session of the account and signs in.
+  rpc ResetPassword(ResetPasswordRequest) returns (TokenResponse);
 }
 
 message User {
@@ -25,24 +38,41 @@ message User {
 }
 
 message RegisterRequest {
+  // Empty: the e-mail's local part is used.
   string nickname = 1;
   string email = 2;
   string password = 3;
   optional string phone = 4;
+  // Six-digit code from SendRegistrationCode.
+  string code = 5;
 }
-message RegisterResponse { User user = 1; }
 
 message LoginRequest {
   string identifier = 1;
   string password = 2;
 }
 
-message RefreshRequest { string token = 1; }
+// The refresh token travels in the HttpOnly cookie, never in the message.
+message RefreshRequest {
+  reserved 1;
+  reserved "token";
+}
+
+message LogoutRequest {}
+message LogoutResponse {}
+
+message ResetPasswordRequest {
+  string email = 1;
+  string code = 2;
+  string new_password = 3;
+}
 
 message TokenResponse {
   string access_token = 1;
   string token_type = 2;
+  // Seconds until the access token expires.
   int32 expires_in = 3;
+  // Seconds until the session (refresh cookie) expires.
   int32 refresh_window = 4;
   User user = 5;
 }

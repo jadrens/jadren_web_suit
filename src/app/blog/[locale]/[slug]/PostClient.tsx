@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useHydrated } from "@hooks/app/useHydrated";
 import { Box, Breadcrumbs, Chip, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import Link from "next/link";
@@ -44,7 +45,7 @@ interface PostClientProps {
   next: PostMeta | null;
 }
 
-function getRelativeTime(dateStr: string, t: any): string {
+function getRelativeTime(dateStr: string, t: ReturnType<typeof useI18n>["t"]): string {
   const now = new Date();
   const date = new Date(dateStr);
   const diff = Math.abs(now.getTime() - date.getTime());
@@ -100,20 +101,14 @@ function PostContent({ post, views, slug, incrementView, locale, allPosts, title
   const theme = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useBrowserConfig(BrowserConfigKeys.sidebarOpen, true);
-  const [localViews, setLocalViews] = useState(views);
-  const [mounted, setMounted] = useState(false);
-
-  
+  const mounted = useHydrated();
+  // `views` is the count before this visit, which the effect below records.
+  const localViews = views + 1;
 
   useScrollProgress();
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
     incrementView(slug);
-    setLocalViews((v) => v + 1);
   }, [slug, incrementView]);
 
   return (
@@ -123,7 +118,7 @@ function PostContent({ post, views, slug, incrementView, locale, allPosts, title
       <ReadingProgressBar />
       <BackToTopButton />
 
-      <Box sx={{ display: { xs: "block", sm: "grid" }, gridTemplateColumns: { sm: sidebarOpen ? "250px 1fr 250px" : "1fr 250px" }, gap: 4, pr: { sm: 3 }, transition: "grid-template-columns 0.3s ease" }}>
+      <Box sx={{ display: { xs: "block", lg: "grid" }, gridTemplateColumns: { lg: "minmax(0, 1fr) 250px", xl: sidebarOpen ? "250px minmax(0, 1fr) 250px" : "minmax(0, 1fr) 250px" }, alignItems: "start", gap: { lg: 3, xl: 4 }, pr: { lg: 3 } }}>
         {/* Posts sidebar — open state in left grid column */}
         {sidebarOpen && (
           <PostsSidebar
@@ -134,7 +129,7 @@ function PostContent({ post, views, slug, incrementView, locale, allPosts, title
             locale={locale}
           />
         )}
-        <Box component="main" sx={{ width: '100%', pl: { sm: '76px', xs: 3 }, pr: { xs: 3, sm: 0 }, py: 8 }}>
+        <Box component="main" sx={{ width: '100%', minWidth: 0, maxWidth: 960, mx: "auto", px: { xs: 3, sm: 4 }, py: { xs: 4, sm: 6 }, overflowWrap: "anywhere" }}>
           <Breadcrumbs sx={{ mb: 2, animation: 'fadeIn 0.5s ease-out', animationDelay: '0.1s', animationFillMode: 'both' }}>
             <Link
               href={`/blog/${locale}`}
@@ -153,6 +148,7 @@ function PostContent({ post, views, slug, incrementView, locale, allPosts, title
                 gutterBottom
                 sx={{
                   fontWeight: "bold",
+                  fontSize: { xs: "2rem", sm: "3rem" },
                   color: "primary.main",
                   animation: mounted ? 'slideUp 0.6s ease-out' : 'none',
                   animationDelay: '0.2s',

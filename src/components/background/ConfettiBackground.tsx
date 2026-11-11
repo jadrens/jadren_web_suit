@@ -6,7 +6,7 @@ import { useTheme } from "@theme/ThemeProvider";
 
 // --- Simplex-like noise (self-contained, no dependency) ---
 function hash(x: number, y: number, z: number): number {
-  let n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+  const n = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
   return n - Math.floor(n);
 }
 
@@ -68,6 +68,31 @@ const CONFETTI_SVGS: { src: string; w: number; h: number; weight: number }[] = [
   { src: "/backgrounds/confetti/green-triangle-sm.svg", w: 40, h: 40, weight: 1 },
   { src: "/backgrounds/confetti/green-triangle-lg.svg", w: 80, h: 80, weight: 1 },
 ];
+
+type DepthLayer = 0 | 1 | 2;
+
+interface DepthConfig {
+  scaleRange: [number, number];
+  frictionAir: number;
+  opacity: number;
+  blur: number;
+  driftFactor: number;
+}
+
+interface ConfettiBody extends MatterJS.Body {
+  svgKey: string;
+  baseScale: number;
+  depth: DepthLayer;
+  depthConfig: DepthConfig;
+  noiseOffsetX: number;
+  noiseOffsetY: number;
+  noiseOffsetZ: number;
+  energy: number;
+  energyPhase: number;
+  wobbleFreq: number;
+  wobblePhase: number;
+  wobbleAmp: number;
+}
 
 export default function ConfettiBackground() {
   const { theme } = useTheme();
@@ -149,8 +174,7 @@ export default function ConfettiBackground() {
     ];
     World.add(Engine.world, walls);
 
-    type DepthLayer = 0 | 1 | 2;
-    const depthConfig: Record<DepthLayer, { scaleRange: [number, number]; frictionAir: number; opacity: number; blur: number; driftFactor: number }> = {
+    const depthConfig: Record<DepthLayer, DepthConfig> = {
       0: { scaleRange: [0.2, 0.35], frictionAir: 0.05, opacity: 0.3, blur: 2, driftFactor: 0.35 },
       1: { scaleRange: [0.35, 0.6], frictionAir: 0.035, opacity: 0.65, blur: 0.5, driftFactor: 0.9 },
       2: { scaleRange: [0.55, 0.85], frictionAir: 0.02, opacity: 1.0, blur: 0, driftFactor: 1.8 },
@@ -193,21 +217,22 @@ export default function ConfettiBackground() {
       Body.setVelocity(body, { x: (Math.random() - 0.5) * 0.5, y: (Math.random() - 0.5) * 0.5 });
       Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.002);
 
-      (body as any).svgKey = svgInfo.src;
-      (body as any).baseScale = baseScale;
-      (body as any).depth = depth;
-      (body as any).depthConfig = cfg;
+      const confetti = body as ConfettiBody;
+      confetti.svgKey = svgInfo.src;
+      confetti.baseScale = baseScale;
+      confetti.depth = depth;
+      confetti.depthConfig = cfg;
 
-      (body as any).noiseOffsetX = Math.random() * 1000;
-      (body as any).noiseOffsetY = Math.random() * 1000;
-      (body as any).noiseOffsetZ = Math.random() * 1000;
+      confetti.noiseOffsetX = Math.random() * 1000;
+      confetti.noiseOffsetY = Math.random() * 1000;
+      confetti.noiseOffsetZ = Math.random() * 1000;
 
-      (body as any).energy = 0.3 + Math.random() * 0.5;
-      (body as any).energyPhase = Math.random() * Math.PI * 2;
+      confetti.energy = 0.3 + Math.random() * 0.5;
+      confetti.energyPhase = Math.random() * Math.PI * 2;
 
-      (body as any).wobbleFreq = 0.3 + Math.random() * 0.4;
-      (body as any).wobblePhase = Math.random() * Math.PI * 2;
-      (body as any).wobbleAmp = 0.05 + Math.random() * 0.1;
+      confetti.wobbleFreq = 0.3 + Math.random() * 0.4;
+      confetti.wobblePhase = Math.random() * Math.PI * 2;
+      confetti.wobbleAmp = 0.05 + Math.random() * 0.1;
 
       World.add(Engine.world, body);
     }
@@ -220,15 +245,16 @@ export default function ConfettiBackground() {
       const globalFlowX = Math.sin(time * 0.03) * 0.000005;
       const globalFlowY = Math.cos(time * 0.025) * 0.000005;
 
-      Composite.allBodies(Engine.world).forEach((body: MatterJS.Body) => {
-        if (body.isStatic) return;
+      Composite.allBodies(Engine.world).forEach((rawBody: MatterJS.Body) => {
+        if (rawBody.isStatic) return;
+        const body = rawBody as ConfettiBody;
 
-        const cfg = (body as any).depthConfig;
-        const energy = (body as any).energy as number;
-        const noiseZ = (body as any).noiseOffsetZ as number;
+        const cfg = body.depthConfig;
+        const energy = body.energy;
+        const noiseZ = body.noiseOffsetZ;
 
-        const nx = (body as any).noiseOffsetX as number;
-        const ny = (body as any).noiseOffsetY as number;
+        const nx = body.noiseOffsetX;
+        const ny = body.noiseOffsetY;
         const noiseVal = noise3D(
           (body.position.x + nx) * 0.0008,
           (body.position.y + ny) * 0.0008,
@@ -274,17 +300,18 @@ export default function ConfettiBackground() {
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      Composite.allBodies(Engine.world).forEach((body: MatterJS.Body) => {
-        if (body.isStatic) return;
-        const svgKey = (body as any).svgKey as string;
+      Composite.allBodies(Engine.world).forEach((rawBody: MatterJS.Body) => {
+        if (rawBody.isStatic) return;
+        const body = rawBody as ConfettiBody;
+        const svgKey = body.svgKey;
         const img = imagesRef.current.get(svgKey);
         if (!img) return;
 
-        const baseScale = (body as any).baseScale as number;
-        const cfg = (body as any).depthConfig;
-        const wobbleFreq = (body as any).wobbleFreq as number;
-        const wobblePhase = (body as any).wobblePhase as number;
-        const wobbleAmp = (body as any).wobbleAmp as number;
+        const baseScale = body.baseScale;
+        const cfg = body.depthConfig;
+        const wobbleFreq = body.wobbleFreq;
+        const wobblePhase = body.wobblePhase;
+        const wobbleAmp = body.wobbleAmp;
 
         ctx.save();
         ctx.translate(body.position.x, body.position.y);

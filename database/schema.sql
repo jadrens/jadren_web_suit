@@ -40,15 +40,42 @@ END $$;
 
 ALTER TABLE user_main DROP COLUMN IF EXISTS blog_editor;
 
-CREATE TABLE IF NOT EXISTS email_verification_code (
-  email VARCHAR(320) PRIMARY KEY
-    REFERENCES user_main(email) ON UPDATE CASCADE ON DELETE CASCADE,
+-- Replaced by email_code, which also holds codes for e-mails without an account.
+DROP TABLE IF EXISTS email_verification_code;
+
+-- One pending code per e-mail and purpose. Not tied to user_main: registration
+-- codes are sent before the account exists. Wrong guesses are counted in the
+-- local SQLite limiter, which deletes the row after too many.
+CREATE TABLE IF NOT EXISTS email_code (
+  email VARCHAR(320) NOT NULL,
+  purpose VARCHAR(16) NOT NULL CHECK (purpose IN ('register', 'verify', 'reset')),
   code_bcrypt TEXT NOT NULL,
-  expire_at TIMESTAMPTZ NOT NULL
+  expire_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (email, purpose)
 );
 
-CREATE INDEX IF NOT EXISTS email_verification_code_expire_at_idx
-  ON email_verification_code (expire_at);
+CREATE INDEX IF NOT EXISTS email_code_expire_at_idx ON email_code (expire_at);
+
+-- Refresh sessions. The browser holds the refresh token in an HttpOnly cookie;
+-- only its SHA-256 is stored. Each refresh rotates the token and keeps the
+-- previous hash briefly so concurrent refreshes from several tabs succeed,
+-- while a reused older token revokes the session.
+CREATE TABLE IF NOT EXISTS auth_session (
+  session_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL
+    REFERENCES user_main(user_id) ON UPDATE CASCADE ON DELETE CASCADE,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  previous_token_hash CHAR(64) DEFAULT NULL,
+  rotated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ DEFAULT NULL,
+  user_agent VARCHAR(255) DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS auth_session_user_idx ON auth_session (user_id);
+CREATE INDEX IF NOT EXISTS auth_session_previous_hash_idx ON auth_session (previous_token_hash);
+CREATE INDEX IF NOT EXISTS auth_session_expires_at_idx ON auth_session (expires_at);
 
 CREATE TABLE IF NOT EXISTS unscrible (
   email VARCHAR(320) PRIMARY KEY,
