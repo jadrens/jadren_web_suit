@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Resolve DNS submodule through GitHub mirror
+        run: git config --global url."https://github.com/jadrens/calidns_dashboard.git".insteadOf "https://git.koi.ci/JadrenDev/calidns-dashboard.git"
+
       - uses: actions/checkout@v7
         with:
           submodules: recursive
