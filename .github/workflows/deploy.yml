@@ -50,6 +50,9 @@ jobs:
           || 'https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip https://registry.npmmirror.com/-/binary/bun/bun-v1.4.0/bun-linux-x64.zip' }}
 
     steps:
+      - name: Resolve DNS submodule through GitHub mirror
+        run: git config --global url."https://github.com/jadrens/calidns_dashboard.git".insteadOf "https://git.koi.ci/JadrenDev/calidns-dashboard.git"
+
       - name: Check out source
         uses: actions/checkout@v7
         with:
