@@ -127,17 +127,6 @@ export const CONTACT_CONFIG: Record<string, ContactConfigItem> = {
     username: "",
     color: "#25D366",
   },
-  wechat: {
-    enabled: true,
-    name: "WeChat",
-    icon: "wechat",
-    url: "#",
-    actions: (toast) => {
-      toast("id: JadRens");
-    },
-    username: "Caliconix",
-    color: "#07C160",
-  },
   dingtalk: {
     enabled: false,
     name: "DingTalk",
