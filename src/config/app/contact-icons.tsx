@@ -7,7 +7,6 @@ import {
   mdiTwitch,
   mdiInstagram,
   mdiFacebook,
-  mdiWechat,
   mdiGitlab,
   mdiWhatsapp,
 } from "@mdi/js";
@@ -63,7 +62,6 @@ export const CONTACT_ICON_REGISTRY: Record<string, () => ReactNode> = {
   twitch:    () => <MdiIcon path={mdiTwitch} />,
   facebook:  () => <MdiIcon path={mdiFacebook} />,
   instagram: () => <MdiIcon path={mdiInstagram} />,
-  wechat:    () => <MdiIcon path={mdiWechat} />,
   gitlab:    () => <MdiIcon path={mdiGitlab} />,
   whatsapp:  () => <MdiIcon path={mdiWhatsapp} />,
 
