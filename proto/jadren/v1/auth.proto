@@ -9,6 +9,12 @@ package jadren.v1;
 // token and set an HttpOnly refresh cookie scoped to this service. Refresh
 // reads that cookie, rotates it and returns a new access token; Logout revokes
 // the session on the server.
+//
+// CAPTCHA: after an address has made 2 guarded requests (every RPC below
+// except Refresh, Logout, Me and GetCaptcha) within 5 hours, further guarded
+// requests fail with ErrorDetail code "captcha_required" (or "captcha_invalid")
+// until they carry "x-captcha: <captcha_id>.<answer>" metadata from GetCaptcha.
+// Each challenge is single-use.
 service AuthService {
   // Sends a code proving ownership of an e-mail that has no verified account.
   rpc SendRegistrationCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
@@ -25,6 +31,30 @@ service AuthService {
   rpc SendPasswordResetCode(SendVerificationCodeRequest) returns (SendVerificationCodeResponse);
   // Sets a new password, revokes every session of the account and signs in.
   rpc ResetPassword(ResetPasswordRequest) returns (TokenResponse);
+  // Issues an animated GIF challenge bound to the caller's address.
+  rpc GetCaptcha(GetCaptchaRequest) returns (GetCaptchaResponse);
+  // Checks an answer without touching the auth allowance (for the test page).
+  // Like any use, it consumes the challenge.
+  rpc CheckCaptcha(CheckCaptchaRequest) returns (CheckCaptchaResponse);
+}
+
+message GetCaptchaRequest {}
+message GetCaptchaResponse {
+  string captcha_id = 1;
+  // image/gif
+  bytes image = 2;
+  // Seconds until the challenge expires.
+  int32 expires_in = 3;
+  // Number of characters in the answer.
+  int32 length = 4;
+}
+
+message CheckCaptchaRequest {
+  string captcha_id = 1;
+  string answer = 2;
+}
+message CheckCaptchaResponse {
+  bool correct = 1;
 }
 
 message User {

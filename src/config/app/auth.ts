@@ -3,6 +3,7 @@ const AUTH_CONFIG = {
   reminderFromEmail: "Jadren Reminder <auto@jadren.me>",
   emailRateLimitDbPath: ".data/email-send-monitor.sqlite",
   loginRateLimitDbPath: ".data/login-attempt-monitor.sqlite",
+  captchaDbPath: ".data/captcha.sqlite",
 } as const;
 
 export default AUTH_CONFIG;

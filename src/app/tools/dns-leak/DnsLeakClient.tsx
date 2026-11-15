@@ -29,7 +29,7 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import { alpha } from "@mui/material";
 import Footer from "@components/ui/layout/Footer";
-import { toolsApi } from "@lib/client-api";
+import { ApiError, toolsApi } from "@lib/client-api";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 
@@ -272,12 +272,16 @@ export default function DnsLeakClient() {
           if (ip) void fetchGeo(domain, ip);
           return true;
         }
-      } catch {
+      } catch (requestError) {
         if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+        // Polling continues, but an unreachable query log must not read as "no leak".
+        if (requestError instanceof ApiError && requestError.code === "dns_leak_unavailable") {
+          setError(t.tools.dnsLeak.logUnavailable);
+        }
       }
       return false;
     },
-    [fetchGeo, pickIp],
+    [fetchGeo, pickIp, t.tools.dnsLeak.logUnavailable],
   );
 
   // ── start test ──

@@ -118,6 +118,24 @@ function tokenResponse(response: {
   };
 }
 
+/** Why a CAPTCHA is being asked for. */
+export type CaptchaReason = "captcha_required" | "captcha_invalid";
+/** Resolves to "<captcha id>.<answer>", or null when the user gives up. */
+export type CaptchaSolver = (reason: CaptchaReason) => Promise<string | null>;
+export interface CaptchaChallenge {
+  id: string;
+  image: Uint8Array;
+  expiresIn: number;
+  length: number;
+}
+type CallOptions = { headers: Record<string, string> } | undefined;
+const MAX_CAPTCHA_PROMPTS = 5;
+
+function captchaReason(error: unknown): CaptchaReason | null {
+  if (!(error instanceof ApiError)) return null;
+  return error.code === "captcha_required" || error.code === "captcha_invalid" ? error.code : null;
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Authentication request failed";
 }
@@ -141,11 +159,59 @@ export class AuthSessionManager {
   private refreshPromise: Promise<string | null> | null = null;
   private refreshRevision = -1;
   private refreshTimer: number | null = null;
+  private captchaSolver: CaptchaSolver | null = null;
 
   private authClient = async () => {
     this.clients ??= import("./rpc-transport").then((module) => module.createAnonymousClients());
     return (await this.clients).auth;
   };
+
+  /** Registers the UI that asks the user to solve challenges; returns an unregister function. */
+  setCaptchaSolver = (solver: CaptchaSolver) => {
+    this.captchaSolver = solver;
+    return () => {
+      if (this.captchaSolver === solver) this.captchaSolver = null;
+    };
+  };
+
+  getCaptcha = async (): Promise<CaptchaChallenge> => {
+    const { captchaId, image, expiresIn, length } = await (await this.authClient()).getCaptcha({});
+    return { id: captchaId, image, expiresIn, length };
+  };
+
+  /** Checks an answer without counting an auth request; consumes the challenge. */
+  checkCaptcha = async (id: string, answer: string) =>
+    (await (await this.authClient()).checkCaptcha({ captchaId: id, answer })).correct;
+
+  /**
+   * Opens the registered CAPTCHA dialog as a real auth call would and checks
+   * the answer. Null when the user cancels or no dialog is mounted.
+   */
+  tryCaptchaDialog = async (): Promise<boolean | null> => {
+    const solution = await this.captchaSolver?.("captcha_required");
+    if (!solution) return null;
+    const dot = solution.indexOf(".");
+    return this.checkCaptcha(solution.slice(0, dot), solution.slice(dot + 1));
+  };
+
+  /**
+   * Runs a guarded auth call; when the server asks for a CAPTCHA, prompts the
+   * user and retries with the solution. Cancelling rethrows the server error.
+   */
+  private async withCaptcha<T>(call: (options: CallOptions) => Promise<T>): Promise<T> {
+    let options: CallOptions;
+    for (let prompts = 0; ; prompts++) {
+      try {
+        return await call(options);
+      } catch (error) {
+        const reason = captchaReason(error);
+        if (!reason || !this.captchaSolver || prompts >= MAX_CAPTCHA_PROMPTS) throw error;
+        const solution = await this.captchaSolver(reason);
+        if (!solution) throw error;
+        options = { headers: { "x-captcha": solution } };
+      }
+    }
+  }
 
   getSnapshot = () => this.snapshot;
   getServerSnapshot = () => SERVER_SNAPSHOT;
@@ -214,7 +280,7 @@ export class AuthSessionManager {
     locale: "en" | "zh" = "en"
   ): Promise<SendVerificationCodeResponse> => {
     const { message, expiresIn, sentAt, expiresAt } =
-      await (await this.authClient()).sendRegistrationCode({ email, locale });
+      await this.withCaptcha(async (options) => (await this.authClient()).sendRegistrationCode({ email, locale }, options));
     return { message, expiresIn, sentAt, expiresAt };
   };
 
@@ -224,7 +290,8 @@ export class AuthSessionManager {
     const revision = this.beginSessionChange();
     return this.runSessionRequest(async () => {
       const response = tokenResponse(
-        await (await this.authClient()).register({ ...input, phone: input.phone ?? undefined })
+        await this.withCaptcha(async (options) =>
+          (await this.authClient()).register({ ...input, phone: input.phone ?? undefined }, options))
       );
       if (revision === this.sessionRevision) this.acceptToken(response);
       return response.user;
@@ -239,7 +306,7 @@ export class AuthSessionManager {
     locale: "en" | "zh" = "en"
   ): Promise<SendVerificationCodeResponse> => {
     const { message, expiresIn, sentAt, expiresAt } =
-      await (await this.authClient()).sendPasswordResetCode({ email, locale });
+      await this.withCaptcha(async (options) => (await this.authClient()).sendPasswordResetCode({ email, locale }, options));
     return { message, expiresIn, sentAt, expiresAt };
   };
 
@@ -249,7 +316,8 @@ export class AuthSessionManager {
     const revision = this.beginSessionChange();
     return this.runSessionRequest(async () => {
       const response = tokenResponse(
-        await (await this.authClient()).resetPassword({ email, code, newPassword })
+        await this.withCaptcha(async (options) =>
+          (await this.authClient()).resetPassword({ email, code, newPassword }, options))
       );
       if (revision === this.sessionRevision) this.acceptToken(response);
       return response.user;
@@ -266,7 +334,9 @@ export class AuthSessionManager {
     this.publish("authenticating", null, null);
     try {
       return await this.runSessionRequest(async () => {
-        const response = tokenResponse(await (await this.authClient()).login(input));
+        const response = tokenResponse(
+          await this.withCaptcha(async (options) => (await this.authClient()).login(input, options))
+        );
         if (revision === this.sessionRevision) this.acceptToken(response);
         return response.user;
       });
@@ -304,13 +374,13 @@ export class AuthSessionManager {
     locale: "en" | "zh" = "en"
   ): Promise<SendVerificationCodeResponse> => {
     const { message, expiresIn, sentAt, expiresAt } =
-      await (await this.authClient()).sendVerificationCode({ email, locale });
+      await this.withCaptcha(async (options) => (await this.authClient()).sendVerificationCode({ email, locale }, options));
     return { message, expiresIn, sentAt, expiresAt };
   };
 
   verifyEmail = async (email: string, code: string) => {
     const revision = this.sessionRevision;
-    const verified = await (await this.authClient()).verifyEmail({ email, code });
+    const verified = await this.withCaptcha(async (options) => (await this.authClient()).verifyEmail({ email, code }, options));
     const response: VerifyEmailResponse = {
       message: verified.message,
       user: toUserProfile(verified.user),
