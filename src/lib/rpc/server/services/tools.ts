@@ -213,8 +213,18 @@ async function resolveWithDoH(hostname: string, rrtype: string): Promise<DnsSect
 
 // --- DNS leak test ---------------------------------------------------------
 
-// CaliDNS master (moved from hzal1 to shal1 along with hzns -> shns).
-const LEAK_API_BASE = "https://shns.koi.ci";
+// CaliDNS nodes that serve the shared query log: the master shns (shal1) and
+// the slaves usns (usgp1, local to the global site) and dens (deor2). Aliyun resets HTTPS to shal1 from
+// abroad when the SNI is the unregistered koi.ci (only handshakes that fit in
+// one packet, which includes Bun's), so the global site must be able to fall
+// back to a slave. DNS_LEAK_API_BASES (comma-separated) overrides the order.
+const LEAK_API_BASES = (process.env.DNS_LEAK_API_BASES ?? "https://shns.koi.ci,https://usns.koi.ci,https://dens.koi.ci")
+  .split(",")
+  .map((base) => base.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+const LEAK_API_TIMEOUT_MS = 8_000;
+/** Index of the endpoint that answered last; later requests start there. */
+let preferredLeakApi = 0;
 const TRACK_DOMAIN_RE = /^[a-z0-9]+[a-z0-9-]*[a-z0-9]\.track\.rayne\.cn$/i;
 
 interface LeakQueryItem {
@@ -229,10 +239,11 @@ interface LeakQueryItem {
   created_at: string;
 }
 
-async function fetchLeakQueries(domain: string, token: string): Promise<LeakQueryItem[]> {
-  const res = await fetch(`${LEAK_API_BASE}/api/queries?domain=${encodeURIComponent(domain)}`, {
+async function fetchLeakQueriesFrom(base: string, domain: string, token: string): Promise<LeakQueryItem[]> {
+  const res = await fetch(`${base}/api/queries?domain=${encodeURIComponent(domain)}`, {
     cache: "no-store",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(LEAK_API_TIMEOUT_MS),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -240,6 +251,27 @@ async function fetchLeakQueries(domain: string, token: string): Promise<LeakQuer
   }
   const data: { items?: LeakQueryItem[] } = await res.json();
   return data.items || [];
+}
+
+/** Asks each CaliDNS node in turn, starting with the one that answered last. */
+async function fetchLeakQueries(domain: string, token: string): Promise<LeakQueryItem[]> {
+  const failures: string[] = [];
+  for (let attempt = 0; attempt < LEAK_API_BASES.length; attempt++) {
+    const index = (preferredLeakApi + attempt) % LEAK_API_BASES.length;
+    const base = LEAK_API_BASES[index];
+    try {
+      const items = await fetchLeakQueriesFrom(base, domain, token);
+      if (index !== preferredLeakApi) {
+        console.warn(`DNS leak API: switched to ${base} after: ${failures.join("; ")}`);
+        preferredLeakApi = index;
+      }
+      return items;
+    } catch (error) {
+      const cause = error instanceof Error ? (error as Error & { code?: string }).code ?? error.message : String(error);
+      failures.push(`${base}: ${cause}`);
+    }
+  }
+  throw new Error(failures.join("; "));
 }
 
 // --- IP geolocation --------------------------------------------------------
@@ -399,12 +431,16 @@ export const toolsService: ServiceImpl<typeof ToolsService> = {
               createdAt: q.created_at,
             })),
           };
-        } catch {
-          return { domain, found: false, queries: [] };
+        } catch (error) {
+          console.error(`DNS leak API unavailable for ${domain}:`, error instanceof Error ? error.message : error);
+          return null;
         }
       })
     );
-    return { results };
+    if (results.some((result) => result === null)) {
+      throw apiFailure("The DNS query log is unreachable", 502, "dns_leak_unavailable");
+    }
+    return { results: results.filter((result) => result !== null) };
   },
 
   async synthesizePronunciation(request, context) {

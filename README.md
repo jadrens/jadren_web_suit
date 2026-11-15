@@ -116,6 +116,18 @@ The sanitizer removes:
 
 Sanitization runs before KaTeX and syntax highlighting, preventing user content from abusing their generated markup to bypass the allowlist.
 
+## Account CAPTCHA
+
+Every guarded account RPC (sign-in, registration, e-mail codes, e-mail verification, and password reset) counts toward a per-address allowance. Once an address has made 2 such requests within 5 hours, further requests need a solved CAPTCHA. The browser shows the challenge dialog automatically and retries the request with the answer.
+
+The challenge is an animated GIF rendered on the server with no image dependencies (`src/lib/captcha`):
+
+- Each of the 5 characters appears on its own, in its own slot, for a random period with noise-only gaps between them, so no single frame contains the whole answer.
+- Part of the background noise changes on every frame, and random pixels drop out of each stroke. Strokes and noise use the same colours, so subtracting one frame from another does not isolate the characters.
+- Each character comes from a stroke font and gets its own rotation, scale, shear, and sine warp. Look-alike characters (0/O, 1/I/L, 2/Z, 5/S, 8/B, and so on) are never used.
+
+Each challenge is bound to the address that fetched it, expires after 5 minutes, and can be tried once: a wrong answer uses it up. An address can fetch at most 20 challenges per 10 minutes. State is kept in `.data/captcha.sqlite`. Try the challenge at `/captcha-test` (not indexed by search engines): answers there go through `CheckCaptcha`, which uses up the challenge without counting toward the auth allowance, and the page can also open the real sign-in dialog. The client address comes from `X-Real-IP`, as it does for the other rate limits.
+
 ## LLM settings cloud backup
 
 LLM providers, models, and API keys remain in the current browser by default. After signing in with a verified account, the settings page offers manual upload and download actions. This feature is **not recommended**: cloud data containing API keys always carries risk, and no system can guarantee complete security.

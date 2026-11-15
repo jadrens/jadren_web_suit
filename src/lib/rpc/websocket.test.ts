@@ -215,6 +215,12 @@ describe("WebSocket RPC transport", () => {
     expect(f.headers().get("cookie")).toBeNull();
   });
 
+  test("forwards CAPTCHA solutions in frame metadata", async () => {
+    const f = await fixture();
+    await createApiClient(AuthService, f.transport()).me({}, { headers: { "x-captcha": "challenge.AC3EF" } });
+    expect(f.headers().get("x-captcha")).toBe("challenge.AC3EF");
+  });
+
   test("rejects cross-origin upgrades and unsupported protocols", async () => {
     const f = await fixture();
     expect(await upgradeStatus(f.origin, { origin: "https://evil.example" })).toBe(403);

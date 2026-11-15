@@ -237,4 +237,37 @@ describe("auth session lifecycle", () => {
     expect(manager.getSnapshot().user?.userId).toBe("alice");
     expect(timers.size).toBe(1);
   });
+
+  test("asks for a CAPTCHA when the server requires one and retries with the solution", async () => {
+    const seen: (string | undefined)[] = [];
+    const reasons: string[] = [];
+    clients({
+      login: async (_input: never, options?: { headers: Record<string, string> }) => {
+        const solution = options?.headers["x-captcha"];
+        seen.push(solution);
+        if (!solution) throw new ApiError("captcha", 403, "/rpc", { code: "captcha_required" });
+        if (solution !== "id.GOOD") throw new ApiError("captcha", 403, "/rpc", { code: "captcha_invalid" });
+        return token("alice");
+      },
+    });
+    let answers = ["id.BAD", "id.GOOD"];
+    manager.setCaptchaSolver(async (reason) => {
+      reasons.push(reason);
+      const [next, ...rest] = answers;
+      answers = rest;
+      return next;
+    });
+    await manager.login({ identifier: "alice", password: "password" });
+    expect(seen).toEqual([undefined, "id.BAD", "id.GOOD"]);
+    expect(reasons).toEqual(["captcha_required", "captcha_invalid"]);
+    expect(manager.getSnapshot().user?.userId).toBe("alice");
+  });
+
+  test("surfaces the CAPTCHA error when the user cancels or no solver is mounted", async () => {
+    clients({ sendPasswordResetCode: async () => { throw new ApiError("captcha", 403, "/rpc", { code: "captcha_required" }); } });
+    await expect(manager.sendPasswordResetCode("a@example.com")).rejects.toMatchObject({ code: "captcha_required" });
+    const unregister = manager.setCaptchaSolver(async () => null);
+    await expect(manager.sendPasswordResetCode("a@example.com")).rejects.toMatchObject({ code: "captcha_required" });
+    unregister();
+  });
 });

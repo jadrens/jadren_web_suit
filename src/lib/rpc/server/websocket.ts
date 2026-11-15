@@ -6,7 +6,7 @@ import {
   needsCookieTransport, RPC_WEBSOCKET_PATH, RPC_WEBSOCKET_PROTOCOL,
 } from "../websocket-protocol";
 
-const allowedRequestHeaders = ["authorization", "content-type", "connect-protocol-version", "connect-timeout-ms", "accept"];
+const allowedRequestHeaders = ["authorization", "x-captcha", "content-type", "connect-protocol-version", "connect-timeout-ms", "accept"];
 const trustedRequestHeaders = ["host", "user-agent", "x-real-ip", "x-forwarded-for", "x-forwarded-proto"];
 const allowedResponseHeaders = ["content-type", "retry-after", "cache-control", "connect-content-encoding"];
 

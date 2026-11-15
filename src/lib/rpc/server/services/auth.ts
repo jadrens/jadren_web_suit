@@ -18,6 +18,7 @@ import {
   rotateSession,
   type SessionGrant,
 } from "@lib/auth/sessions";
+import { CAPTCHA_HEADER, CAPTCHA_LENGTH, captchaStore } from "@lib/captcha/store";
 import { apiFailure } from "../errors";
 import { headersOf } from "../context";
 
@@ -85,6 +86,17 @@ function enforceEmailSendLimit(email: string, context: HandlerContext) {
   }
 }
 
+/**
+ * Counts one guarded auth request from the caller's address; past the free
+ * allowance it must carry a solved challenge in the x-captcha metadata.
+ */
+function requireHuman(context: HandlerContext) {
+  const ip = requestIp(headersOf(context));
+  const result = captchaStore().admit(ip, context.requestHeader.get(CAPTCHA_HEADER));
+  if (result === "captcha_required") throw apiFailure("A CAPTCHA is required", 403, "captcha_required");
+  if (result === "captcha_invalid") throw apiFailure("The CAPTCHA answer is incorrect or expired", 403, "captcha_invalid");
+}
+
 /** The first nickname in `candidates` that nobody uses yet. */
 async function firstFreeNickname(client: QueryClient, candidates: string[]) {
   const placeholders = candidates.map((_, index) => `$${index + 1}`).join(", ");
@@ -105,6 +117,7 @@ async function userByEmail(email: string) {
 
 export const authService: ServiceImpl<typeof AuthService> = {
   async sendRegistrationCode(request, context) {
+    requireHuman(context);
     const email = normalizeEmail(request.email);
     if (!email) throw apiFailure("Invalid email address", 400, "invalid_email");
     // Only an unverified (status 0) account may be replaced by a new sign-up.
@@ -123,6 +136,7 @@ export const authService: ServiceImpl<typeof AuthService> = {
   },
 
   async register(request, context) {
+    requireHuman(context);
     const email = normalizeEmail(request.email);
     const password = normalizePassword(request.password);
     const phone = normalizePhone(request.phone);
@@ -174,11 +188,14 @@ export const authService: ServiceImpl<typeof AuthService> = {
   },
 
   async login(request, context) {
+    requireHuman(context);
     const identifier = request.identifier.trim();
-    const password = normalizePassword(request.password);
-    if (!identifier || !password) {
+    if (!identifier || !request.password) {
       throw apiFailure("Identifier and password are required", 400, "missing_credentials");
     }
+    // No account has a password outside the registration rules, so such a
+    // password is simply wrong rather than missing.
+    const password = normalizePassword(request.password);
 
     const ip = requestIp(headersOf(context));
     if (!consumeLoginAttempt(identifier, ip)) {
@@ -197,10 +214,11 @@ export const authService: ServiceImpl<typeof AuthService> = {
       [byEmail ? identifier.toLowerCase() : identifier]
     );
     const user = firstRow(result.rows);
+    // Always run bcrypt so response time does not reveal which check failed.
     const passwordMatches = await bcrypt.compare(
-      password,
+      password ?? "",
       user?.password_bcrypt ?? DUMMY_PASSWORD_HASH
-    );
+    ) && password !== null;
     if (!user || !passwordMatches) {
       throw apiFailure("Invalid credentials", 401, "invalid_credentials");
     }
@@ -263,6 +281,7 @@ export const authService: ServiceImpl<typeof AuthService> = {
   },
 
   async sendVerificationCode(request, context) {
+    requireHuman(context);
     const email = normalizeEmail(request.email);
     if (!email) throw apiFailure("Invalid email address", 400, "invalid_email");
 
@@ -281,7 +300,8 @@ export const authService: ServiceImpl<typeof AuthService> = {
     return codeSentResponse(sentAt, expiresAt);
   },
 
-  async verifyEmail(request) {
+  async verifyEmail(request, context) {
+    requireHuman(context);
     const email = normalizeEmail(request.email);
     const code = request.code;
     if (!email || !isVerificationCode(code)) {
@@ -306,6 +326,7 @@ export const authService: ServiceImpl<typeof AuthService> = {
   },
 
   async sendPasswordResetCode(request, context) {
+    requireHuman(context);
     const email = normalizeEmail(request.email);
     if (!email) throw apiFailure("Invalid email address", 400, "invalid_email");
     enforceEmailSendLimit(email, context);
@@ -327,6 +348,7 @@ export const authService: ServiceImpl<typeof AuthService> = {
   },
 
   async resetPassword(request, context) {
+    requireHuman(context);
     const email = normalizeEmail(request.email);
     const password = normalizePassword(request.newPassword);
     if (!email || !isVerificationCode(request.code)) {
@@ -355,5 +377,21 @@ export const authService: ServiceImpl<typeof AuthService> = {
     // Whoever knew the old password is signed out everywhere.
     await revokeUserSessions(user.user_id);
     return startSession(user, context);
+  },
+
+  async getCaptcha(_request, context) {
+    const challenge = captchaStore().issue(requestIp(headersOf(context)));
+    if (!challenge) throw apiFailure("Too many CAPTCHA requests", 429, "captcha_rate_limit");
+    return {
+      captchaId: challenge.id,
+      image: challenge.gif,
+      expiresIn: challenge.expiresInSeconds,
+      length: CAPTCHA_LENGTH,
+    };
+  },
+
+  async checkCaptcha(request, context) {
+    const correct = captchaStore().check(requestIp(headersOf(context)), `${request.captchaId}.${request.answer}`);
+    return { correct };
   },
 };
