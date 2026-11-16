@@ -1,4 +1,5 @@
 import { db } from "@lib/auth/db";
+import { SITE_CONFIG } from "@config/publishing/config";
 import type { PostMeta } from "./search-index";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
@@ -35,6 +36,11 @@ const postSelect = `
     FROM blog_post p
     LEFT JOIN blog_post_tag t ON t.post_id = p.post_id`;
 
+/** CN only: hides posts tagged SITE_CONFIG.hiddenPostTag. `param` is the placeholder index of that tag. */
+const visible = (param: number) => `
+      AND NOT EXISTS (SELECT 1 FROM blog_post_tag h
+                       WHERE h.post_id = p.post_id AND h.tag = $${param})`;
+
 function isoDate(value: Date | string) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
@@ -59,10 +65,10 @@ export async function getPostSlugs(locale: Locale): Promise<string[]> {
 async function loadPostBySlug(slug: string, locale: Locale): Promise<Post | null> {
   const result = await db.query<PostRow>(
     `${postSelect}
-      WHERE p.locale = $1 AND p.slug = $2
+      WHERE p.locale = $1 AND p.slug = $2${visible(3)}
       GROUP BY p.post_id
       LIMIT 1`,
-    [locale, slug]
+    [locale, slug, SITE_CONFIG.hiddenPostTag]
   );
   return result.rows[0] ? toPost(result.rows[0]) : null;
 }
@@ -70,10 +76,10 @@ async function loadPostBySlug(slug: string, locale: Locale): Promise<Post | null
 async function loadAllPosts(locale: Locale): Promise<Post[]> {
   const result = await db.query<PostRow>(
     `${postSelect}
-      WHERE p.locale = $1
+      WHERE p.locale = $1${visible(2)}
       GROUP BY p.post_id
       ORDER BY p.published_at DESC`,
-    [locale]
+    [locale, SITE_CONFIG.hiddenPostTag]
   );
   return result.rows.map(toPost);
 }
@@ -86,10 +92,10 @@ async function loadAllPostMetas(locale: Locale): Promise<PostMeta[]> {
               FILTER (WHERE t.tag IS NOT NULL), ARRAY[]::varchar[]) AS tags
        FROM blog_post p
        LEFT JOIN blog_post_tag t ON t.post_id = p.post_id
-      WHERE p.locale = $1
+      WHERE p.locale = $1${visible(2)}
       GROUP BY p.post_id
       ORDER BY p.published_at DESC`,
-    [locale]
+    [locale, SITE_CONFIG.hiddenPostTag]
   );
   return result.rows.map((row) => ({
     slug: row.slug,
