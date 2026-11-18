@@ -44,6 +44,7 @@ const PROGRESS_PREFIX = "vocabulary-practice-progress-v2:";
 const AUTO_SPEAK_KEY = "vocabulary-practice-auto-speak";
 const FIRST_LETTER_HINT_KEY = "vocabulary-practice-first-letter-hint";
 const PAUSE_AFTER_CORRECT_KEY = "vocabulary-practice-pause-after-correct";
+const FORGOT_HINT_DURATION = 4000;
 const STAT_DELTAS_PREFIX = "vocabulary-practice-stat-deltas-v1:";
 const DEFAULT_BUCKET_SIZE = 20;
 const DEFAULT_REFILL_THRESHOLD = 6;
@@ -422,7 +423,7 @@ export default function VocabularyPracticeClient() {
   useEffect(() => { if (!hashReady) return; const timer = window.setTimeout(() => void loadMode(dataset, mode), 0); return () => window.clearTimeout(timer); }, [dataset, hashReady, loadMode, mode]);
   useEffect(() => { if (mode === "phonetic" && exercise && autoSpeak) speak(exercise.english); }, [autoSpeak, exercise, mode, speak]);
   useEffect(() => {
-    if (!exercise || loading || forgotten || grade || searchOpen || syncOpen || favoriteOpen) return;
+    if (!exercise || loading || grade || searchOpen || syncOpen || favoriteOpen) return;
     const frame = window.requestAnimationFrame(() => answerInputRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
   }, [exercise, favoriteOpen, forgotten, grade, loading, mode, searchOpen, syncOpen, wrongFlash]);
@@ -456,15 +457,15 @@ export default function VocabularyPracticeClient() {
       if (isEditable) return;
       if (event.key === ";") {
         event.preventDefault();
-        if (!forgotten) void forgetAnswer();
+        void forgetAnswer();
         return;
       }
       if (event.key === "Enter") {
         event.preventDefault();
-        if (forgotten || answerCorrect) void nextQuestion(); else void checkAnswer();
+        if (answerCorrect) void nextQuestion(); else void checkAnswer();
         return;
       }
-      if (forgotten || answerCorrect) return;
+      if (answerCorrect) return;
       if (event.key === "Backspace") {
         event.preventDefault();
         setAnswer(value => value.slice(0, -1));
@@ -550,10 +551,16 @@ export default function VocabularyPracticeClient() {
   }
 
   async function forgetAnswer() {
-    if (!exercise || loading || (mode === "word" && exercise.exerciseKind === "dictionary")) return; recordWrong(); setForgotten(true); setGrade(null); if (mode === "word") setMeaningAnswers(exerciseMeanings(exercise).map(meaning => meaning.text)); else setAnswer(exercise.english);
+    if (!exercise || loading || (mode === "word" && exercise.exerciseKind === "dictionary")) return;
+    // Forgetting gives a transient peek via toast, not a persistent reveal. The learner must
+    // then retype the answer from memory (no hints, no Next skip) to reach the next word.
+    const answerText = mode === "word" ? exerciseMeanings(exercise).map(meaning => meaning.text).join("；") : exercise.english;
+    globalToast.info(<Box sx={{ display: "grid", gap: .25 }}><Box component="span" sx={{ fontSize: 12, opacity: .8 }}>{copy.forgotHint}</Box><Box component="span" sx={{ fontWeight: 800, fontSize: "1.15rem", overflowWrap: "anywhere" }}>{answerText}</Box></Box>, FORGOT_HINT_DURATION);
+    if (forgotten) return; // re-peek only: don't duplicate stats or re-save the word
+    recordWrong(); setForgotten(true); setGrade(null); setAnswer(""); setMeaningAnswers([""]);
     if (status !== "authenticated" || user?.status !== 1) return;
     try { let target = collections.find(item => item.name.toLocaleLowerCase() === "default"); if (!target) { const created = await vocabularyDrillApi.createCollection("default"); target = created.collection; setCollections(current => [...current, created.collection]); }
-      const meanings = exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]; const sourceDataset = exercise.sourceDataset || dataset; await vocabularyDrillApi.addItem({ collectionId: target.collectionId, dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, phonetics: exercise.phonetics, meanings, example: exercise.examples?.[0]?.en || "" }); setCollections(current => current.map(collection => collection.collectionId !== target.collectionId || collection.items.some(item => Number(item.sourceWordId) === exercise.id && item.dataset === sourceDataset) ? collection : { ...collection, items: [...collection.items, { dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, phonetics: exercise.phonetics, meanings, example: exercise.examples?.[0]?.en || "", appearanceCount: 0, correctCount: 0, wrongCount: 0 }] })); setToast(copy.answerSavedToDefault);
+      const meanings = exercise.meanings || [{ text: exercise.chinese, partOfSpeech: "other" as const }]; const sourceDataset = exercise.sourceDataset || dataset; await vocabularyDrillApi.addItem({ collectionId: target.collectionId, dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, phonetics: exercise.phonetics, meanings, example: exercise.examples?.[0]?.en || "" }); setCollections(current => current.map(collection => collection.collectionId !== target.collectionId || collection.items.some(item => Number(item.sourceWordId) === exercise.id && item.dataset === sourceDataset) ? collection : { ...collection, items: [...collection.items, { dataset: sourceDataset, sourceWordId: exercise.id, word: exercise.english, phonetic: exercise.phonetic, phonetics: exercise.phonetics, meanings, example: exercise.examples?.[0]?.en || "", appearanceCount: 0, correctCount: 0, wrongCount: 0 }] }));
     } catch { setToast(copy.answerSaveFailed); }
   }
 

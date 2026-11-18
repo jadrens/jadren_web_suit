@@ -12,6 +12,7 @@
     "proto:generate": "sh scripts/generate-proto.sh",
     "db:setup": "bun database/setup.ts",
     "blog:import": "bun scripts/import-blog-posts.ts",
+    "hanzi:build": "python3 scripts/build_hanzi_db.py",
     "ncee:build": "python3 scripts/build_ncee_db.py",
     "deploy:run": "bun scripts/run-deploy.ts",
     "reminder:dispatch": "bun scripts/dispatch-reminders.ts"
@@ -31,6 +32,7 @@
     "@mui/material-nextjs": "^9.4.0",
     "@tailwindcss/typography": "^0.5.19",
     "bcryptjs": "^3.0.3",
+    "fflate": "^0.8.3",
     "framer-motion": "^12.38.0",
     "gray-matter": "^4.0.3",
     "jose": "^6.2.8",
@@ -39,6 +41,7 @@
     "matter-js": "^0.20.0",
     "mdast-util-to-string": "4.0.0",
     "next": "16.4.5",
+    "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",

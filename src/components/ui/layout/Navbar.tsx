@@ -102,6 +102,15 @@ export default function Navbar() {
                   size="small"
                   aria-current={isCurrent(item.key, item.href) ? "page" : undefined}
                   variant={isCurrent(item.key, item.href) ? "outlined" : "text"}
+                  sx={{
+                    transition: "background-color 150ms ease, color 150ms ease, border-color 150ms ease",
+                    // Override the global gold `a:hover` and MUI's faint 4% tint so hover reads clearly.
+                    "&:hover, &:focus-visible": {
+                      color: theme.palette.mode === "dark" ? "primary.light" : "primary.dark",
+                      bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.2 : 0.16),
+                      borderColor: "primary.main",
+                    },
+                  }}
                 >
                   {t.nav[item.key as keyof typeof t.nav]}
                 </Button>

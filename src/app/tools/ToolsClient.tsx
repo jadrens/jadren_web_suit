@@ -18,6 +18,8 @@ import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
 import FunctionsRoundedIcon from "@mui/icons-material/FunctionsRounded";
+import TranslateRoundedIcon from "@mui/icons-material/TranslateRounded";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 
 interface ToolItem {
   key: string;
@@ -65,6 +67,20 @@ export default function ToolsClient() {
       description: t.tools.latex.description,
       href: "/tools/latex",
       icon: <FunctionsRoundedIcon sx={{ fontSize: 32 }} />,
+    },
+    {
+      key: "hanzi",
+      title: t.tools.hanzi.title,
+      description: t.tools.hanzi.cardDescription,
+      href: "/tools/hanzi",
+      icon: <TranslateRoundedIcon sx={{ fontSize: 32 }} />,
+    },
+    {
+      key: "pdfImposition",
+      title: t.tools.pdfImposition.title,
+      description: t.tools.pdfImposition.cardDescription,
+      href: "/tools/pdf-imposition",
+      icon: <PictureAsPdfIcon sx={{ fontSize: 32 }} />,
     },
     {
       key: "colourPicker",

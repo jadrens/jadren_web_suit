@@ -70,8 +70,12 @@ html.theme-transition::view-transition-new(root) {
 html.theme-transition::view-transition-old(root) { z-index: 1; }
 html.theme-transition::view-transition-new(root) { z-index: 2; }
 
+/* The snapshot overlay would swallow clicks until the sweep ends; let them reach the live page
+   so the toggle can be pressed again mid-transition (a new transition skips the running one). */
+html.theme-transition::view-transition { pointer-events: none; }
+
 html.theme-transition,
-html.theme-transition *:not(.theme-toggle-icon) {
+html.theme-transition * {
   transition: none !important;
 }
 
