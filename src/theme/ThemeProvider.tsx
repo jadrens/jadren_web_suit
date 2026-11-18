@@ -18,7 +18,10 @@ interface ThemeContextType {
   theme: Theme;
   mode: ThemeMode;
   /** origin: viewport point (e.g. the clicked button) the new theme spreads from. */
-  toggleTheme: (origin?: ThemeTransitionOrigin) => void;
+  /** Returns the theme being switched to (applied right away, or once the view transition captures). */
+  toggleTheme: (origin?: ThemeTransitionOrigin) => Theme;
+  /** Latest requested theme; runs ahead of `theme` while a view transition is still committing it. */
+  getRequestedTheme: () => Theme;
   setMode: (mode: ThemeMode) => void;
   refreshTheme: () => void;
 }
@@ -33,7 +36,8 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 const ThemeContext = createContext<ThemeContextType>({
   theme: "light",
   mode: "system",
-  toggleTheme: () => {},
+  toggleTheme: () => "light",
+  getRequestedTheme: () => "light",
   setMode: () => {},
   refreshTheme: () => {},
 });
@@ -80,7 +84,14 @@ export function useTheme() {
 
 // initialTheme comes from the server (RESOLVED_THEME_COOKIE), so SSR output and the first client render agree.
 export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme; children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [theme, setThemeState] = useState<Theme>(initialTheme);
+  // Latest requested theme. toggleTheme flips this synchronously, because the state only commits
+  // inside the view-transition callback; reading `theme` there would drop rapid repeated clicks.
+  const themeRef = useRef<Theme>(initialTheme);
+  const setTheme = (next: Theme) => {
+    themeRef.current = next;
+    setThemeState(next);
+  };
   const [mode, setModeState] = useState<ThemeMode>("system");
   const preferenceApplied = useRef(false);
   const modeRef = useRef<ThemeMode>("system");
@@ -149,7 +160,8 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
     writeStorage(MODE_KEY, "manual");
     modeRef.current = "manual";
     setModeState("manual");
-    const next: Theme = theme === "light" ? "dark" : "light";
+    const next: Theme = themeRef.current === "light" ? "dark" : "light";
+    themeRef.current = next;
     writeStorage(STORAGE_KEY, next);
     writeThemeCookie(next);
 
@@ -157,7 +169,7 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (typeof document.startViewTransition !== "function" || reduceMotion) {
       setTheme(next);
-      return;
+      return next;
     }
 
     // External callers (e.g. the DNS tool's onChange) may pass other arguments; only trust real coordinates.
@@ -168,7 +180,8 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
 
     root.classList.add(TRANSITION_CLASS);
     const transition = document.startViewTransition(() => {
-      flushSync(() => setTheme(next));
+      // Not setTheme: a newer click may already have moved themeRef past this transition's theme.
+      flushSync(() => setThemeState(next));
       // Set synchronously so the "new" snapshot is fully themed even before effects run.
       root.setAttribute("data-theme", next);
       root.style.colorScheme = next;
@@ -188,6 +201,7 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
     }).catch(() => { /* transition skipped; the theme is already applied */ });
 
     transition.finished.finally(() => root.classList.remove(TRANSITION_CLASS));
+    return next;
   };
 
   const setMode = (next: ThemeMode) => {
@@ -196,7 +210,7 @@ export function ThemeProvider({ initialTheme, children }: { initialTheme: Theme;
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, mode, toggleTheme, setMode, refreshTheme: () => applyPreference(modeRef.current) }}>
+    <ThemeContext.Provider value={{ theme, mode, toggleTheme, getRequestedTheme: () => themeRef.current, setMode, refreshTheme: () => applyPreference(modeRef.current) }}>
       {children}
     </ThemeContext.Provider>
   );

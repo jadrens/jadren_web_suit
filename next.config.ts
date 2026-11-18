@@ -38,6 +38,9 @@ const nextConfig: NextConfig = {
   distDir: "build",
   allowedDevOrigins: [
     "jadren.debug",
+    // scripts/server.ts binds 0.0.0.0, so Next only trusts localhost by default;
+    // without this, opening http://127.0.0.1:3000 blocks the HMR socket and the page never hydrates.
+    "127.0.0.1",
   ],
   // public/ files are not content-hashed, so cache them for a bounded time instead of `immutable`.
   async headers() {
@@ -54,6 +57,11 @@ const nextConfig: NextConfig = {
       {
         source: "/:dir(icons|backgrounds|mathlive|vditor)/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" }],
+      },
+      {
+        // The Hanzi tool's gzipped data changes only when the Unicode build is rerun.
+        source: "/hanzi/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" }],
       },
     ];
   },
