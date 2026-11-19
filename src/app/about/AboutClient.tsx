@@ -10,6 +10,9 @@ import { useI18n } from "@lib/i18n/content";
 import { alpha } from "@mui/material";
 import { CONTACT_CONFIG, resolveContactColor } from "@config/app/contact";
 import { CONTACT_ICON_REGISTRY } from "@config/app/contact-icons";
+import { FRIEND_LINKS } from "@config/app/friends";
+
+const FRIENDS_HEADING: Record<"en" | "zh", string> = { en: "## Friends", zh: "## 友链" };
 
 interface AboutClientProps {
   content: Record<"en" | "zh", string>;
@@ -156,6 +159,47 @@ export default function AboutClient({ content }: AboutClientProps) {
               );
             })}
           </Box>
+
+          {FRIEND_LINKS.length ? (
+            <Box sx={{ mt: 6 }}>
+              <ReadingProgressProvider>
+                <MarkdownContent content={FRIENDS_HEADING[locale] ?? FRIENDS_HEADING.en} />
+              </ReadingProgressProvider>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2 }}>
+                {FRIEND_LINKS.map((friend) => (
+                  <MuiLink
+                    key={friend.url}
+                    href={friend.url}
+                    target="_blank"
+                    rel="noopener"
+                    underline="none"
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 1,
+                      py: 0.5,
+                      pl: 0.5,
+                      pr: 1.5,
+                      borderRadius: 999,
+                      border: 1,
+                      borderColor: "divider",
+                      color: "text.primary",
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                      transition: "all 0.2s ease",
+                      "&:hover": {
+                        borderColor: "primary.main",
+                        bgcolor: alpha(theme.palette.primary.main, 0.08),
+                      },
+                    }}
+                  >
+                    <Avatar src={friend.icon} alt="" sx={{ width: 24, height: 24 }} />
+                    <span>{friend.name}</span>
+                  </MuiLink>
+                ))}
+              </Box>
+            </Box>
+          ) : null}
         </Box>
       </Box>
       <Footer />
