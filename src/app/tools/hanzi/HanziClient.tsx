@@ -77,11 +77,13 @@ import GlyphWikiGlyph, { glyphWikiPage } from "./GlyphWikiGlyph";
 import IdsOperatorIcon from "./IdsOperatorIcon";
 import IdsPreview, { HANZI_FONT, normalizeIds } from "./IdsPreview";
 
-type Mode = "char" | "radical" | "strokes" | "pinyin" | "ids" | "usource";
+type Mode = "filter" | "ids" | "usource";
 
 type Selection = { kind: "char"; index: number } | { kind: "u"; entry: USourceEntry } | null;
 
-const MODES: Mode[] = ["char", "radical", "strokes", "pinyin", "ids", "usource"];
+const MODES: Mode[] = ["filter", "ids", "usource"];
+/** Tabs from before radical, strokes and pinyin were merged into one filter page; old links still open it. */
+const LEGACY_FILTER_MODES = ["char", "radical", "strokes", "pinyin"];
 const CHUNK = 240;
 /** Reading order of two slots: lexicographic by child index, a prefix (ancestor) first. */
 function comparePaths(a: IdsPath, b: IdsPath): number {
@@ -97,7 +99,6 @@ const ARRANGE_LAYOUTS: Record<number, readonly (typeof IDS_OPERATORS)[number][]>
 const IDS_LIMIT = 600;
 const TOOL_BUTTON_SX = { width: 34, height: 34, display: "grid", placeItems: "center", p: 0, border: 1, borderColor: "divider", borderRadius: 0.75, "&:hover": { bgcolor: "action.hover" } } as const;
 const EMPTY_IDS_RESULT: IdsSearchResult = { characters: [], total: 0, usource: [], completed: null };
-const EXAMPLES = ["中", "龘", "𠀀", "U+2B88A"];
 const IDS_EXAMPLES = [
   { value: "女马" },
   { operator: "⿰", value: "女马" },
@@ -154,14 +155,14 @@ export default function HanziClient() {
   const [details, setDetails] = useState<HanziDetails | null>(null);
   const [detailsError, setDetailsError] = useState(false);
 
-  const [mode, setMode] = useState<Mode>("char");
+  const [mode, setMode] = useState<Mode>("filter");
   const [selection, setSelection] = useState<Selection>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const [charQuery, setCharQuery] = useState("");
-  const [radicalKey, setRadicalKey] = useState("1");
+  const [radicalKey, setRadicalKey] = useState<string | null>(null);
   const [residual, setResidual] = useState<number | null>(null);
-  const [strokes, setStrokes] = useState(4);
+  const [strokes, setStrokes] = useState<number | null>(null);
   const [pinyinQuery, setPinyinQuery] = useState("");
   const [idsQuery, setIdsQuery] = useState("");
   const [idsDebounced, setIdsDebounced] = useState("");
@@ -229,6 +230,8 @@ export default function HanziClient() {
     if (requestedMode && (MODES as string[]).includes(requestedMode)) {
       setMode(requestedMode as Mode);
       if (requestedMode === "ids") ensureDetails();
+    } else if (requestedMode && LEGACY_FILTER_MODES.includes(requestedMode)) {
+      setMode("filter");
     }
 
     const u = params.get("u");
@@ -236,7 +239,7 @@ export default function HanziClient() {
       const entry = findUSourceById(core, u);
       if (entry) {
         setSelection({ kind: "u", entry });
-        setMode("usource");
+        setCharQuery(entry.id);
       }
     }
 
@@ -278,15 +281,17 @@ export default function HanziClient() {
   useEffect(() => {
     if (!core || !urlReady) return;
     const params = new URLSearchParams();
-    if (mode !== "char") params.set("mode", mode);
+    if (mode !== "filter") params.set("mode", mode);
     if (selection?.kind === "char") params.set("char", core.chars[selection.index]);
     if (selection?.kind === "u") params.set("u", selection.entry.id);
-    if (mode === "radical") {
-      params.set("radical", radicalKey);
-      if (residual !== null) params.set("residual", String(residual));
+    if (mode === "filter") {
+      if (pinyinQuery) params.set("pinyin", pinyinQuery);
+      if (radicalKey !== null) {
+        params.set("radical", radicalKey);
+        if (residual !== null) params.set("residual", String(residual));
+      }
+      if (strokes !== null) params.set("strokes", String(strokes));
     }
-    if (mode === "strokes") params.set("strokes", String(strokes));
-    if (mode === "pinyin" && pinyinQuery) params.set("pinyin", pinyinQuery);
     if (mode === "ids" && idsQuery) params.set("ids", idsQuery);
     if (mode === "usource") {
       params.set("status", uFilter);
@@ -325,19 +330,61 @@ export default function HanziClient() {
   }, [core]);
 
   const currentRadical = useMemo(() => {
-    if (!core) return undefined;
+    if (!core || radicalKey === null) return undefined;
     return core.radicals.find((radical) => radical.key === radicalKey);
   }, [core, radicalKey]);
 
+  /* Filter page: pinyin, radical (+ residual) and total strokes intersect. Each facet's counts apply the other facets. */
+  const pinyinMatches = useMemo(() => {
+    if (!core || mode !== "filter" || !pinyinQuery.trim()) return null;
+    return searchPinyin(core, pinyinQuery);
+  }, [core, mode, pinyinQuery]);
+  const pinyinSet = useMemo(() => (pinyinMatches ? new Set(pinyinMatches) : null), [pinyinMatches]);
+  const radicalMatches = useMemo(() => {
+    if (!core || mode !== "filter" || radicalKey === null) return null;
+    return charactersForRadical(core, radicalKey, residual);
+  }, [core, mode, radicalKey, residual]);
+  const radicalSet = useMemo(() => (radicalMatches ? new Set(radicalMatches) : null), [radicalMatches]);
+
   const residuals = useMemo(() => {
-    if (!core) return [] as { residual: number; count: number }[];
-    return residualGroups(core, radicalKey);
-  }, [core, radicalKey]);
+    if (!core || radicalKey === null) return [] as { residual: number; count: number }[];
+    const groups = residualGroups(core, radicalKey);
+    if (!pinyinSet && strokes === null) return groups;
+    return groups
+      .map((group) => ({
+        residual: group.residual,
+        count: (core.byRadical.get(radicalKey)?.get(group.residual) ?? []).filter(
+          (index) => (!pinyinSet || pinyinSet.has(index)) && (strokes === null || core.totalStrokes[index] === strokes),
+        ).length,
+      }))
+      .filter((group) => group.count > 0 || group.residual === residual);
+  }, [core, radicalKey, residual, pinyinSet, strokes]);
+
+  /** Radicals that still have characters under the pinyin and stroke filters; null when neither is active. */
+  const availableRadicals = useMemo(() => {
+    if (!core || mode !== "filter" || (!pinyinMatches && strokes === null)) return null;
+    const keys = new Set<string>();
+    for (const index of pinyinMatches ?? charactersForStrokes(core, strokes ?? 0)) {
+      if (strokes === null || core.totalStrokes[index] === strokes) keys.add(radicalOf(core, index).key);
+    }
+    return keys;
+  }, [core, mode, pinyinMatches, strokes]);
 
   const strokeCounts = useMemo(() => {
     if (!core) return [] as { strokes: number; count: number }[];
-    return [...core.byStrokes.entries()].map(([value, positions]) => ({ strokes: value, count: positions.length })).sort((a, b) => a.strokes - b.strokes);
-  }, [core]);
+    const narrowed = radicalMatches ?? pinyinMatches;
+    if (!narrowed) {
+      return [...core.byStrokes.entries()].map(([value, positions]) => ({ strokes: value, count: positions.length })).sort((a, b) => a.strokes - b.strokes);
+    }
+    const counts = new Map<number, number>();
+    for (const index of narrowed) {
+      if (radicalMatches && pinyinSet && !pinyinSet.has(index)) continue;
+      const value = core.totalStrokes[index];
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+    if (strokes !== null && !counts.has(strokes)) counts.set(strokes, 0);
+    return [...counts.entries()].map(([value, count]) => ({ strokes: value, count })).sort((a, b) => a.strokes - b.strokes);
+  }, [core, radicalMatches, pinyinMatches, pinyinSet, strokes]);
 
   const uCounts = useMemo(() => {
     const counts = new Map<UStatusFilter, number>();
@@ -348,13 +395,23 @@ export default function HanziClient() {
     return counts;
   }, [core]);
 
+  const filterActive = Boolean(pinyinQuery.trim()) || radicalKey !== null || strokes !== null;
   const charResults = useMemo(() => {
-    if (!core) return [] as number[];
-    if (mode === "radical") return charactersForRadical(core, radicalKey, residual);
-    if (mode === "strokes") return charactersForStrokes(core, strokes);
-    if (mode === "pinyin") return searchPinyin(core, pinyinQuery);
-    return [];
-  }, [core, mode, radicalKey, residual, strokes, pinyinQuery]);
+    if (!core || mode !== "filter") return [] as number[];
+    // Pinyin order (by reading) wins when present; otherwise the lists are already sorted by commonness.
+    const base = pinyinMatches ?? radicalMatches ?? (strokes !== null ? charactersForStrokes(core, strokes) : null);
+    if (!base) return [];
+    return base.filter(
+      (index) => (!radicalSet || radicalSet.has(index)) && (strokes === null || core.totalStrokes[index] === strokes),
+    );
+  }, [core, mode, pinyinMatches, radicalMatches, radicalSet, strokes]);
+
+  const clearFilters = () => {
+    setPinyinQuery("");
+    setRadicalKey(null);
+    setResidual(null);
+    setStrokes(null);
+  };
 
   const idsResults = useMemo(() => {
     if (!core || mode !== "ids") return EMPTY_IDS_RESULT;
@@ -466,21 +523,25 @@ export default function HanziClient() {
 
   /* ------------------------------------------------------------- handlers --- */
 
+  const lookup = useCallback(
+    (value: string): Selection => {
+      if (!core || !value.trim()) return null;
+      const entry = findUSourceById(core, value);
+      if (entry) return { kind: "u", entry };
+      const index = findCharacter(core, value);
+      return index === null ? null : { kind: "char", index };
+    },
+    [core],
+  );
+  const lookupResult = useMemo(() => lookup(charQuery), [lookup, charQuery]);
+
+  /** Typing updates the side panel live; on narrow screens the detail dialog opens only on Enter. */
   const applyCharQuery = (value: string) => {
     setCharQuery(value);
-    if (!core) return;
-    const entry = findUSourceById(core, value);
-    if (entry) {
-      setSelection({ kind: "u", entry });
-      return;
-    }
-    const index = findCharacter(core, value);
-    if (index !== null) {
-      setSelection({ kind: "char", index });
-      ensureDetails();
-    } else {
-      setSelection(null);
-    }
+    const found = lookup(value);
+    if (!found) return;
+    setSelection(found);
+    if (found.kind === "char") ensureDetails();
   };
 
   const selectChar = (index: number) => {
@@ -500,9 +561,15 @@ export default function HanziClient() {
   };
 
   const searchByRadical = (key: string) => {
-    setMode("radical");
+    clearFilters();
+    setMode("filter");
     setRadicalKey(key);
-    setResidual(null);
+  };
+
+  const searchByPinyin = (value: string) => {
+    clearFilters();
+    setMode("filter");
+    setPinyinQuery(value);
   };
 
   /** Operators, wildcards and components all insert at the caret, so a structure can be composed by clicking. */
@@ -797,10 +864,7 @@ export default function HanziClient() {
           </MetaRow>
           {core.pinyin[index] ? (
             <MetaRow label={text.detail.pinyin}>
-              <Typography variant="body2" sx={{ cursor: "pointer" }} onClick={() => {
-                setMode("pinyin");
-                setPinyinQuery(core.pinyin[index] ?? "");
-              }}>
+              <Typography variant="body2" sx={{ cursor: "pointer" }} onClick={() => searchByPinyin(core.pinyin[index] ?? "")}>
                 {core.pinyin[index]}
               </Typography>
             </MetaRow>
@@ -907,7 +971,7 @@ export default function HanziClient() {
 
   const shownCharacters = charResults.slice(0, visible);
   const remaining = charResults.length - shownCharacters.length;
-  const charNotFound = mode === "char" && charQuery.trim().length > 0 && !selection;
+  const charNotFound = charQuery.trim().length > 0 && !lookupResult;
 
   const renderCharacterGrid = (indices: number[]) => (
     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))", gap: 0.5 }}>
@@ -1063,6 +1127,53 @@ export default function HanziClient() {
             </Paper>
           ) : (
             <>
+              <Box sx={{ mb: 2 }}>
+                <TextField
+                  label={text.lookup.label}
+                  placeholder={text.lookup.placeholder}
+                  value={charQuery}
+                  onChange={(event) => applyCharQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && lookupResult) {
+                      event.preventDefault();
+                      openSelection(lookupResult);
+                    }
+                  }}
+                  error={charNotFound}
+                  helperText={charNotFound ? `${text.lookup.notFound} ${text.lookup.unencodedHint}` : undefined}
+                  fullWidth
+                  size="small"
+                  autoComplete="off"
+                  slotProps={{
+                    input: {
+                      sx: { fontFamily: HANZI_FONT },
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchRoundedIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: charQuery ? (
+                        <InputAdornment position="end">
+                          {charNotFound && (hasIdsOperator(charQuery) || Array.from(charQuery.trim()).length > 1) ? (
+                            <Button size="small" onClick={() => searchByIds(charQuery)} sx={{ mr: 0.5, whiteSpace: "nowrap" }}>
+                              {text.lookup.searchIds}
+                            </Button>
+                          ) : null}
+                          {lookupResult ? (
+                            <Button size="small" onClick={() => openSelection(lookupResult)} sx={{ mr: 0.5, whiteSpace: "nowrap", display: { lg: "none" } }}>
+                              {text.lookup.open}
+                            </Button>
+                          ) : null}
+                          <IconButton size="small" aria-label={text.ids.clear} onClick={() => setCharQuery("")} edge="end">
+                            <CloseRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ) : undefined,
+                    },
+                  }}
+                />
+              </Box>
+
               <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden", mb: 3 }}>
                 <Tabs
                   value={mode}
@@ -1078,13 +1189,14 @@ export default function HanziClient() {
                 </Tabs>
 
                 <Box sx={{ p: { xs: 2, sm: 2.5 } }}>
-                  {mode === "char" ? (
-                    <Stack spacing={1.5}>
+                  {mode === "filter" ? (
+                    <Stack spacing={2}>
                       <TextField
-                        label={text.char.label}
-                        placeholder={text.char.placeholder}
-                        value={charQuery}
-                        onChange={(event) => applyCharQuery(event.target.value)}
+                        label={text.pinyin.label}
+                        placeholder={text.pinyin.placeholder}
+                        value={pinyinQuery}
+                        onChange={(event) => setPinyinQuery(event.target.value)}
+                        helperText={text.pinyin.hint}
                         fullWidth
                         size="small"
                         autoComplete="off"
@@ -1095,149 +1207,129 @@ export default function HanziClient() {
                                 <SearchRoundedIcon fontSize="small" />
                               </InputAdornment>
                             ),
+                            endAdornment: pinyinQuery ? (
+                              <InputAdornment position="end">
+                                <IconButton size="small" aria-label={text.ids.clear} onClick={() => setPinyinQuery("")} edge="end">
+                                  <CloseRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </InputAdornment>
+                            ) : undefined,
                           },
                         }}
                       />
-                      <Typography variant="caption" color="text.secondary">{text.char.hint}</Typography>
-                      <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                        <Typography variant="caption" color="text.secondary">{text.char.examples}</Typography>
-                        {EXAMPLES.map((example) => (
-                          <Chip key={example} size="small" label={example} onClick={() => applyCharQuery(example)} />
-                        ))}
-                      </Stack>
-                      {charNotFound ? (
-                        <Alert
-                          severity="info"
-                          action={
-                            hasIdsOperator(charQuery) || Array.from(charQuery.trim()).length > 1 ? (
-                              <Button color="inherit" size="small" onClick={() => searchByIds(charQuery)}>
-                                {text.char.searchIds}
-                              </Button>
-                            ) : undefined
-                          }
-                        >
-                          {text.char.notFound} {text.char.unencodedHint}
-                        </Alert>
-                      ) : null}
-                    </Stack>
-                  ) : null}
 
-                  {mode === "radical" ? (
-                    <Stack spacing={2}>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                        <Typography variant="caption" color="text.secondary">{text.radical.picker}</Typography>
-                        {currentRadical ? (
+                      <Box>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", mb: 0.75 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700 }}>{text.radical.label}</Typography>
                           <Chip
                             size="small"
-                            color="primary"
-                            label={text.radical.selected(currentRadical.key, currentRadical.ideograph || currentRadical.radical)}
+                            label={text.filter.any}
+                            color={radicalKey === null ? "primary" : "default"}
+                            variant={radicalKey === null ? "filled" : "outlined"}
+                            onClick={() => {
+                              setRadicalKey(null);
+                              setResidual(null);
+                            }}
                           />
-                        ) : null}
-                      </Stack>
-                      <Box sx={{ border: 1, borderColor: "divider", borderRadius: 1, p: 1.25 }}>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: "baseline", flexWrap: "wrap", mb: 1 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700 }}>{text.radical.common}</Typography>
-                          <Typography variant="caption" color="text.secondary">{text.radical.commonHint}</Typography>
+                          {currentRadical ? (
+                            <Chip
+                              size="small"
+                              color="primary"
+                              label={text.radical.selected(currentRadical.key, currentRadical.ideograph || currentRadical.radical)}
+                              onDelete={() => {
+                                setRadicalKey(null);
+                                setResidual(null);
+                              }}
+                            />
+                          ) : null}
                         </Stack>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                          {COMMON_COMPONENTS.map((component) => (
-                            <Tooltip key={component} title={component} enterDelay={300}>
-                              <ButtonBase
-                                onClick={() => searchByIds(component)}
-                                sx={{
-                                  width: 32,
-                                  height: 32,
-                                  borderRadius: 0.75,
-                                  border: 1,
-                                  borderColor: "divider",
-                                  fontFamily: HANZI_FONT,
-                                  fontSize: 18,
-                                  "&:hover": { borderColor: "primary.main", bgcolor: alpha(theme.palette.primary.main, 0.08) },
-                                }}
-                              >
-                                {component}
-                              </ButtonBase>
-                            </Tooltip>
+                        <Box
+                          sx={{
+                            maxHeight: 200,
+                            overflow: "auto",
+                            border: 1,
+                            borderColor: "divider",
+                            borderRadius: 1,
+                            p: 1.25,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 1,
+                          }}
+                        >
+                          {radicalGroups.map((group) => (
+                            <Stack key={group.strokes} direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ width: 50, flexShrink: 0, pt: 0.75, whiteSpace: "nowrap" }}>
+                                {group.strokes ? text.radical.radicalStrokes(group.strokes) : "—"}
+                              </Typography>
+                              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.25 }}>
+                                {group.radicals.map((radical) => {
+                                  const active = radical.key === radicalKey;
+                                  const empty = !active && availableRadicals !== null && !availableRadicals.has(radical.key);
+                                  return (
+                                    <Tooltip key={radical.key} title={`#${radical.key} ${radical.ideograph}`} enterDelay={300}>
+                                      <ButtonBase
+                                        onClick={() => {
+                                          setRadicalKey(active ? null : radical.key);
+                                          setResidual(null);
+                                        }}
+                                        sx={{
+                                          width: 32,
+                                          height: 32,
+                                          borderRadius: 0.75,
+                                          border: 1,
+                                          borderColor: active ? "primary.main" : "transparent",
+                                          bgcolor: active ? alpha(theme.palette.primary.main, 0.12) : "transparent",
+                                          fontFamily: HANZI_FONT,
+                                          fontSize: 18,
+                                          opacity: empty ? 0.3 : 1,
+                                          "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.08) },
+                                        }}
+                                      >
+                                        {radical.ideograph || radical.radical}
+                                      </ButtonBase>
+                                    </Tooltip>
+                                  );
+                                })}
+                              </Box>
+                            </Stack>
                           ))}
                         </Box>
                       </Box>
-                      <Box
-                        sx={{
-                          maxHeight: 232,
-                          overflow: "auto",
-                          border: 1,
-                          borderColor: "divider",
-                          borderRadius: 1,
-                          p: 1.25,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 1,
-                        }}
-                      >
-                        {radicalGroups.map((group) => (
-                          <Stack key={group.strokes} direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ width: 50, flexShrink: 0, pt: 0.75, whiteSpace: "nowrap" }}>
-                              {group.strokes ? text.radical.radicalStrokes(group.strokes) : "—"}
-                            </Typography>
-                            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.25 }}>
-                              {group.radicals.map((radical) => {
-                                const active = radical.key === radicalKey;
-                                return (
-                                  <Tooltip key={radical.key} title={`#${radical.key} ${radical.ideograph}`} enterDelay={300}>
-                                    <ButtonBase
-                                      onClick={() => {
-                                        setRadicalKey(radical.key);
-                                        setResidual(null);
-                                      }}
-                                      sx={{
-                                        width: 32,
-                                        height: 32,
-                                        borderRadius: 0.75,
-                                        border: 1,
-                                        borderColor: active ? "primary.main" : "transparent",
-                                        bgcolor: active ? alpha(theme.palette.primary.main, 0.12) : "transparent",
-                                        fontFamily: HANZI_FONT,
-                                        fontSize: 18,
-                                        "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.08) },
-                                      }}
-                                    >
-                                      {radical.ideograph || radical.radical}
-                                    </ButtonBase>
-                                  </Tooltip>
-                                );
-                              })}
-                            </Box>
-                          </Stack>
-                        ))}
-                      </Box>
-                      <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                        <Typography variant="caption" color="text.secondary">{text.radical.residual}</Typography>
+
+                      {radicalKey !== null ? (
+                        <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, mr: 0.25 }}>{text.radical.residual}</Typography>
+                          <Chip
+                            size="small"
+                            label={text.filter.any}
+                            color={residual === null ? "primary" : "default"}
+                            variant={residual === null ? "filled" : "outlined"}
+                            onClick={() => setResidual(null)}
+                          />
+                          {residuals.map((group) => (
+                            <Chip
+                              key={group.residual}
+                              size="small"
+                              label={`${group.residual} (${group.count.toLocaleString()})`}
+                              color={residual === group.residual ? "primary" : "default"}
+                              variant={residual === group.residual ? "filled" : "outlined"}
+                              onClick={() => setResidual(residual === group.residual ? null : group.residual)}
+                            />
+                          ))}
+                        </Stack>
+                      ) : null}
+
+                      <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                        <Tooltip title={text.strokes.hint} enterDelay={300}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, mr: 0.25 }}>{text.strokes.label}</Typography>
+                        </Tooltip>
                         <Chip
                           size="small"
-                          label={text.radical.all}
-                          color={residual === null ? "primary" : "default"}
-                          variant={residual === null ? "filled" : "outlined"}
-                          onClick={() => setResidual(null)}
+                          label={text.filter.any}
+                          color={strokes === null ? "primary" : "default"}
+                          variant={strokes === null ? "filled" : "outlined"}
+                          onClick={() => setStrokes(null)}
                         />
-                        {residuals.map((group) => (
-                          <Chip
-                            key={group.residual}
-                            size="small"
-                            label={`${group.residual} (${group.count.toLocaleString()})`}
-                            color={residual === group.residual ? "primary" : "default"}
-                            variant={residual === group.residual ? "filled" : "outlined"}
-                            onClick={() => setResidual(group.residual)}
-                          />
-                        ))}
-                      </Stack>
-                      <Typography variant="caption" color="text.secondary">{text.radical.hint}</Typography>
-                    </Stack>
-                  ) : null}
-
-                  {mode === "strokes" ? (
-                    <Stack spacing={1.5}>
-                      <Typography variant="caption" color="text.secondary">{text.strokes.hint}</Typography>
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                         {strokeCounts.map((group) => (
                           <Chip
                             key={group.strokes}
@@ -1245,39 +1337,16 @@ export default function HanziClient() {
                             label={`${group.strokes} (${group.count.toLocaleString()})`}
                             color={strokes === group.strokes ? "primary" : "default"}
                             variant={strokes === group.strokes ? "filled" : "outlined"}
-                            onClick={() => setStrokes(group.strokes)}
+                            onClick={() => setStrokes(strokes === group.strokes ? null : group.strokes)}
                           />
                         ))}
-                      </Box>
-                    </Stack>
-                  ) : null}
+                      </Stack>
 
-                  {mode === "pinyin" ? (
-                    <Stack spacing={1.5}>
-                      <TextField
-                        label={text.pinyin.label}
-                        placeholder={text.pinyin.placeholder}
-                        value={pinyinQuery}
-                        onChange={(event) => setPinyinQuery(event.target.value)}
-                        fullWidth
-                        size="small"
-                        autoComplete="off"
-                        slotProps={{
-                          input: {
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <SearchRoundedIcon fontSize="small" />
-                              </InputAdornment>
-                            ),
-                          },
-                        }}
-                      />
-                      <Typography variant="caption" color="text.secondary">{text.pinyin.hint}</Typography>
-                      <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                        <Typography variant="caption" color="text.secondary">{text.char.examples}</Typography>
-                        {["zhong", "zhōng", "yi", "ma"].map((example) => (
-                          <Chip key={example} size="small" label={example} onClick={() => setPinyinQuery(example)} />
-                        ))}
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                        <Typography variant="caption" color="text.secondary">{text.filter.hint}</Typography>
+                        {filterActive ? (
+                          <Button size="small" onClick={clearFilters} sx={{ flexShrink: 0 }}>{text.filter.clear}</Button>
+                        ) : null}
                       </Stack>
                     </Stack>
                   ) : null}
@@ -1498,20 +1567,7 @@ export default function HanziClient() {
 
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 370px" }, gap: 3, alignItems: "start" }}>
                 <Box sx={{ minWidth: 0 }}>
-                  {mode === "char" ? (
-                    <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
-                      <Stack spacing={1.5}>
-                        <Typography variant="body2" color="text.secondary">{text.char.unencodedHint}</Typography>
-                        <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap" }}>
-                          {EXAMPLES.map((example) => (
-                            <Chip key={example} size="small" label={example} onClick={() => applyCharQuery(example)} />
-                          ))}
-                        </Stack>
-                      </Stack>
-                    </Paper>
-                  ) : null}
-
-                  {mode === "radical" || mode === "strokes" || mode === "pinyin" ? (
+                  {mode === "filter" ? (
                     <Box>
                       {resultsHeader(charResults.length, "characters")}
                       {charResults.length ? (
@@ -1526,7 +1582,7 @@ export default function HanziClient() {
                           ) : null}
                         </>
                       ) : (
-                        <Alert severity="info">{mode === "pinyin" && !pinyinQuery.trim() ? text.pinyin.empty : text.results.empty}</Alert>
+                        <Alert severity="info">{filterActive ? text.results.empty : text.filter.empty}</Alert>
                       )}
                     </Box>
                   ) : null}
