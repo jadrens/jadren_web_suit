@@ -76,6 +76,14 @@ describe("LaTeX virtual keyboard layouts", () => {
       }
     }
   });
+
+  test("offers a direct square key on the structure row instead of a top-level sum key", () => {
+    const structureValues = STRUCTURE_ROW.map((keycap) => keycap.latex);
+    expect(structureValues).toContain("#@^2");
+    expect(structureValues).not.toContain("\\sum");
+    const squareKey = STRUCTURE_ROW.find((keycap) => keycap.latex === "#@^2");
+    expect(squareKey?.insert).toBe("^{2}");
+  });
 });
 
 describe("LaTeX export helpers", () => {
