@@ -23,36 +23,42 @@ import KeyboardRoundedIcon from "@mui/icons-material/KeyboardRounded";
 import ClearAllRoundedIcon from "@mui/icons-material/ClearAllRounded";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import type { MathfieldElement } from "mathlive";
+import type { MathfieldElement, Selector } from "mathlive";
 import Footer from "@components/ui/layout/Footer";
 import { toast } from "@components/ui/feedback/toast";
 import { useI18n } from "@lib/i18n/app";
 import { useDocumentTitle } from "@hooks/app/useDocumentTitle";
 import { KEYBOARD_LAYOUTS } from "./keyboard";
+import { buildOutput, exportLatex, type OutputFormat } from "./latex-utils";
 
 type MathfieldClass = typeof MathfieldElement;
-type OutputFormat = "display" | "align" | "plain";
 
 interface Line {
   id: string;
   latex: string;
+  // Incremented only on external edits (source box, clear, undo) so mathfield typing is never clobbered by stale renders.
+  syncVersion: number;
 }
+
+type StructureItem =
+  | { label: string; latex: string; command?: never }
+  | { label: string; command: Selector | [Selector, ...unknown[]]; latex?: never };
 
 const STORAGE_KEY = "tools.latex.lines";
 const DEFAULT_LINES = ["f(x)=\\frac{1}{\\sqrt{2\\pi}\\sigma}e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}", ""];
 
 // Inserted templates use MathLive placeholders: #@ wraps the current selection, #? is an empty slot, #0 takes the selection or a slot.
-const STRUCTURES: { latex: string; label: string }[] = [
+const STRUCTURES: StructureItem[] = [
   { latex: "\\frac{#@}{#?}", label: "\\frac{\\square}{\\square}" },
-  { latex: "#@^{#?}", label: "\\square^{\\square}" },
-  { latex: "#@_{#?}", label: "\\square_{\\square}" },
+  { command: "moveToSuperscript", label: "\\square^{\\square}" },
+  { command: "moveToSubscript", label: "\\square_{\\square}" },
   { latex: "\\sqrt{#0}", label: "\\sqrt{\\square}" },
   { latex: "\\sqrt[#?]{#0}", label: "\\sqrt[\\square]{\\square}" },
   { latex: "\\left(#0\\right)", label: "(\\square)" },
   { latex: "\\left|#0\\right|", label: "|\\square|" },
   { latex: "\\sum_{#?}^{#?}", label: "\\sum_{\\square}^{\\square}" },
   { latex: "\\prod_{#?}^{#?}", label: "\\prod_{\\square}^{\\square}" },
-  { latex: "\\int_{#?}^{#?}#0\\,\\mathrm{d}#?", label: "\\int_{\\square}^{\\square}" },
+  { latex: "\\int_{#?}^{#?}", label: "\\int_{\\square}^{\\square}" },
   { latex: "\\lim_{#?\\to#?}", label: "\\lim_{\\square\\to\\square}" },
   { latex: "\\frac{\\mathrm{d}#?}{\\mathrm{d}#?}", label: "\\frac{\\mathrm{d}\\square}{\\mathrm{d}\\square}" },
   { latex: "\\frac{\\partial #?}{\\partial #?}", label: "\\frac{\\partial\\square}{\\partial\\square}" },
@@ -72,6 +78,10 @@ function newId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function makeLine(latex = "", syncVersion = 0): Line {
+  return { id: newId(), latex, syncVersion };
+}
+
 function renderLabel(latex: string) {
   return katex.renderToString(latex, { throwOnError: false, output: "html" });
 }
@@ -80,31 +90,19 @@ function loadLines(): Line[] {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (Array.isArray(stored) && stored.length > 0 && stored.every((value) => typeof value === "string")) {
-      return stored.map((latex: string) => ({ id: newId(), latex }));
+      return stored.map((latex: string) => makeLine(latex));
     }
   } catch {
     // Corrupt storage falls back to the sample document.
   }
-  return DEFAULT_LINES.map((latex) => ({ id: newId(), latex }));
-}
-
-// Unfilled MathLive slots are not valid LaTeX, so exported text keeps only what was typed into them.
-function exportLatex(latex: string) {
-  return latex.replace(/\\placeholder(?:\[[^\]]*\])?\{([^{}]*)\}/g, "{$1}").trim();
-}
-
-function buildOutput(lines: Line[], format: OutputFormat) {
-  const values = lines.map((line) => exportLatex(line.latex)).filter(Boolean);
-  if (values.length === 0) return "";
-  if (format === "plain") return values.join("\n");
-  if (format === "display") return values.map((value) => `$$\n${value}\n$$`).join("\n\n");
-  return `\\begin{align*}\n${values.map((value) => `  ${value}`).join(" \\\\\n")}\n\\end{align*}`;
+  return DEFAULT_LINES.map((latex) => makeLine(latex));
 }
 
 interface MathLineProps {
   Mathfield: MathfieldClass;
   id: string;
   value: string;
+  syncVersion: number;
   register: (id: string, element: MathfieldElement | null) => void;
   onChange: (latex: string) => void;
   onFocus: () => void;
@@ -113,15 +111,20 @@ interface MathLineProps {
   onMoveOut: (direction: "forward" | "backward" | "upward" | "downward") => void;
 }
 
-function MathLine({ Mathfield, id, value, register, ...handlers }: MathLineProps) {
+function MathLine({ Mathfield, id, value, syncVersion, register, ...handlers }: MathLineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<MathfieldElement | null>(null);
   const handlersRef = useRef(handlers);
   const initialValue = useRef(value);
+  const latestValueRef = useRef(value);
 
   useEffect(() => {
     handlersRef.current = handlers;
   });
+
+  useLayoutEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
 
   // Layout effect + flushSync in the parent let a new line be focused within the same keystroke, so fast typing is not lost.
   useLayoutEffect(() => {
@@ -143,27 +146,45 @@ function MathLine({ Mathfield, id, value, register, ...handlers }: MathLineProps
     const onFocus = () => handlersRef.current.onFocus();
     const onMoveOut = (event: CustomEvent<{ direction: "forward" | "backward" | "upward" | "downward" }>) => {
       event.preventDefault();
+      // Tab inside a fraction or bracket emits move-out before the line end; step out of the parent first instead of jumping lines.
+      if (event.detail.direction === "forward" && field.position < field.lastOffset) {
+        field.executeCommand("moveAfterParent");
+        return;
+      }
+      if (event.detail.direction === "backward" && field.position > 0) {
+        field.executeCommand("moveBeforeParent");
+        return;
+      }
       handlersRef.current.onMoveOut(event.detail.direction);
     };
     // Capture phase runs before MathLive's own key handling inside the shadow root.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.key === "Enter" && !event.shiftKey && field.mode !== "latex") {
         event.preventDefault();
         event.stopPropagation();
         handlersRef.current.onEnter();
-      } else if (event.key === "Backspace" && field.value === "") {
+      } else if (event.key === "Backspace" && field.mode === "math" && field.value === "") {
         event.preventDefault();
         event.stopPropagation();
+        handlersRef.current.onDeleteEmpty();
+      }
+    };
+    // Touch keyboard [backspace] deletes via executeCommand("deleteBackward") instead of keydown, firing beforeinput.
+    const onBeforeInput = (event: InputEvent) => {
+      if (event.inputType === "deleteContentBackward" && field.mode === "math" && field.value === "") {
+        event.preventDefault();
         handlersRef.current.onDeleteEmpty();
       }
     };
 
     // The touch keyboard's return key commits instead of sending Enter; a blur also fires "change", but by then the field has lost focus.
     const onCommit = () => {
-      if (field.hasFocus()) handlersRef.current.onEnter();
+      if (field.hasFocus() && field.mode !== "latex") handlersRef.current.onEnter();
     };
 
     field.addEventListener("input", onInput);
+    field.addEventListener("beforeinput", onBeforeInput);
     field.addEventListener("change", onCommit);
     field.addEventListener("focus", onFocus);
     field.addEventListener("move-out", onMoveOut);
@@ -174,6 +195,7 @@ function MathLine({ Mathfield, id, value, register, ...handlers }: MathLineProps
 
     return () => {
       field.removeEventListener("input", onInput);
+      field.removeEventListener("beforeinput", onBeforeInput);
       field.removeEventListener("change", onCommit);
       field.removeEventListener("focus", onFocus);
       field.removeEventListener("move-out", onMoveOut);
@@ -184,11 +206,13 @@ function MathLine({ Mathfield, id, value, register, ...handlers }: MathLineProps
     };
   }, [Mathfield, id, register]);
 
-  // Edits from the source panel flow back into the field without re-emitting input events.
+  // Only external edits (source textarea, clear, undo) increment syncVersion so live mathfield edits never get overwritten.
   useEffect(() => {
+    if (syncVersion === 0) return;
     const field = fieldRef.current;
-    if (field && field.value !== value) field.setValue(value, { silenceNotifications: true });
-  }, [value]);
+    const nextValue = latestValueRef.current;
+    if (field && field.value !== nextValue) field.setValue(nextValue, { silenceNotifications: true });
+  }, [syncVersion]);
 
   return <Box ref={containerRef} sx={{ flex: 1, minWidth: 0, overflowX: "auto" }} />;
 }
@@ -234,8 +258,12 @@ export default function LatexClient() {
     if (!Mathfield) return;
     const keyboard = window.mathVirtualKeyboard;
     const sync = () => setKeyboardHeight(keyboard.visible ? Math.ceil(keyboard.boundingRect.height) : 0);
+    sync();
     keyboard.addEventListener("geometrychange", sync);
-    return () => keyboard.removeEventListener("geometrychange", sync);
+    return () => {
+      keyboard.removeEventListener("geometrychange", sync);
+      keyboard.hide();
+    };
   }, [Mathfield]);
 
   useEffect(() => {
@@ -250,11 +278,11 @@ export default function LatexClient() {
   const focusLine = useCallback((id: string, atEnd = true) => {
     const field = fields.current.get(id);
     if (!field) return;
-    // MathLive moves DOM focus 60ms after a programmatic focus(); focusing its keyboard sink directly
-    // makes keys typed right after Enter land in the new line instead of the previous one.
+    // Focus the host first so MathLive registers the active mathfield, then focus the keyboard sink synchronously
+    // (avoiding MathLive's 60ms timer) so keys typed right after Enter land in the new line.
+    field.focus();
     const sink = field.shadowRoot?.querySelector<HTMLElement>("[part=keyboard-sink]");
-    if (sink) sink.focus();
-    else field.focus();
+    sink?.focus({ preventScroll: true });
     field.position = atEnd ? field.lastOffset : 0;
   }, []);
 
@@ -266,12 +294,18 @@ export default function LatexClient() {
     fields.current.set(id, element);
   }, []);
 
-  const updateLine = useCallback((id: string, latex: string) => {
+  const updateLineFromField = useCallback((id: string, latex: string) => {
     setLines((current) => current.map((line) => (line.id === id ? { ...line, latex } : line)));
   }, []);
 
+  const updateLineExternally = useCallback((id: string, latex: string) => {
+    setLines((current) =>
+      current.map((line) => (line.id === id ? { ...line, latex, syncVersion: line.syncVersion + 1 } : line))
+    );
+  }, []);
+
   const insertLineAfter = useCallback((id: string | null) => {
-    const line = { id: newId(), latex: "" };
+    const line = makeLine();
     flushSync(() => {
       setLines((current) => {
         const index = id ? current.findIndex((item) => item.id === id) : current.length - 1;
@@ -288,7 +322,7 @@ export default function LatexClient() {
     const index = lines.findIndex((line) => line.id === id);
     if (index < 0) return;
     if (lines.length === 1) {
-      updateLine(id, "");
+      if (lines[0].latex !== "") updateLineExternally(id, "");
       focusLine(id);
       return;
     }
@@ -298,7 +332,7 @@ export default function LatexClient() {
       setActiveId(target.id);
     });
     focusLine(target.id);
-  }, [focusLine, lines, updateLine]);
+  }, [focusLine, lines, updateLineExternally]);
 
   const moveOut = useCallback((id: string, direction: "forward" | "backward" | "upward" | "downward") => {
     const index = lines.findIndex((line) => line.id === id);
@@ -312,20 +346,35 @@ export default function LatexClient() {
 
   const activeLine = lines.find((line) => line.id === activeId) ?? lines[0];
 
-  const insertIntoActive = (latex: string) => {
+  const insertIntoActive = (item: StructureItem) => {
     if (!activeLine) return;
     const field = fields.current.get(activeLine.id);
     if (!field) return;
     field.focus();
-    field.executeCommand(["insert", latex, { selectionMode: "placeholder", focus: true }]);
-    updateLine(activeLine.id, field.value);
+    if (item.command) {
+      if (Array.isArray(item.command)) field.executeCommand(item.command);
+      else field.executeCommand(item.command);
+    } else {
+      field.executeCommand(["insert", item.latex, { selectionMode: "placeholder", focus: true }]);
+    }
+    updateLineFromField(activeLine.id, field.value);
   };
 
   const toggleKeyboard = () => {
-    if (activeLine) focusLine(activeLine.id);
     const keyboard = window.mathVirtualKeyboard;
-    if (keyboard.visible) keyboard.hide();
-    else keyboard.show({ animate: true });
+    if (keyboard.visible) {
+      // MathLive's virtual-keyboard-toggle handler blurs and refocuses focused "auto" fields on hide,
+      // which triggers its touch-device focusin listener to re-open the keyboard 300ms later.
+      for (const field of fields.current.values()) field.mathVirtualKeyboardPolicy = "manual";
+      try {
+        keyboard.hide({ animate: true });
+      } finally {
+        for (const field of fields.current.values()) field.mathVirtualKeyboardPolicy = "auto";
+      }
+      return;
+    }
+    if (activeLine) focusLine(activeLine.id);
+    keyboard.show({ animate: true });
   };
 
   const copy = async (value: string) => {
@@ -354,7 +403,7 @@ export default function LatexClient() {
   const clearAll = () => {
     const previous = lines;
     const previousActive = activeId;
-    const line = { id: newId(), latex: "" };
+    const line = makeLine();
     flushSync(() => {
       setLines([line]);
       setActiveId(line.id);
@@ -370,7 +419,7 @@ export default function LatexClient() {
           variant="outlined"
           sx={{ py: 0, minWidth: 0 }}
           onClick={() => {
-            setLines(previous);
+            setLines(previous.map((item) => ({ ...item, syncVersion: item.syncVersion + 1 })));
             setActiveId(previousActive ?? previous[0]?.id ?? null);
             toast.dismiss(toastId);
           }}
@@ -385,8 +434,8 @@ export default function LatexClient() {
   const structureLabels = useMemo(() => STRUCTURES.map((item) => renderLabel(item.label)), []);
   const symbolLabels = useMemo(() => SYMBOLS.map(renderLabel), []);
 
-  // Keep focus in the formula while tapping palette buttons, so the caret and the touch keyboard stay put.
-  const keepFocus = (event: React.PointerEvent | React.MouseEvent) => event.preventDefault();
+  // Keep focus in the formula on desktop mouse clicks without interfering with touch scroll on mobile.
+  const keepFocus = (event: React.MouseEvent) => event.preventDefault();
 
   const paletteButtonSx = {
     flex: "0 0 auto",
@@ -428,14 +477,14 @@ export default function LatexClient() {
               <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box sx={paletteRowSx}>
                   {STRUCTURES.map((item, index) => (
-                    <Button key={item.latex} onPointerDown={keepFocus} onMouseDown={keepFocus} onClick={() => insertIntoActive(item.latex)} sx={paletteButtonSx}>
+                    <Button key={item.label} onMouseDown={keepFocus} onClick={() => insertIntoActive(item)} sx={paletteButtonSx}>
                       <span dangerouslySetInnerHTML={{ __html: structureLabels[index] }} />
                     </Button>
                   ))}
                 </Box>
                 <Box sx={paletteRowSx}>
                   {SYMBOLS.map((symbol, index) => (
-                    <Button key={symbol} onPointerDown={keepFocus} onMouseDown={keepFocus} onClick={() => insertIntoActive(symbol)} sx={{ ...paletteButtonSx, height: 38, minWidth: 38 }}>
+                    <Button key={symbol} onMouseDown={keepFocus} onClick={() => insertIntoActive({ latex: symbol, label: symbol })} sx={{ ...paletteButtonSx, height: 38, minWidth: 38 }}>
                       <span dangerouslySetInnerHTML={{ __html: symbolLabels[index] }} />
                     </Button>
                   ))}
@@ -446,7 +495,7 @@ export default function LatexClient() {
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, py: 1, borderBottom: 1, borderColor: "divider" }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>{text.lines}</Typography>
                   <Tooltip title={text.keyboard}>
-                    <IconButton size="small" onPointerDown={keepFocus} onMouseDown={keepFocus} onClick={toggleKeyboard} aria-label={text.keyboard}>
+                    <IconButton size="small" onMouseDown={keepFocus} onClick={toggleKeyboard} aria-label={text.keyboard}>
                       <KeyboardRoundedIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
@@ -509,9 +558,10 @@ export default function LatexClient() {
                         <MathLine
                           Mathfield={Mathfield}
                           value={line.latex}
+                          syncVersion={line.syncVersion}
                           id={line.id}
                           register={registerField}
-                          onChange={(latex) => updateLine(line.id, latex)}
+                          onChange={(latex) => updateLineFromField(line.id, latex)}
                           onFocus={() => setActiveId(line.id)}
                           onEnter={() => insertLineAfter(line.id)}
                           onDeleteEmpty={() => deleteLine(line.id)}
@@ -548,7 +598,7 @@ export default function LatexClient() {
                 <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 1.5 }}>{text.sourceHint}</Typography>
                 <TextField
                   value={activeLine?.latex ?? ""}
-                  onChange={(event) => activeLine && updateLine(activeLine.id, event.target.value)}
+                  onChange={(event) => activeLine && updateLineExternally(activeLine.id, event.target.value)}
                   disabled={!activeLine}
                   multiline
                   minRows={2}
