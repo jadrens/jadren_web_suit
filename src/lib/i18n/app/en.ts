@@ -595,7 +595,7 @@ export const en = {
       copyFailed: "Failed to copy",
       cleared: "All lines cleared",
       loading: "Loading editor…",
-      tips: "Tips: / makes a fraction, ^ and _ add superscripts and subscripts, type sqrt, sum, int, alpha, pi or -> to convert them. Enter adds a line; Backspace on an empty line removes it. On the phone keyboard the top row inserts subscripts, fractions and roots; long-press a key for more, including Greek letters (long-press f for φ).",
+      tips: "Tips: on a hardware keyboard, / makes a fraction, ^ and _ add superscripts and subscripts, and sqrt, sum, int, alpha, pi or -> convert automatically. Enter adds a line; Backspace on an empty line removes it. The default math keyboard puts common variables, f(…), α β γ and structures on one screen; long-press keys for more, or switch to abc for full QWERTY.",
     },
     dnsLeak: {
       logUnavailable: "The DNS query log is unreachable right now, so results cannot be checked. Try again later.",
