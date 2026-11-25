@@ -43,6 +43,8 @@ jobs:
       BUN_VERSION: 1.4.0
       # sha256 of bun-linux-x64.zip for BUN_VERSION (from the release's SHASUMS256.txt).
       BUN_SHA256: 2d03fb5fb83ac8b567aca0a281b2ce1a1a19d488f56c2968d88c3f25e92fe452
+      # sha256 of bun-linux-aarch64.zip for BUN_VERSION (from the release's SHASUMS256.txt).
+      BUN_SHA256_ARM64: 4b1a332ee861983eb93bcfe6f770fff94e3e31b2c388bdaea3c8ed35e58eed0e
       # GitHub downloads are unreliable from mainland China; gh.koi.ci proxies GitHub.
       BUN_MIRRORS: >-
         ${{ inputs.target == 'cn'
@@ -118,6 +120,7 @@ jobs:
           SITE_HOST: ${{ env.SITE_HOST }}
           BUN_VERSION: ${{ env.BUN_VERSION }}
           BUN_SHA256: ${{ env.BUN_SHA256 }}
+          BUN_SHA256_ARM64: ${{ env.BUN_SHA256_ARM64 }}
           BUN_MIRRORS: ${{ env.BUN_MIRRORS }}
           DNS_MANAGER_TOKEN: ${{ secrets.DNS_MANAGER_TOKEN }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -134,7 +137,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
-          envs: DEPLOY_PATH,ARCHIVE_NAME,SITE_HOST,BUN_VERSION,BUN_SHA256,BUN_MIRRORS,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,MAIL_API_TOKEN
+          envs: DEPLOY_PATH,ARCHIVE_NAME,SITE_HOST,BUN_VERSION,BUN_SHA256,BUN_SHA256_ARM64,BUN_MIRRORS,DNS_MANAGER_TOKEN,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_DB,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_SSL,JWT_SECRET,MAIL_API_TOKEN
           command_timeout: 10m
           script: |
             bash -c '
