@@ -10,9 +10,10 @@
 # Environment:
 #   DEPLOY_PATH   live directory, e.g. /home/dragonren/service/web/jadren_web_suit
 #   SITE_HOST     Host header for the health check (jadren.me / jadren.cn)
-#   BUN_VERSION   Bun version to run, e.g. 1.4.0
-#   BUN_SHA256    sha256 of bun-linux-x64.zip for BUN_VERSION
-#   BUN_MIRRORS   space-separated download URLs for bun-linux-x64.zip, tried in order
+#   BUN_VERSION        Bun version to run, e.g. 1.4.0
+#   BUN_SHA256         sha256 of bun-linux-x64.zip for BUN_VERSION
+#   BUN_SHA256_ARM64   sha256 of bun-linux-aarch64.zip for BUN_VERSION (required on arm64)
+#   BUN_MIRRORS        space-separated download URLs for bun-linux-x64.zip, tried in order
 #   plus the application secrets written to .env (see write_env).
 set -Eeuo pipefail
 
@@ -25,26 +26,45 @@ log() { printf '==> %s\n' "$*"; }
 
 ensure_bun() {
   if [ -x "$bun_bin" ] && [ "$("$bun_bin" --version)" = "$BUN_VERSION" ]; then return; fi
-  if [ "$(uname -m)" != "x86_64" ]; then
-    echo "BUN_SHA256 pins the x64 build; this server is $(uname -m)" >&2
+
+  local arch bun_sha256
+  case "$(uname -m)" in
+    x86_64)
+      arch="x64"
+      bun_sha256="$BUN_SHA256"
+      ;;
+    aarch64|arm64)
+      arch="aarch64"
+      bun_sha256="${BUN_SHA256_ARM64:-}"
+      ;;
+    *)
+      echo "Unsupported server architecture: $(uname -m)" >&2
+      return 1
+      ;;
+  esac
+  if [ -z "$bun_sha256" ]; then
+    echo "BUN_SHA256 is not configured for architecture $arch" >&2
     return 1
   fi
 
   local tmp url
   tmp="$(mktemp -d)"
   for url in $BUN_MIRRORS; do
-    log "Downloading Bun $BUN_VERSION from $url"
+    if [ "$arch" != "x64" ]; then
+      url="${url//bun-linux-x64.zip/bun-linux-${arch}.zip}"
+    fi
+    log "Downloading Bun $BUN_VERSION ($arch) from $url"
     if curl -fsSL --retry 2 --connect-timeout 15 --max-time 300 -o "$tmp/bun.zip" "$url" \
-      && echo "$BUN_SHA256  $tmp/bun.zip" | sha256sum --check --status; then
+      && echo "$bun_sha256  $tmp/bun.zip" | sha256sum --check --status; then
       unzip -oq "$tmp/bun.zip" -d "$tmp"
-      install -D -m 0755 "$tmp/bun-linux-x64/bun" "$bun_bin"
+      install -D -m 0755 "$tmp/bun-linux-${arch}/bun" "$bun_bin"
       rm -rf "$tmp"
       return
     fi
     log "Download failed or checksum mismatch, trying the next mirror"
   done
   rm -rf "$tmp"
-  echo "Could not install Bun $BUN_VERSION from any mirror" >&2
+  echo "Could not install Bun $BUN_VERSION ($arch) from any mirror" >&2
   return 1
 }
 
